@@ -618,12 +618,8 @@ export class App {
     } else {
       el.append(h("span", { class: "w-verb" }, `${form.name} ${label}`), " · ", h("span", { class: "w-fail" }, brief(reason ?? check.steps.at(-1)?.text ?? "", 90)));
     }
-    el.className = "why-line show";
-    if (this.whyTimer !== undefined) clearTimeout(this.whyTimer);
-    this.whyTimer = setTimeout(() => (el.className = "why-line"), 9000);
+    el.className = "why-line show"; // stays until the next move, like the narration
   }
-
-  private whyTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** Small explanation sheet for HUD elements – tap anything you don't understand. */
   private showInfo(kind: "wille" | "runde" | "arena"): void {
@@ -787,13 +783,11 @@ export class App {
     return li;
   }
 
-  private captionTimer: ReturnType<typeof setTimeout> | undefined;
   private showCaption(text: string, pending: boolean): void {
     const c = this.els.caption;
     c.textContent = brief(text, 150);
+    // Stays until the next move starts (hideCaption) – reading must never be a race.
     c.className = `caption show${pending ? " pending" : ""}`;
-    if (this.captionTimer !== undefined) clearTimeout(this.captionTimer);
-    if (!pending) this.captionTimer = setTimeout(() => (c.className = "caption"), 9000);
   }
 
   private hideCaption(): void {
@@ -807,7 +801,9 @@ export class App {
     b.textContent = text;
     b.className = `banner show ${kind}`;
     if (this.bannerTimer !== undefined) clearTimeout(this.bannerTimer);
-    this.bannerTimer = setTimeout(() => (b.className = "banner"), kind === "bad" ? 3200 : 2200);
+    // Short cries ("Es reicht!") flash; longer explanations stay long enough to read (~15 chars/s).
+    const readMs = Math.max(kind === "bad" ? 3200 : 2200, text.length * 65);
+    this.bannerTimer = setTimeout(() => (b.className = "banner"), readMs);
   }
 
   // ── Modals ──────────────────────────────────────────────────────────────

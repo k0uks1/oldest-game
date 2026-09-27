@@ -170,3 +170,7 @@ Welche Tags welche Gewandung auslösen:
 ## Versionsnummer (Nutzerwunsch: „damit man weiß, was gerade live ist“)
 
 Jeder PR erhöht `package.json` → `version`. Der Build schreibt die Version ins Spiel, und sie steht dezent auf dem Startbildschirm und unten im Menü, zum Beispiel „v0.32.0“. PR-Vorschauen zeigen zusätzlich „· PR 32“. Details in `src/version.ts` und `appVersion()` in `scripts/build.ts`.
+
+## Lesezeit (Nutzerfeedback: „man muss sich anstrengen, schnell zu lesen“)
+
+Erzählung und Warum-Zeile verschwinden nicht mehr nach einer festen Zeit. Sie bleiben stehen, bis der nächste Zug beginnt. Längere Hinweise im Banner, etwa eine Ablehnung mit Erklärung, bleiben so lange sichtbar, wie man zum Lesen braucht (etwa 15 Zeichen pro Sekunde). Kurze Ausrufe wie „Es reicht!“ blitzen weiterhin nur kurz auf.
