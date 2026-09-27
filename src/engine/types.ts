@@ -1,3 +1,4 @@
+import type { VictoryKind } from "./ontology/pack.ts";
 /**
  * Core domain types. The engine is pure and DOM-free: every function in
  * `src/engine` is deterministic for a given input.
@@ -19,6 +20,9 @@ export const ARCHETYPES = [
 ] as const;
 /** Visual archetype – selects the sprite silhouette. */
 export type Archetype = (typeof ARCHETYPES)[number];
+
+/** Victory kinds (see VerbSpec.outcome) plus the two ways of getting away. */
+export type Outcome = VictoryKind | "entkommen" | "versteckt";
 
 /** A fully resolved form ("Gestalt") that can appear in the arena. */
 export interface Form {
@@ -109,6 +113,11 @@ export interface GameConfig {
   /** Nothing escapes a target of this scale or larger ("Welt", "kosmisch"). */
   readonly maxEscapeScale: number;
   readonly escapeEleganz: number;
+  /** Escape routes that are hiding rather than running (outcome "versteckt"). */
+  readonly hidingRoutes: readonly string[];
+  /** "Gnade": extra eleganz for winning without harm (outcome in `mercyOutcomes`). */
+  readonly mercyEleganz: number;
+  readonly mercyOutcomes: readonly string[];
   /** A mechanism used within the last N moves may not be repeated. */
   readonly echoWindow: number;
 }
@@ -139,6 +148,10 @@ export interface CounterCheck {
   /** Tag of the target the mechanism acted on. */
   readonly hitTag: string | null;
   readonly weaknessHit: boolean;
+  /** "Schreck": the target was startled (counts as weakness; it flees rather than falls). */
+  readonly startled?: true;
+  /** How the target is beaten – or, for an escape, how the attacker got away. */
+  readonly outcome: Outcome;
   readonly power: number;
   readonly needed: number;
 }

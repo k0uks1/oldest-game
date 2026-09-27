@@ -61,6 +61,8 @@ interface SpriteEntry {
   readonly silhouette: HTMLCanvasElement;
   /** Only the outline, in the form's glow colour (drawn into the bloom layer). */
   readonly rim: HTMLCanvasElement;
+  /** Grey, crumbling version (versteinert). */
+  readonly stone: HTMLCanvasElement;
   readonly pixels: PixelImage;
   readonly palette: SpritePalette;
 }
@@ -77,6 +79,10 @@ interface Fighter {
   offsetY: number;
   /** 1 = faces the opponent, -1 = turned away (fleeing). */
   facing: 1 | -1;
+  /** 1 = normal height, 0 = squashed into the ground (sealed). */
+  squash: number;
+  /** 0..1 turned to stone. */
+  stone: number;
   flash: number;
   readonly seed: number;
   readonly aura: Aura;
@@ -127,17 +133,21 @@ const STYLE_BY_FAMILY: Readonly<Record<string, AttackStyle>> = {
   gewalt: "slash", element: "fire", leben: "poison", sinne: "sound", geist: "mind", magie: "rune", kosmos: "cosmic",
 };
 
-/** What happens to the loser: destroyed, driven off, lulled to sleep or won over. */
-export type AttackOutcome = "destroy" | "flee" | "sleep" | "charm";
+/** What happens to the loser on screen – derived from the engine's victory kind. */
+export type AttackOutcome = "destroy" | "flee" | "sleep" | "charm" | "peace" | "seal" | "petrify";
 
-const OUTCOME_BY_VERB: Readonly<Record<string, AttackOutcome>> = {
-  aengstigt: "flee", uebertoent: "flee", verweht: "flee", langweilt: "flee", verwaltet: "flee", verklagt: "flee", befreit: "flee", demuetigt: "flee", zweifel: "flee",
-  einschlaefern: "sleep", vergessen: "sleep", verzweiflung: "sleep",
-  lockt: "charm", verfuehrt: "charm", befreundet: "charm", zaehmt: "charm", verzaubert: "charm", befiehlt: "charm", erloest: "charm",
+const OUTCOME_BY_KIND: Readonly<Record<string, AttackOutcome>> = {
+  vernichtet: "destroy",
+  vertrieben: "flee",
+  verfuehrt: "charm",
+  befriedet: "peace",
+  eingeschlaefert: "sleep",
+  gebannt: "seal",
+  versteinert: "petrify",
 };
 
-export function attackOutcome(verbId: string): AttackOutcome {
-  return OUTCOME_BY_VERB[verbId] ?? "destroy";
+export function attackOutcome(kind: string): AttackOutcome {
+  return OUTCOME_BY_KIND[kind] ?? "destroy";
 }
 
 /** Visual style for a mechanism: specific verbs first, then its family. Unknown (learned) verbs follow their family. */
@@ -386,6 +396,7 @@ export class Arena {
       glow: toCanvas(renderGlow(this.onto, form)),
       silhouette: toCanvas(silhouetteOf(pixels, "#07050c")),
       rim: toCanvas(rimOf(pixels, palette.glow)),
+      stone: toCanvas(stoneOf(pixels)),
       pixels,
       palette,
     };
@@ -420,6 +431,8 @@ export class Arena {
       offsetX: 0,
       offsetY: 0,
       facing: 1,
+      squash: 1,
+      stone: 0,
       flash: 0,
       seed: hash32(form.id),
       aura: this.auraFor(form),
@@ -504,9 +517,25 @@ export class Arena {
         f.offsetY = 4 * t;
         f.alpha = 1 - t * t;
       });
+    } else if (outcome === "seal") {
+      // pulled into a shrinking rune circle
+      const cx = SIDE_X[side];
+      for (let k = 0; k < 3; k++) this.rings.push({ x: cx, y: GROUND_Y - 2, r: 40 - k * 10, life: -k * 0.1, max: 1, color: "#c8a0ff" });
+      await this.tween(this.reducedMotion ? 50 : 900, (t) => {
+        f.squash = 1 - t;
+        f.alpha = 1 - t * t;
+      });
+      this.burst(cx, GROUND_Y - 4, "#c8a0ff", 30);
+    } else if (outcome === "petrify") {
+      await this.tween(this.reducedMotion ? 50 : 700, (t) => (f.stone = t));
+      await wait(500);
+      this.disintegrate(side);
+      await wait(600);
     } else {
+      const gold = outcome === "peace";
       for (let k = 0; k < 24; k++) {
-        this.particles.push({ x: SIDE_X[side] + (this.rand() - 0.5) * f.sprite.pixels.width, y: GROUND_Y - this.rand() * f.sprite.pixels.height, vx: 0, vy: -12 - this.rand() * 10, life: -this.rand() * 0.5, max: 1, color: this.rand() < 0.5 ? "#ff9ad0" : "#ffe0f0", size: 1, gravity: 0, glow: true });
+        const c = gold ? (this.rand() < 0.5 ? "#ffe890" : "#fffbe0") : this.rand() < 0.5 ? "#ff9ad0" : "#ffe0f0";
+        this.particles.push({ x: SIDE_X[side] + (this.rand() - 0.5) * f.sprite.pixels.width, y: GROUND_Y - this.rand() * f.sprite.pixels.height, vx: 0, vy: -12 - this.rand() * 10, life: -this.rand() * 0.5, max: 1, color: c, size: 1, gravity: 0, glow: true });
       }
       await this.tween(this.reducedMotion ? 50 : 1100, (t) => {
         f.alpha = 1 - t;
@@ -539,19 +568,25 @@ export class Arena {
    * An escape: the target lashes out, the evader slips away (up into the air or down
    * into water/earth), the blow hits nothing and the target withdraws into the dark.
    */
-  async evade(side: Side, targetStyle: AttackStyle, direction: "up" | "down"): Promise<void> {
+  async evade(side: Side, targetStyle: AttackStyle, direction: "up" | "down" | "hide"): Promise<void> {
     const other: Side = side === 0 ? 1 : 0;
     const evader = this.fighters[side];
     const target = this.fighters[other];
     if (evader === null) return;
-    const dy = direction === "up" ? -30 : 16;
-    const dodge = this.tween(this.reducedMotion ? 50 : 420, (t) => (evader.offsetY = dy * Math.sin(t * Math.PI * 0.5)));
+    const dy = direction === "up" ? -30 : direction === "down" ? 16 : 0;
+    const dodge = this.tween(this.reducedMotion ? 50 : 420, (t) => {
+      if (direction === "hide") evader.alpha = 1 - 0.85 * t;
+      else evader.offsetY = dy * Math.sin(t * Math.PI * 0.5);
+    });
     if (target !== null) await this.strike(other, targetStyle, true);
     await dodge;
     this.onCue?.("fizzle");
     this.burst(SIDE_X[side], GROUND_Y - 30 + dy, evader.sprite.palette.glow, 20);
     await wait(250);
-    await this.tween(this.reducedMotion ? 50 : 500, (t) => (evader.offsetY = dy * (1 - t)));
+    await this.tween(this.reducedMotion ? 50 : 500, (t) => {
+      if (direction === "hide") evader.alpha = 0.15 + 0.85 * t;
+      else evader.offsetY = dy * (1 - t);
+    });
     if (target !== null) {
       await this.tween(this.reducedMotion ? 50 : 700, (t) => (target.alpha = 1 - t));
       this.fighters[other] = null;
@@ -1037,7 +1072,14 @@ export class Arena {
     this.base.save();
     this.glow.save();
     this.base.globalAlpha = f.alpha;
-    this.glow.globalAlpha = f.alpha;
+    this.glow.globalAlpha = f.alpha * (1 - f.stone);
+    if (f.squash < 1) {
+      for (const ctx of [this.base, this.glow]) {
+        ctx.translate(0, GROUND_Y);
+        ctx.scale(1, Math.max(0.02, f.squash));
+        ctx.translate(0, -GROUND_Y);
+      }
+    }
     this.drawFighterBody(side, f);
     this.base.restore();
     this.glow.restore();
@@ -1077,6 +1119,12 @@ export class Arena {
       this.glow.globalAlpha = f.reveal * f.alpha;
       blit(this.glow, f.sprite.glow);
       this.glow.restore();
+    }
+    if (f.stone > 0) {
+      b.save();
+      b.globalAlpha = f.stone * f.alpha;
+      blit(b, f.sprite.stone);
+      b.restore();
     }
     // materialisation scanline
     if (f.appear < 1) {
@@ -1284,6 +1332,23 @@ function silhouetteOf(img: PixelImage, color: string): PixelImage {
     data[i + 1] = g;
     data[i + 2] = b;
     data[i + 3] = 255;
+  }
+  return { width: img.width, height: img.height, data };
+}
+
+/** Greyscale with a stony tint and a little grain. */
+function stoneOf(img: PixelImage): PixelImage {
+  const data = new Uint8ClampedArray(img.data.length);
+  for (let i = 0; i < data.length; i += 4) {
+    const a = img.data[i + 3] ?? 0;
+    if (a === 0) continue;
+    const l = 0.3 * (img.data[i] ?? 0) + 0.59 * (img.data[i + 1] ?? 0) + 0.11 * (img.data[i + 2] ?? 0);
+    const grain = ((i * 2654435761) >>> 28) - 8;
+    const v = Math.max(20, Math.min(200, l * 0.7 + 40 + grain));
+    data[i] = v + 6;
+    data[i + 1] = v + 2;
+    data[i + 2] = v - 4;
+    data[i + 3] = a;
   }
   return { width: img.width, height: img.height, data };
 }

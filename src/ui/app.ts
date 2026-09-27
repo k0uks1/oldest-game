@@ -33,6 +33,16 @@ function sameShape(a: Form, b: Form): boolean {
   return a.scale === b.scale && eq(a.tags, b.tags) && eq(a.not, b.not) && eq(a.verbs, b.verbs);
 }
 
+/** Banner suffix per victory kind ("Es genügt – in die Flucht geschlagen."). */
+const VICTORY_TEXT: Readonly<Record<string, string>> = {
+  vertrieben: "in die Flucht geschlagen.",
+  verfuehrt: "verführt.",
+  befriedet: "befriedet. Gnade.",
+  eingeschlaefert: "eingeschläfert.",
+  gebannt: "gebannt.",
+  versteinert: "versteinert.",
+};
+
 const SCALE_NAMES = ["", "winzig", "klein", "menschengroß", "groß", "gewaltig", "Landschaft", "Welt", "kosmisch"];
 
 function roman(n: number): string {
@@ -499,11 +509,14 @@ export class App {
       if (move.verb === ESCAPE) {
         const target = this.state.history.at(-2)?.form;
         const threat = target === undefined ? undefined : this.onto.compileForm(target).verbs.find((v) => ["gewalt", "element", "leben"].includes(this.onto.verbs.get(v)?.spec.family ?? ""));
-        await this.arena.evade(actor, threat === undefined ? "slash" : this.styleOf(threat), this.onto.formHas(form, "fliegt") ? "up" : "down");
-        this.flashBanner("Entkommen.", "good");
+        const hidden = move.check?.outcome === "versteckt";
+        await this.arena.evade(actor, threat === undefined ? "slash" : this.styleOf(threat), hidden ? "hide" : this.onto.formHas(form, "fliegt") ? "up" : "down");
+        this.flashBanner(hidden ? "Versteckt." : "Entkommen.", "good");
       } else if (move.verb !== null) {
-        await this.arena.attack(actor, this.styleOf(move.verb), move.check?.weaknessHit === true, attackOutcome(move.verb));
-        this.flashBanner(move.eleganz > 1 ? `Es genügt. ✦ ${String(move.eleganz)}` : "Es genügt.", "good");
+        const kind = move.check?.outcome ?? "vernichtet";
+        await this.arena.attack(actor, this.styleOf(move.verb), move.check?.weaknessHit === true, attackOutcome(kind));
+        const how = VICTORY_TEXT[kind] ?? "";
+        this.flashBanner(`Es genügt${how === "" ? "." : ` – ${how}`}${move.eleganz > 1 ? `  ✦ ${String(move.eleganz)}` : ""}`, "good");
       }
     } else {
       this.retry = true;
@@ -756,7 +769,8 @@ export class App {
         li("Wer kleiner als das Ziel gewinnt, bekommt Wille zurück und viel ", h("strong", {}, "Eleganz ✦"), "."),
         li(`Einfallsreichtum: Wer zu etwas wird, das das Spiel noch nie gesehen hat, lehrt es dem Grimoire – und bekommt bei Erfolg +${String(c.discoveryEleganz)} Eleganz.`),
         li(`Eskalation: Alle ${String(c.escalateEveryMoves)} Züge steigt die Mindeststufe – die Mauern der Arena fallen. Nur mythische Hebel (≥ ${String(c.mythicLeverage)}) – Hoffnung, wahre Namen, Erwachen – ignorieren das.`),
-        li(`Entkommen: Statt zu besiegen, darf man auch fliehen – fliegend, tauchend, grabend –, wenn das Ziel nicht folgen kann und nur körperlich angreift. Der Kolibri fliegt der Lavawelle davon, nicht aber dem Drachen oder dem Lied der Sirene. Vor Welten und Kosmischem gibt es kein Entkommen. Bringt ${String(c.escapeEleganz)} Eleganz; danach muss der Gegner den Entkommenen besiegen.`),
+        li(`Entkommen: Statt zu besiegen, darf man auch fliehen – fliegend, tauchend, grabend – oder sich verstecken (getarnt, im Schatten; Licht und Feuer finden jeden),, wenn das Ziel nicht folgen kann und nur körperlich angreift. Der Kolibri fliegt der Lavawelle davon, nicht aber dem Drachen oder dem Lied der Sirene. Vor Welten und Kosmischem gibt es kein Entkommen. Bringt ${String(c.escapeEleganz)} Eleganz; danach muss der Gegner den Entkommenen besiegen.`),
+        li(`Siegarten: Nicht jeder Sieg vernichtet. Man kann in die Flucht schlagen (ein Knall und das Pferd rennt – „Schreck“ zählt wie eine Schwäche), verführen, einschläfern, bannen, versteinern – oder befrieden: Wer ohne Leid gewinnt, bekommt ${String(c.mercyEleganz)} Eleganz als Gnade.`),
         li(`Echo: Ein Mechanismus der letzten ${String(c.echoWindow)} Züge darf nicht wiederholt werden. Jede Gestalt nur einmal pro Spiel.`),
         li(`Du weißt vorher nicht, ob deine Gestalt reicht. Reicht sie nicht, zerschellt sie: Du zahlst ihren Preis an Wille plus ${String(c.failurePenalty)}, sie ist verbraucht, und du versuchst es erneut. Wem der Wille ausgeht, der verliert.`),
         li(`Wer aufgibt oder keine Antwort findet, verliert. Nach ${String(c.roundLimit)} Runden gewinnt die höhere Eleganz.`),

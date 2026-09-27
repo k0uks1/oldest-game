@@ -48,16 +48,33 @@ export function narrateMove(onto: Ontology, state: GameState, move: Move, index:
     const flavor = move.form.flavor === undefined ? "" : ` ${move.form.flavor}`;
     return fill(pick(OPENINGS), { A: move.form.name, P: player }) + flavor;
   }
-  if (move.verb === ESCAPE) return fill(pick(ESCAPES), { A: move.form.name, B: target.name });
+  if (move.verb === ESCAPE) return fill(pick(move.check?.outcome === "versteckt" ? HIDES : ESCAPES), { A: move.form.name, B: target.name });
   const verb = onto.verbs.get(move.verb)?.spec;
   const phrase = verb?.phrase ?? `${verb?.label ?? move.verb} {B}`;
   const action = fill(phrase, { B: target.name });
   const intro = pick(INTROS[verb?.family ?? "gewalt"] ?? INTROS["gewalt"] ?? [""]);
   const parts = [`${intro} ${move.form.name} ${action}.`];
-  if (move.check?.weaknessHit === true) parts.push(pick(WEAKNESS));
+  const how = move.check?.outcome ?? "vernichtet";
+  const after = AFTERMATH[how];
+  if (after !== undefined) parts.push(fill(pick(after), { B: target.name }));
+  else if (move.check?.weaknessHit === true) parts.push(pick(WEAKNESS));
   if (move.form.scale < target.scale) parts.push(pick(UNDERDOG));
   return parts.join(" ");
 }
+
+const AFTERMATH: Readonly<Record<string, readonly string[]>> = {
+  vertrieben: ["{B} ergreift die Flucht.", "{B} wendet sich ab und rennt.", "Von {B} bleibt nur eine Staubwolke am Horizont."],
+  verfuehrt: ["{B} folgt willig.", "{B} vergisst, wofür es kämpfte."],
+  befriedet: ["{B} findet Frieden.", "Kein Leid – nur Stille, wo eben noch {B} tobte."],
+  eingeschlaefert: ["{B} sinkt in tiefen Schlaf.", "{B} gähnt – und ist fort."],
+  gebannt: ["{B} ist gebannt.", "Ein Siegel schließt sich über {B}."],
+  versteinert: ["{B} erstarrt zu Stein.", "Wo {B} stand, steht nun eine Statue."],
+};
+
+const HIDES = [
+  "{B} sucht und sucht – {A} ist nirgends zu sehen.",
+  "{A} wird eins mit den Schatten. {B} starrt ins Leere.",
+];
 
 const ESCAPES = [
   "{B} schlägt zu – doch wo eben noch {A} war, ist nur noch Luft.",

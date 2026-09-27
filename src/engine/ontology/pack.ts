@@ -15,6 +15,11 @@ export interface TagSpec {
   readonly implies?: readonly string[];
   /** Mechanisms any carrier of this tag can use. */
   readonly grants?: readonly string[];
+  /**
+   * "Schreck": what startles a carrier – mechanism ids (a bang: `uebertoent`) or tags of the
+   * attacker (`feuer`). A startled target counts as hit in its weakness and flees.
+   */
+  readonly startledBy?: readonly string[];
   readonly aliases?: readonly string[];
 }
 
@@ -31,7 +36,24 @@ export interface VerbSpec {
   readonly hint: string;
   /** Sentence template, `{B}` = target. Defaults to "<label> {B}". */
   readonly phrase?: string;
+  /** How the loser is beaten ("Siegart"). Default: vernichtet. */
+  readonly outcome?: VictoryKind;
   readonly aliases?: readonly string[];
+}
+
+/** Ways to win: not every victory destroys. */
+export const VICTORY_KINDS = ["vernichtet", "vertrieben", "verfuehrt", "befriedet", "eingeschlaefert", "gebannt", "versteinert"] as const;
+export type VictoryKind = (typeof VICTORY_KINDS)[number];
+
+function isVictoryKind(x: string): x is VictoryKind {
+  return (VICTORY_KINDS as readonly string[]).includes(x);
+}
+
+function victoryKind(raw: string | undefined, where: string, errors: string[]): VictoryKind | undefined {
+  if (raw === undefined) return undefined;
+  if (isVictoryKind(raw)) return raw;
+  errors.push(`${where}.outcome: unbekannte Siegart „${raw}“ (erlaubt: ${VICTORY_KINDS.join(", ")}).`);
+  return undefined;
 }
 
 export interface ModifierSpec {
@@ -167,6 +189,7 @@ export function parsePack(input: unknown): PackResult {
         ...opt("parents", c.list(o, "parents", w)),
         ...opt("implies", c.list(o, "implies", w)),
         ...opt("grants", c.list(o, "grants", w)),
+        ...opt("startledBy", c.list(o, "startledBy", w)),
         ...opt("aliases", c.list(o, "aliases", w)),
       };
     }),
@@ -182,6 +205,7 @@ export function parsePack(input: unknown): PackResult {
         ...opt("blockedBy", c.list(o, "blockedBy", w)),
         ...opt("minRelativeScale", c.optNum(o, "minRelativeScale", w)),
         ...opt("phrase", c.optStr(o, "phrase", w)),
+        ...opt("outcome", victoryKind(c.optStr(o, "outcome", w), w, c.errors)),
         ...opt("aliases", c.list(o, "aliases", w)),
       };
     }),
