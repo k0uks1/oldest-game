@@ -1,0 +1,30 @@
+{
+  "name": "oldest-game",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Oldest Game – ein Duell der Vorstellungskraft für zwei Spieler. Deterministische Regel-Engine, Pixel-Arena, optionaler Claude-Parser.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx scripts/build.ts --serve",
+    "build": "tsx scripts/build.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "tsx --test tests/*.test.ts",
+    "simulate": "tsx scripts/simulate.ts",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "@types/node": "^22.15.0",
+    "esbuild": "^0.27.0",
+    "eslint": "^9.30.0",
+    "globals": "^16.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "~5.9.2",
+    "typescript-eslint": "^8.40.0"
+  }
+}
