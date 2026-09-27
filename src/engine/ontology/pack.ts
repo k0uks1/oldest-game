@@ -106,6 +106,16 @@ export interface FieldSpec {
   readonly effects: readonly { readonly on: readonly string[]; readonly delta: number }[];
 }
 
+/** A precedent for one exact pair of forms – decided once (by Claude as referee), then replayed deterministically. */
+export interface RulingSpec {
+  readonly attacker: string;
+  readonly target: string;
+  readonly valid: boolean;
+  /** Mechanism the victory uses (existing id). */
+  readonly verb: string;
+  readonly reason: string;
+}
+
 export interface ContentPack {
   readonly id: string;
   readonly name: string;
@@ -115,6 +125,7 @@ export interface ContentPack {
   readonly modifiers: readonly ModifierSpec[];
   readonly forms: readonly FormSpec[];
   readonly fields?: readonly FieldSpec[];
+  readonly rulings?: readonly RulingSpec[];
 }
 
 // ── Runtime shape validation (packs may come from untrusted JSON) ─────────
@@ -260,6 +271,16 @@ export function parsePack(input: unknown): PackResult {
         ...opt("discoveredAt", c.optStr(o, "discoveredAt", w)),
       };
     }),
+    ...(input["rulings"] === undefined
+      ? {}
+      : {
+          rulings: c.array(input, "rulings", id).map((o, i) => {
+            const w = `${id}.rulings[${i}]`;
+            const valid = o["valid"];
+            if (typeof valid !== "boolean") c.errors.push(`${w}: "valid" muss true/false sein`);
+            return { attacker: c.str(o, "attacker", w), target: c.str(o, "target", w), valid: valid === true, verb: c.str(o, "verb", w), reason: c.str(o, "reason", w) };
+          }),
+        }),
     ...(input["fields"] === undefined
       ? {}
       : {

@@ -1,5 +1,5 @@
 import { Ontology, OntologyError, lookupKey } from "../engine/ontology/ontology.ts";
-import { parsePack, type ContentPack, type FormSpec, type TagSpec, type VerbSpec } from "../engine/ontology/pack.ts";
+import { parsePack, type ContentPack, type FormSpec, type RulingSpec, type TagSpec, type VerbSpec } from "../engine/ontology/pack.ts";
 import { findCounters } from "../engine/rules.ts";
 import { normalize } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
@@ -165,4 +165,12 @@ function compile(base: readonly ContentPack[], learned: ContentPack): Ontology |
     if (e instanceof OntologyError) return undefined;
     throw e;
   }
+}
+
+/** Store a referee ruling as a precedent in the learned pack (replacing one for the same pair). */
+export function addRuling(base: readonly ContentPack[], learned: ContentPack, ruling: RulingSpec): { onto: Ontology; pack: ContentPack } | undefined {
+  const rulings = [...(learned.rulings ?? []).filter((r) => r.attacker !== ruling.attacker || r.target !== ruling.target), ruling];
+  const pack: ContentPack = { ...learned, rulings };
+  const onto = compile(base, pack);
+  return onto === undefined ? undefined : { onto, pack };
 }

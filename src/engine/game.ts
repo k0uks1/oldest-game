@@ -1,7 +1,7 @@
 import { eleganzFor, formCost, overkillSurcharge, underdogRefund } from "./cost.ts";
 import { activeFields, fieldModifiers } from "./fields.ts";
 import type { Ontology } from "./ontology/ontology.ts";
-import { checkCounter, checkEscape, DEFAULT_CONFIG, effectiveVerbs, ESCAPE } from "./rules.ts";
+import { checkCounter, checkEscape, checkRuling, DEFAULT_CONFIG, effectiveVerbs, ESCAPE } from "./rules.ts";
 import type {
   CounterCheck,
   Form,
@@ -74,12 +74,16 @@ export function evaluateForm(onto: Ontology, state: GameState, form: Form): Move
   const fields = activeFields(onto, state);
   const verbs = [...effectiveVerbs(onto, form)];
   if (Object.keys(state.config.escapeRoutes).some((r) => onto.formHas(form, r))) verbs.push(ESCAPE);
+  const ruling = onto.rulingFor(form.id, target.id);
+  if (ruling !== undefined && !verbs.includes(ruling.verb)) verbs.push(ruling.verb);
   return verbs
     .map((verb) => {
       const check =
-        verb === ESCAPE
-          ? checkEscape(onto, form, target, state.config, minScale)
-          : checkCounter(onto, form, target, verb, state.config, minScale, fieldModifiers(onto, fields, verb));
+        verb === ruling?.verb
+          ? checkRuling(onto, form, target, ruling, state.config, minScale)
+          : verb === ESCAPE
+            ? checkEscape(onto, form, target, state.config, minScale)
+            : checkCounter(onto, form, target, verb, state.config, minScale, fieldModifiers(onto, fields, verb));
       const echoed = echo.has(verb);
       const affordable = cost <= wille;
       const belowArena = form.scale < minScale && !isMythic(onto, state, verb);

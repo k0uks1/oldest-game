@@ -42,7 +42,7 @@ export async function handleLearned(req: Request, file: string): Promise<Respons
   // one entry per line, like the core content – reviewable diffs when committed
   const p = parsed.pack;
   const list = (xs: readonly unknown[]): string => (xs.length === 0 ? "[]" : `[\n${xs.map((x) => `    ${JSON.stringify(x)}`).join(",\n")}\n  ]`);
-  const out = `{\n  "id": ${JSON.stringify(p.id)},\n  "name": ${JSON.stringify(p.name)},\n  "version": ${JSON.stringify(p.version)},\n  "tags": ${list(p.tags)},\n  "verbs": ${list(p.verbs)},\n  "modifiers": ${list(p.modifiers)},\n  "forms": ${list(p.forms)}\n}\n`;
+  const out = `{\n  "id": ${JSON.stringify(p.id)},\n  "name": ${JSON.stringify(p.name)},\n  "version": ${JSON.stringify(p.version)},\n  "tags": ${list(p.tags)},\n  "verbs": ${list(p.verbs)},\n  "modifiers": ${list(p.modifiers)},\n  "forms": ${list(p.forms)},\n  "rulings": ${list(p.rulings ?? [])}\n}\n`;
   writeFileSync(file, out);
-  return json(200, { ok: true, forms: p.forms.length, tags: p.tags.length, verbs: p.verbs.length });
+  return json(200, { ok: true, forms: p.forms.length, tags: p.tags.length, verbs: p.verbs.length, rulings: (p.rulings ?? []).length });
 }

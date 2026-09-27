@@ -15,7 +15,8 @@ import {
   type LlmSettings,
 } from "../llm/client.ts";
 import { browserStore, serverStore, type LearnedStore } from "../llm/learned-store.ts";
-import { emptyLearnedPack, findLearned, learn } from "../llm/learning.ts";
+import { addRuling, emptyLearnedPack, findLearned, learn } from "../llm/learning.ts";
+import { refereeWithClaude } from "../llm/referee.ts";
 import { narrateEpilogueWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
 import { Ontology } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
@@ -468,7 +469,22 @@ export class App {
   ): Promise<void> {
     const actor = this.state.active;
     const isDiscovery = novelty?.kind === "discovery";
-    const outcome = attempt(this.onto, this.state, form, intendedVerb, isDiscovery);
+    let outcome = attempt(this.onto, this.state, form, intendedVerb, isDiscovery);
+    let verdict: string | null = null;
+    // The engine is unsure → ask the referee once; the ruling becomes a precedent for this pair.
+    if (outcome.kind === "failure" && outcome.failure.uncertain !== undefined && !this.debug && isClaudeReady(this.llm)) {
+      if (!alreadyBusy) this.setBusy(true);
+      const v = await refereeWithClaude(this.onto, this.llm, outcome.failure);
+      if (!alreadyBusy) this.setBusy(false);
+      const stored = v === undefined ? undefined : addRuling(this.basePacks, this.learned, v.ruling);
+      if (v !== undefined && stored !== undefined) {
+        this.setOntology(stored.onto);
+        this.learned = stored.pack;
+        void this.store.save(stored.pack).catch(() => undefined);
+        outcome = attempt(this.onto, this.state, form, v.ruling.valid ? v.ruling.verb : intendedVerb, isDiscovery);
+        verdict = `⚖ ${v.ruling.reason}`;
+      }
+    }
     if (outcome.kind === "rejected") {
       this.flashBanner(outcome.reason, "bad");
       return;
@@ -479,7 +495,7 @@ export class App {
     this.resetInput();
     this.hideCaption();
     try {
-      await this.animate(actor, form, outcome, novelty);
+      await this.animate(actor, form, outcome, novelty, verdict);
     } finally {
       if (!alreadyBusy) this.setBusy(false);
       this.render();
@@ -496,6 +512,7 @@ export class App {
     form: Form,
     outcome: Exclude<AttemptOutcome, { kind: "rejected" }>,
     novelty: { kind: "discovery"; extra: readonly string[] } | { kind: "remembered"; by: string | null } | null,
+    verdict: string | null = null,
   ): Promise<void> {
     const index = this.state.history.length - 1;
     const narration = this.narrate(outcome, index);
@@ -514,6 +531,11 @@ export class App {
       this.els.revealSub.textContent = `aus dem Grimoire · entdeckt von ${novelty.by}`;
       this.els.revealSub.className = "reveal-sub show quiet";
       await sleep(500);
+    }
+    if (verdict !== null) {
+      this.els.revealSub.textContent = verdict;
+      this.els.revealSub.className = "reveal-sub show quiet";
+      await sleep(1400);
     }
     this.els.plates[actor].textContent = form.name;
     this.hideName();
@@ -830,6 +852,18 @@ export class App {
       tabNew.classList.toggle("on", onlyDiscovered);
       clear(list);
       const needle = search.value.trim().toLowerCase();
+      const rulings = this.learned.rulings ?? [];
+      if (onlyDiscovered && needle === "" && rulings.length > 0) {
+        const name = (id: string): string => this.onto.formById(id)?.name ?? id;
+        list.append(
+          h(
+            "details",
+            { class: "rulings" },
+            h("summary", {}, `⚖ ${String(rulings.length)} Schiedssprüche`),
+            h("ul", {}, ...rulings.map((r) => h("li", {}, `${name(r.attacker)} → ${name(r.target)}: ${r.valid ? "✓" : "✗"} ${r.reason}`))),
+          ),
+        );
+      }
       if (onlyDiscovered && needle === "" && this.learned.tags.length > 0) {
         list.append(
           h(

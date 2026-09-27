@@ -152,6 +152,10 @@ export interface CounterCheck {
   readonly startled?: true;
   /** How the target is beaten – or, for an escape, how the attacker got away. */
   readonly outcome: Outcome;
+  /** Where the check failed – lets the engine judge how sure it is (see attempt.ts). */
+  readonly failedAt?: "surface" | "blocked" | "immune" | "scale" | "power" | "other";
+  /** Decided by a stored precedent ("Schiedsspruch") instead of the tag rules. */
+  readonly ruling?: true;
   readonly power: number;
   readonly needed: number;
 }

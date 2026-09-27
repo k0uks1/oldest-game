@@ -39,8 +39,12 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
 
 ### Core invariants – do not break
 
-1. **The LLM never decides outcomes.** It maps text → `Form` (closed vocabulary) and writes
-   prose about an already-resolved move. Winner/validity/cost come only from `src/engine`.
+1. **The LLM never decides outcomes on its own.** It maps text → `Form` (closed vocabulary) and writes
+   prose about an already-resolved move. Winner/validity/cost come from `src/engine`. The one
+   exception is the **referee** (`src/llm/referee.ts`): only when the engine flags a failure as
+   uncertain (`Failure.uncertain`, see `uncertainty()`), Claude may rule on that exact pair; the ruling
+   is validated and stored as a precedent (`rulings` in the learned pack) and from then on replayed
+   deterministically by the engine (`checkRuling`, scale caps still apply).
 2. **Classification is independent of the opponent.** `parseWithClaude` gets only the player's
    text plus lexicon anchors, never the current target. Results are cached per text.
 3. **Rules reference tags, never concrete forms.** No `if (form.id === "drache")` anywhere.

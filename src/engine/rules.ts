@@ -1,5 +1,6 @@
 import type { PowerModifier } from "./fields.ts";
 import type { Ontology } from "./ontology/ontology.ts";
+import type { RulingSpec } from "./ontology/pack.ts";
 import { has, intersection } from "./ontology/tagset.ts";
 import type { CheckStep, CounterCheck, Form, GameConfig, Scale } from "./types.ts";
 
@@ -85,7 +86,7 @@ export function checkCounter(
   const hits = intersection(verb.targets, t.closure);
   if (hits.length === 0) {
     const need = verb.spec.targets.map((x) => onto.tagLabel(x)).join(" / ");
-    return fail(`${target.name} bietet keine Angriffsfläche – nötig wäre: ${need}.`);
+    return fail(`${target.name} bietet keine Angriffsfläche – nötig wäre: ${need}.`, { failedAt: "surface" });
   }
   // A hit exploits a weakness if the weakness tag lies at or below the targeted category:
   // weak "eisen", verb targets "metall" → weakness. Weak "stolz", verb targets "fuehlt" → no.
@@ -98,9 +99,9 @@ export function checkCounter(
   const blockers = intersection(verb.blocked, t.closure);
   if (blockers.length > 0) {
     const names = blockers.map((b) => onto.tagLabel(b)).join(" und ");
-    return fail(`${target.name} ist ${names} – „${verb.spec.label}“ greift nicht.`, { hitTag });
+    return fail(`${target.name} ist ${names} – „${verb.spec.label}“ greift nicht.`, { hitTag, failedAt: "blocked" });
   }
-  if (t.immune.has(verbId)) return fail(`${target.name} ist immun gegen „${verb.spec.label}“.`, { hitTag });
+  if (t.immune.has(verbId)) return fail(`${target.name} ist immun gegen „${verb.spec.label}“.`, { hitTag, failedAt: "immune" });
 
   // 3. game rules on scale
   const jump = attacker.scale - target.scale;
@@ -108,13 +109,13 @@ export function checkCounter(
   if (attacker.scale - base > config.maxScaleJump) {
     return fail(
       `Maßlos: ${attacker.name} (Stufe ${attacker.scale}) ist zu groß – erlaubt ist höchstens Stufe ${String(base + config.maxScaleJump)}.`,
-      { hitTag },
+      { hitTag, failedAt: "scale" },
     );
   }
   if (-jump > config.maxScaleDrop && verb.spec.leverage < config.mythicLeverage) {
     return fail(
       `Zu klein: ${attacker.name} ist ${-jump} Stufen kleiner als ${target.name}. Das geht nur mit einem mythischen Hebel (≥ ${config.mythicLeverage}).`,
-      { hitTag },
+      { hitTag, failedAt: "scale" },
     );
   }
   if (verb.spec.minRelativeScale !== undefined && jump < verb.spec.minRelativeScale) {
@@ -138,11 +139,35 @@ export function checkCounter(
     (weaknessHit ? ` + ${WEAKNESS_BONUS} (${weakHit === undefined ? "Schreck" : "Schwäche"}!)` : "") +
     (fieldDelta === 0 ? "" : ` ${fieldDelta > 0 ? "+" : "−"} ${String(Math.abs(fieldDelta))} (Arena)`) +
     ` = ${power} gegen Stufe ${needed}`;
-  if (power < needed) return fail(`${powerText} – zu schwach.`, { hitTag, weaknessHit, power, needed });
+  if (power < needed) return fail(`${powerText} – zu schwach.`, { hitTag, weaknessHit, power, needed, failedAt: "power" });
   steps.push({ ok: true, text: `${powerText} ✓` });
 
   const outcome = scare !== undefined ? "vertrieben" : (verb.spec.outcome ?? "vernichtet");
   return { verb: verbId, valid: true, steps, hitTag, weaknessHit, power, needed, outcome, ...(scare === undefined ? {} : { startled: true as const }) };
+}
+
+/**
+ * A stored precedent ("Schiedsspruch"): a ruling for exactly this pair replaces the tag rules for
+ * the mechanism it names. Game rules on scale still apply – no ruling lets a supernova swat a snake.
+ */
+export function checkRuling(
+  onto: Ontology,
+  attacker: Form,
+  target: Form,
+  ruling: RulingSpec,
+  config: GameConfig = DEFAULT_CONFIG,
+  floorScale = 1,
+): CounterCheck {
+  const verb = onto.verbs.get(ruling.verb);
+  const label = verb?.spec.label ?? ruling.verb;
+  const steps: CheckStep[] = [{ ok: true, text: `${attacker.name} ${label} …` }];
+  const base = Math.max(target.scale, floorScale);
+  const common = { verb: ruling.verb, hitTag: null, weaknessHit: false, needed: target.scale, ruling: true as const };
+  if (attacker.scale - base > config.maxScaleJump) {
+    return { ...common, valid: false, steps: [...steps, { ok: false, text: `Maßlos: ${attacker.name} ist zu groß.` }], power: 0, outcome: "vernichtet", failedAt: "scale" };
+  }
+  steps.push({ ok: ruling.valid, text: `Schiedsspruch: ${ruling.reason}` });
+  return { ...common, valid: ruling.valid, steps, power: attacker.scale, outcome: verb?.spec.outcome ?? "vernichtet", ...(ruling.valid ? {} : { failedAt: "other" as const }) };
 }
 
 /** Pseudo-mechanism recorded in the history for an escape (subject to echo like any mechanism). */

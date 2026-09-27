@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { CORE_PACK_RAW, loadPack } from "../src/content/index.ts";
+import { CORE_PACK_RAW, coreOntology, loadPack } from "../src/content/index.ts";
+import { parsePack } from "../src/engine/ontology/pack.ts";
 import { Ontology } from "../src/engine/ontology/ontology.ts";
 import { findCounters } from "../src/engine/rules.ts";
 import { emptyLearnedPack, findLearned, learn, readLearnedPack } from "../src/llm/learning.ts";
@@ -121,3 +122,62 @@ describe("learned weaknesses", () => {
     assert.deepEqual(l.value.form.weak, ["g_kaese"]);
   });
 });
+
+describe("referee precedents (Schiedssprüche)", () => {
+  it("a stored ruling decides the pair – deterministically, with the reason in the steps", async () => {
+    const { addRuling: add } = await import("../src/llm/learning.ts");
+    const { attempt } = await import("../src/engine/attempt.ts");
+    const { createGame, play } = await import("../src/engine/game.ts");
+    const core = parsePack(CORE_PACK_RAW);
+    assert.ok(core.ok);
+    const stored = add([core.pack], emptyLearnedPack(), { attacker: "salz", target: "ritter", valid: true, verb: "zersetzt", reason: "Salz lässt die Rüstung rosten." });
+    assert.ok(stored);
+    const onto = stored.onto;
+    const g = play(onto, createGame(["A", "B"]), need(onto.formById("ritter")), null);
+    assert.ok(g.ok);
+    const r = attempt(onto, g.value, need(onto.formById("salz")), "zersetzt");
+    assert.ok(r.kind === "success", r.kind === "failure" ? r.failure.reason : r.kind);
+    assert.equal(r.move.check?.ruling, true);
+    assert.ok(r.move.check.steps.some((s) => s.text.includes("Rüstung rosten")));
+  });
+
+  it("uncertain failures are flagged; a negative ruling stops further asking", async () => {
+    const { addRuling: add } = await import("../src/llm/learning.ts");
+    const { attempt } = await import("../src/engine/attempt.ts");
+    const { createGame, play } = await import("../src/engine/game.ts");
+    const core = parsePack(CORE_PACK_RAW);
+    assert.ok(core.ok);
+    const base = Ontology.compile([core.pack]);
+    const g = play(base, createGame(["A", "B"]), need(base.formById("ritter")), null);
+    assert.ok(g.ok);
+    const r = attempt(base, g.value, need(base.formById("salz")), null);
+    assert.ok(r.kind === "failure");
+    assert.ok(r.failure.uncertain !== undefined);
+    const stored = add([core.pack], emptyLearnedPack(), { attacker: "salz", target: "ritter", valid: false, verb: r.failure.closest?.verb ?? "zersetzt", reason: "Salz kratzt Stahl nicht." });
+    assert.ok(stored);
+    const g2 = play(stored.onto, createGame(["A", "B"]), need(stored.onto.formById("ritter")), null);
+    assert.ok(g2.ok);
+    const r2 = attempt(stored.onto, g2.value, need(stored.onto.formById("salz")), null);
+    assert.ok(r2.kind === "failure");
+    assert.equal(r2.failure.uncertain, undefined);
+  });
+
+  it("referee answers are validated (unknown mechanism, missing reason → no ruling)", async () => {
+    const { verdictFrom } = await import("../src/llm/referee.ts");
+    const { attempt } = await import("../src/engine/attempt.ts");
+    const { createGame, play } = await import("../src/engine/game.ts");
+    const onto = coreOntology();
+    const g = play(onto, createGame(["A", "B"]), need(onto.formById("ritter")), null);
+    assert.ok(g.ok);
+    const r = attempt(onto, g.value, need(onto.formById("salz")), null);
+    assert.ok(r.kind === "failure");
+    assert.equal(verdictFrom(onto, r.failure, { sieg: true, mechanismus: "zaubert_alles_weg", begruendung: "" }), undefined);
+    const ok = verdictFrom(onto, r.failure, { sieg: true, mechanismus: "zersetzt", begruendung: "Salz frisst Metall." });
+    assert.equal(ok?.ruling.verb, "zersetzt");
+  });
+});
+
+function need<T>(x: T | undefined): T {
+  assert.ok(x !== undefined);
+  return x;
+}

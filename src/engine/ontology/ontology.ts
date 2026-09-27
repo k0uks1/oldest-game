@@ -1,7 +1,7 @@
 import { normalize } from "../text.ts";
 import { ARCHETYPES, PLANES, type Archetype, type Form, type Plane, type Scale } from "../types.ts";
 import { Trie, TrigramIndex } from "./indexes.ts";
-import type { ContentPack, FieldSpec, FormSpec, ModifierSpec, TagSpec, VerbSpec } from "./pack.ts";
+import type { ContentPack, FieldSpec, FormSpec, ModifierSpec, RulingSpec, TagSpec, VerbSpec } from "./pack.ts";
 import { difference, fromIterable, has, intersection, type TagSet } from "./tagset.ts";
 
 export interface CompiledVerb {
@@ -67,6 +67,7 @@ export class Ontology {
   private readonly startleByTag = new Map<number, { verbs: ReadonlySet<string>; tags: TagSet }>();
   private readonly startleTags: TagSet;
   private readonly formsById = new Map<string, Form>();
+  private readonly rulings = new Map<string, RulingSpec>();
   private readonly compiled = new WeakMap<Form, CompiledForm>();
   private verbUsersMemo: Map<string, Form[]> | undefined;
 
@@ -212,6 +213,21 @@ export class Ontology {
       }
     }
     this.lexicon = lexicon;
+
+    // ── Precedents ("Schiedssprüche") ───────────────────────────────────
+    for (const p of packs) {
+      for (const r of p.rulings ?? []) {
+        if (!this.formsById.has(r.attacker) || !this.formsById.has(r.target)) {
+          errors.push(`Schiedsspruch ${r.attacker} → ${r.target}: unbekannte Gestalt.`);
+          continue;
+        }
+        if (!verbs.has(r.verb)) {
+          errors.push(`Schiedsspruch ${r.attacker} → ${r.target}: unbekannter Mechanismus „${r.verb}“.`);
+          continue;
+        }
+        this.rulings.set(`${r.attacker}>${r.target}`, r); // later packs override earlier ones
+      }
+    }
 
     if (errors.length > 0) throw new OntologyError(errors);
 
@@ -418,6 +434,11 @@ export class Ontology {
   /** Expanded tag ids of a form (for UI / narration). */
   formTags(form: Form): string[] {
     return [...this.compileForm(form).closure].map((i) => this.tags[i]?.id ?? "").filter((x) => x !== "");
+  }
+
+  /** Stored precedent for exactly this pair, if any. */
+  rulingFor(attackerId: string, targetId: string): RulingSpec | undefined {
+    return this.rulings.get(`${attackerId}>${targetId}`);
   }
 
   formById(id: string): Form | undefined {
