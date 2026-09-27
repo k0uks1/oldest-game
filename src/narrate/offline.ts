@@ -1,3 +1,4 @@
+import { ESCAPE } from "../engine/rules.ts";
 import type { Ontology } from "../engine/ontology/ontology.ts";
 import { hash32, rng } from "../engine/text.ts";
 import type { GameState, Move } from "../engine/types.ts";
@@ -47,6 +48,7 @@ export function narrateMove(onto: Ontology, state: GameState, move: Move, index:
     const flavor = move.form.flavor === undefined ? "" : ` ${move.form.flavor}`;
     return fill(pick(OPENINGS), { A: move.form.name, P: player }) + flavor;
   }
+  if (move.verb === ESCAPE) return fill(pick(ESCAPES), { A: move.form.name, B: target.name });
   const verb = onto.verbs.get(move.verb)?.spec;
   const phrase = verb?.phrase ?? `${verb?.label ?? move.verb} {B}`;
   const action = fill(phrase, { B: target.name });
@@ -56,6 +58,13 @@ export function narrateMove(onto: Ontology, state: GameState, move: Move, index:
   if (move.form.scale < target.scale) parts.push(pick(UNDERDOG));
   return parts.join(" ");
 }
+
+const ESCAPES = [
+  "{B} schlägt zu – doch wo eben noch {A} war, ist nur noch Luft.",
+  "{A} ist schon fort, bevor {B} begreift, was geschieht.",
+  "{B} tobt ins Leere. {A} sieht aus sicherer Ferne zu.",
+  "Nicht jeder Kampf wird gewonnen. Manche werden einfach verlassen: {A} entkommt {B}.",
+];
 
 export function narrateEnd(state: GameState): string {
   if (state.winner === null) return "Unentschieden. Das älteste Spiel kennt heute keinen Sieger.";

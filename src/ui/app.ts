@@ -1,6 +1,7 @@
 import { attempt, type AttemptOutcome } from "../engine/attempt.ts";
 import { arenaMinScale, createGame, currentTarget, pass, roundNumber } from "../engine/game.ts";
 import { parseForm } from "../engine/parse.ts";
+import { ESCAPE } from "../engine/rules.ts";
 import type { Form, GameState, PlayerId } from "../engine/types.ts";
 import {
   detectLocalProxy,
@@ -495,7 +496,12 @@ export class App {
       this.retry = false;
       why = move.check?.steps.map((st) => st.text) ?? ["Eröffnung."];
       if (move.discovery) why = [...why, `Einfallsreichtum: +${String(this.state.config.discoveryEleganz)} Eleganz für eine nie gesehene Gestalt.`];
-      if (move.verb !== null) {
+      if (move.verb === ESCAPE) {
+        const target = this.state.history.at(-2)?.form;
+        const threat = target === undefined ? undefined : this.onto.compileForm(target).verbs.map((v) => this.onto.verbs.get(v)?.spec.family).find((f) => f === "gewalt" || f === "element");
+        await this.arena.evade(actor, threat ?? "gewalt", this.onto.formHas(form, "fliegt") ? "up" : "down");
+        this.flashBanner("Entkommen.", "good");
+      } else if (move.verb !== null) {
         const family = this.onto.verbs.get(move.verb)?.spec.family ?? "gewalt";
         await this.arena.attack(actor, family, move.check?.weaknessHit === true);
         this.flashBanner(move.eleganz > 1 ? `Es genügt. ✦ ${String(move.eleganz)}` : "Es genügt.", "good");
@@ -747,6 +753,7 @@ export class App {
         li("Wer kleiner als das Ziel gewinnt, bekommt Wille zurück und viel ", h("strong", {}, "Eleganz ✦"), "."),
         li(`Einfallsreichtum: Wer zu etwas wird, das das Spiel noch nie gesehen hat, lehrt es dem Grimoire – und bekommt bei Erfolg +${String(c.discoveryEleganz)} Eleganz.`),
         li(`Eskalation: Alle ${String(c.escalateEveryMoves)} Züge steigt die Mindeststufe – die Mauern der Arena fallen. Nur mythische Hebel (≥ ${String(c.mythicLeverage)}) – Hoffnung, wahre Namen, Erwachen – ignorieren das.`),
+        li(`Entkommen: Statt zu besiegen, darf man auch fliehen – fliegend, tauchend, grabend –, wenn das Ziel nicht folgen kann und nur körperlich angreift. Der Kolibri fliegt der Lavawelle davon, nicht aber dem Drachen oder dem Lied der Sirene. Vor Welten und Kosmischem gibt es kein Entkommen. Bringt ${String(c.escapeEleganz)} Eleganz; danach muss der Gegner den Entkommenen besiegen.`),
         li(`Echo: Ein Mechanismus der letzten ${String(c.echoWindow)} Züge darf nicht wiederholt werden. Jede Gestalt nur einmal pro Spiel.`),
         li(`Du weißt vorher nicht, ob deine Gestalt reicht. Reicht sie nicht, zerschellt sie: Du zahlst ihren Preis an Wille plus ${String(c.failurePenalty)}, sie ist verbraucht, und du versuchst es erneut. Wem der Wille ausgeht, der verliert.`),
         li(`Wer aufgibt oder keine Antwort findet, verliert. Nach ${String(c.roundLimit)} Runden gewinnt die höhere Eleganz.`),

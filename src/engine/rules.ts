@@ -16,6 +16,14 @@ export const DEFAULT_CONFIG: GameConfig = {
   failurePenalty: 3,
   roundLimit: 10,
   discoveryEleganz: 1,
+  escapeRoutes: {
+    fliegt: ["fliegt", "blitz", "licht", "gas", "krankheit", "schwarm"],
+    schwimmt: ["schwimmt", "fluessig", "blitz", "krankheit"],
+    graebt: ["graebt", "erde", "fluessig", "krankheit"],
+  },
+  physicalFamilies: ["gewalt", "element", "leben"],
+  maxEscapeScale: 6,
+  escapeEleganz: 1,
   echoWindow: 2,
 };
 
@@ -116,6 +124,74 @@ export function checkCounter(
   steps.push({ ok: true, text: `${powerText} ✓` });
 
   return { verb: verbId, valid: true, steps, hitTag, weaknessHit, power, needed };
+}
+
+/** Pseudo-mechanism recorded in the history for an escape (subject to echo like any mechanism). */
+export const ESCAPE = "entkommt";
+
+/** Can mechanism `verbId` touch `target` at all? (surface, blockers, immunity – no scale rules) */
+export function reaches(onto: Ontology, verbId: string, target: Form): boolean {
+  const verb = onto.verbs.get(verbId);
+  if (verb === undefined) return false;
+  const t = onto.compileForm(target);
+  if (intersection(verb.targets, t.closure).length === 0) return false;
+  if (intersection(verb.blocked, t.closure).length > 0) return false;
+  return !t.immune.has(verbId);
+}
+
+/**
+ * "Entkommen" – `evader` answers `target` not by defeating it but by getting out of reach.
+ *
+ *  1. the evader has an escape route (a key of `config.escapeRoutes`, e.g. fliegt)
+ *  2. the target is not too vast to flee from (≤ maxEscapeScale)
+ *  3. the target cannot follow along that route (it has none of the route's closing tags)
+ *  4. there is something to flee from: at least one physical mechanism of the target reaches the evader
+ *  5. nothing non-physical of the target reaches it either (a siren's song follows you into the sky)
+ *  6. usual scale cap: the evader may not be more than maxScaleJump above the target / floor
+ */
+export function checkEscape(
+  onto: Ontology,
+  evader: Form,
+  target: Form,
+  config: GameConfig = DEFAULT_CONFIG,
+  floorScale = 1,
+): CounterCheck {
+  const steps: CheckStep[] = [{ ok: true, text: `${evader.name} versucht zu entkommen …` }];
+  const fail = (text: string): CounterCheck => ({
+    verb: ESCAPE,
+    valid: false,
+    steps: [...steps, { ok: false, text }],
+    hitTag: null,
+    weaknessHit: false,
+    power: 0,
+    needed: target.scale,
+  });
+  const routes = Object.keys(config.escapeRoutes).filter((r) => onto.formHas(evader, r));
+  if (routes.length === 0) return fail(`${evader.name} hat keinen Fluchtweg (fliegen, schwimmen, graben).`);
+  if (target.scale >= config.maxEscapeScale + 1) return fail(`Vor ${target.name} gibt es kein Entkommen – es ist überall.`);
+  const open = routes.filter((r) => !(config.escapeRoutes[r] ?? []).some((c) => onto.formHas(target, c)));
+  if (open.length === 0) {
+    const r = routes[0] ?? "";
+    return fail(`${target.name} folgt überallhin – auch wer ${onto.tagLabel(r)}, entkommt ihm nicht.`);
+  }
+  const route = open[0] ?? "";
+  steps.push({ ok: true, text: `Fluchtweg: ${evader.name} ${onto.tagLabel(route)} – ${target.name} kann nicht folgen.` });
+  const threats = onto.compileForm(target).verbs.filter((v) => reaches(onto, v, evader));
+  const family = (v: string): string => onto.verbs.get(v)?.spec.family ?? "";
+  const physical = threats.filter((v) => config.physicalFamilies.includes(family(v)));
+  const other = threats.filter((v) => !config.physicalFamilies.includes(family(v)));
+  if (other.length > 0) {
+    const label = onto.verbs.get(other[0] ?? "")?.spec.label ?? "";
+    return fail(`„${label}“ erreicht ${evader.name} auch aus der Ferne – Flucht hilft nicht.`);
+  }
+  if (physical.length === 0) return fail(`${target.name} kann ${evader.name} ohnehin nichts anhaben – Flucht ist hier kein Zug.`);
+  const base = Math.max(target.scale, floorScale);
+  if (evader.scale - base > config.maxScaleJump) {
+    return fail(`Maßlos: ${evader.name} ist zu groß, um bloß zu fliehen.`);
+  }
+  const labels = physical.map((v) => onto.verbs.get(v)?.spec.label ?? v).join(", ");
+  steps.push({ ok: true, text: `${target.name} (${labels}) greift ins Leere ✓` });
+  return { verb: ESCAPE, valid: true, steps, hitTag: null, weaknessHit: false, power: evader.scale, needed: target.scale };
 }
 
 /**

@@ -98,6 +98,17 @@ export interface GameConfig {
    * Whether a form is new is decided outside the engine (validated live learning) and passed in.
    */
   readonly discoveryEleganz: number;
+  /**
+   * "Entkommen": instead of defeating the target, a form may escape it – fly away from a lava
+   * wave, dive under a fire, burrow beneath a stampede. Each route (a tag of the evader) is
+   * closed by attacker tags that can follow (a flier follows fliers, lightning reaches the sky).
+   * Only physical attacks (families in `physicalFamilies`) can be escaped this way.
+   */
+  readonly escapeRoutes: Readonly<Record<string, readonly string[]>>;
+  readonly physicalFamilies: readonly string[];
+  /** Nothing escapes a target of this scale or larger ("Welt", "kosmisch"). */
+  readonly maxEscapeScale: number;
+  readonly escapeEleganz: number;
   /** A mechanism used within the last N moves may not be repeated. */
   readonly echoWindow: number;
 }
