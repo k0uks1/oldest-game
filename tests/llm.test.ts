@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { coreOntology } from "../src/content/index.ts";
-import { callClaude, DEFAULT_SETTINGS, estimateCostUsd } from "../src/llm/client.ts";
+import { scanText } from "../scripts/secret-scan.ts";
+import { callClaude, DEFAULT_SETTINGS, estimateCostUsd, persistable } from "../src/llm/client.ts";
 import { anchorsFor, formFromLlm } from "../src/llm/parser.ts";
 
 const onto = coreOntology();
@@ -103,5 +104,19 @@ describe("callClaude", () => {
 
   it("estimates Haiku cost", () => {
     assert.equal(estimateCostUsd({ input: 1_000_000, output: 0, cacheRead: 0, cacheWrite: 0 }), 1);
+  });
+});
+
+describe("key hygiene", () => {
+  it("does not persist secrets unless the player opts in", () => {
+    const s = { ...DEFAULT_SETTINGS, apiKey: "sk-ant-secret", accessCode: "code" };
+    assert.equal(persistable(s).apiKey, "");
+    assert.equal(persistable(s).accessCode, "");
+    assert.equal(persistable({ ...s, rememberSecrets: true }).apiKey, "sk-ant-secret");
+  });
+
+  it("secret scan recognises Anthropic keys", () => {
+    assert.ok(scanText(`const k = "sk-ant-api03-${"x".repeat(40)}"`));
+    assert.ok(!scanText("placeholder: sk-ant-…"));
   });
 });

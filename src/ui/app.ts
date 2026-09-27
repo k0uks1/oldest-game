@@ -14,7 +14,7 @@ import type { Ontology } from "../engine/ontology/ontology.ts";
 import { parseForm } from "../engine/parse.ts";
 import { findCounters } from "../engine/rules.ts";
 import type { Form, GameState, PlayerId } from "../engine/types.ts";
-import { detectLocalProxy, estimateCostUsd, isClaudeReady, loadSettings, saveSettings, sessionUsage, type LlmSettings } from "../llm/client.ts";
+import { detectLocalProxy, estimateCostUsd, isClaudeReady, isHostedOrigin, loadSettings, saveSettings, sessionUsage, type LlmSettings } from "../llm/client.ts";
 import { narrateWithClaude } from "../llm/narrator.ts";
 import { parseWithClaude } from "../llm/parser.ts";
 import { narrateEnd, narrateMove } from "../narrate/offline.ts";
@@ -532,7 +532,9 @@ export class App {
     const n0 = h("input", { class: "form-input", value: this.state.players[0].name, placeholder: "Spieler 1" });
     const n1 = h("input", { class: "form-input", value: this.state.players[1].name, placeholder: "Spieler 2" });
     const needsKey = !this.debug && !isClaudeReady(this.llm);
-    const key = h("input", { class: "form-input", type: "password", placeholder: "sk-ant-… (Claude API-Key)" });
+    const key = h("input", { class: "form-input", id: "start-key", type: "password", placeholder: "sk-ant-… (Claude API-Key)", autocomplete: "off" });
+    const remember = h("input", { type: "checkbox", id: "start-remember" });
+    remember.checked = this.settings.rememberSecrets;
     const go = (): void => {
       if (needsKey) {
         const k = key.value.trim();
@@ -541,7 +543,7 @@ export class App {
           this.flashBanner("Bitte einen API-Key eintragen – oder den Debug-Modus nutzen.", "bad");
           return;
         }
-        this.settings = { ...this.settings, apiKey: k };
+        this.settings = { ...this.settings, apiKey: k, rememberSecrets: remember.checked };
         saveSettings(this.settings);
       }
       this.closeModal();
@@ -556,7 +558,9 @@ export class App {
       "Das älteste Spiel",
       h("p", { class: "lore" }, "Zwei Willen. Eine Arena. Jeder wird zu etwas, das den anderen besiegt – bis einer keine Antwort mehr findet."),
       h("div", { class: "names" }, h("label", {}, "Spieler 1", n0), h("label", {}, "Spieler 2", n1)),
-      needsKey ? h("label", {}, "Claude API-Key (bleibt lokal in deinem Browser)", key) : null,
+      needsKey ? h("label", { for: "start-key" }, "Claude API-Key", key) : null,
+      needsKey ? this.rememberBox(remember) : null,
+      needsKey ? h("p", { class: "hint" }, "Tipp: Nutze einen eigenen Key nur für dieses Spiel, mit Ausgabenlimit. Ganz ohne Key im Browser: lokal mit `npm start`.") : null,
       this.debug ? h("p", { class: "hint" }, "Debug-Modus: ohne Claude – Eingaben werden mechanisch geparst, die Chronik nutzt Textbausteine.") : null,
       h(
         "div",
@@ -642,6 +646,8 @@ export class App {
     const code = h("input", { class: "form-input", id: "llm-code", type: "password", value: this.settings.accessCode, placeholder: "nur für gehostete Proxys" });
     const model = h("input", { class: "form-input", id: "llm-model", value: this.settings.model });
     const debug = h("input", { type: "checkbox", id: "llm-debug" });
+    const remember = h("input", { type: "checkbox", id: "llm-remember" });
+    remember.checked = this.settings.rememberSecrets;
     debug.checked = this.settings.debugOffline;
     const u = sessionUsage;
     const eff = this.llm;
@@ -660,6 +666,7 @@ export class App {
         accessCode: code.value.trim(),
         model: model.value.trim(),
         debugOffline: debug.checked,
+        rememberSecrets: remember.checked,
       };
       saveSettings(this.settings);
       this.closeModal();
@@ -676,9 +683,26 @@ export class App {
       h("label", { for: "llm-code" }, "Zugangscode (optional)", code),
       h("label", { for: "llm-key" }, "Eigener API-Key (nur ohne Proxy)", key),
       h("label", { for: "llm-model" }, "Modell (ohne Proxy; der Proxy legt es selbst fest)", model),
+      this.rememberBox(remember),
       h("label", { class: "check" }, debug, " Debug-Modus: mechanischer Parser & Textbausteine, keine API-Aufrufe"),
       h("p", { class: "hint" }, `Diese Sitzung: ${String(u.calls)} Aufrufe · ${String(u.input + u.cacheRead + u.cacheWrite)} Input- / ${String(u.output)} Output-Tokens · ca. $${estimateCostUsd(u).toFixed(4)}`),
       h("div", { class: "actions" }, h("button", { class: "btn primary", onclick: save }, "Speichern")),
+    );
+  }
+
+  private rememberBox(box: HTMLInputElement): HTMLElement {
+    const hosted = isHostedOrigin();
+    return h(
+      "div",
+      { class: "remember" },
+      h("label", { class: "check", for: box.id }, box, " Key in diesem Browser merken"),
+      h(
+        "p",
+        { class: hosted ? "warn" : "hint" },
+        hosted
+          ? `Nicht empfohlen auf ${location.hostname}: Alle Seiten unter dieser Domain teilen sich den Browser-Speicher und könnten den Key lesen. Ohne Haken bleibt er nur in diesem Tab im Arbeitsspeicher.`
+          : "Ohne Haken bleibt der Key nur in diesem Tab im Arbeitsspeicher und muss beim nächsten Mal neu eingegeben werden.",
+      ),
     );
   }
 
