@@ -79,8 +79,14 @@ export interface GameConfig {
   readonly mythicLeverage: number;
   /** Extra regeneration every N rounds, so the duel escalates over time. */
   readonly regenGrowthEvery: number;
-  /** "Eskalation": the minimum scale rises by one every N rounds (mythic mechanisms exempt). */
-  readonly escalateEvery: number;
+  /**
+   * "Eskalation": the minimum scale rises by one every N *moves* (mythic mechanisms exempt).
+   * N should be odd so that both players alternately face a new floor first – with an even
+   * period the first player always hits every escalation step (measured: 27 % vs 73 % wins).
+   */
+  readonly escalateEveryMoves: number;
+  /** Eleganz awarded for the opening move (small compensation for moving first). */
+  readonly openingEleganz: number;
   /** Number of full rounds before the game is decided on eleganz. */
   readonly roundLimit: number;
   /** A mechanism used within the last N moves may not be repeated. */

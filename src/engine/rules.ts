@@ -4,14 +4,15 @@ import type { CheckStep, CounterCheck, Form, GameConfig, Scale } from "./types.t
 
 export const DEFAULT_CONFIG: GameConfig = {
   startWille: 20,
-  maxWille: 30,
+  maxWille: 40,
   regen: 3,
   maxOpeningScale: 3,
   maxScaleJump: 2,
   maxScaleDrop: 3,
   mythicLeverage: 4,
-  regenGrowthEvery: 2,
-  escalateEvery: 2,
+  regenGrowthEvery: 1,
+  escalateEveryMoves: 3,
+  openingEleganz: 2,
   roundLimit: 10,
   echoWindow: 2,
 };
@@ -35,6 +36,12 @@ export function checkCounter(
   target: Form,
   verbId: string,
   config: GameConfig = DEFAULT_CONFIG,
+  /**
+   * Current minimum scale of the arena ("Eskalation"). The escalation cap is measured from
+   * max(target scale, floor) – otherwise a tiny mythic form played late would leave the
+   * opponent no legal answer at all.
+   */
+  floorScale = 1,
 ): CounterCheck {
   const steps: CheckStep[] = [];
   const fail = (text: string, extra: Partial<CounterCheck> = {}): CounterCheck => ({
@@ -78,9 +85,10 @@ export function checkCounter(
 
   // 3. game rules on scale
   const jump = attacker.scale - target.scale;
-  if (jump > config.maxScaleJump) {
+  const base = Math.max(target.scale, floorScale);
+  if (attacker.scale - base > config.maxScaleJump) {
     return fail(
-      `Maßlos: ${attacker.name} (Stufe ${attacker.scale}) ist ${jump} Stufen größer als ${target.name}. Erlaubt sind höchstens ${config.maxScaleJump}.`,
+      `Maßlos: ${attacker.name} (Stufe ${attacker.scale}) ist zu groß – erlaubt ist höchstens Stufe ${String(base + config.maxScaleJump)}.`,
       { hitTag },
     );
   }

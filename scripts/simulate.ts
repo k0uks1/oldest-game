@@ -61,9 +61,14 @@ if (games > 0) {
   const random = rng(42);
   const lengths: number[] = [];
   const ends = { pass: 0, rounds: 0 };
+  const wins = [0, 0, 0];
+  const el = [0, 0];
+  const wi = [0, 0];
+  const passer = [0, 0];
   const pickCounts = new Map<string, number>();
   const passReasons = { keinKonter: 0, zuTeuer: 0, eskalation: 0 };
   const scaleByRound = new Map<number, number[]>();
+  const stuckOn = new Map<string, number>();
 
   const bot = (state: GameState): { form: Form; verb: string | null } | null => {
     const pool = forms.filter((f) => !state.usedFormIds.includes(f.id));
@@ -93,9 +98,12 @@ if (games > 0) {
       if (m === null) {
         const pool = forms.filter((f) => !g.usedFormIds.includes(f.id));
         const opts = pool.flatMap((f) => evaluateForm(g, f)).filter((o) => o.check.valid && !o.echoed);
+        const bigEnough = opts.filter((o) => !o.belowArena);
         if (opts.length === 0) passReasons.keinKonter++;
-        else if (opts.every((o) => o.belowArena || !o.affordable) && opts.some((o) => !o.belowArena)) passReasons.zuTeuer++;
-        else passReasons.eskalation++;
+        else if (bigEnough.length === 0) passReasons.eskalation++;
+        else passReasons.zuTeuer++;
+        const t = g.history.at(-1)?.form;
+        if (t !== undefined) stuckOn.set(t.id, (stuckOn.get(t.id) ?? 0) + 1);
         g = pass(g);
         break;
       }
@@ -110,12 +118,21 @@ if (games > 0) {
       g = r.value;
     }
     lengths.push(g.history.length);
+    wins[g.winner ?? 2] = (wins[g.winner ?? 2] ?? 0) + 1;
+    el[0] = (el[0] ?? 0) + g.players[0].eleganz;
+    el[1] = (el[1] ?? 0) + g.players[1].eleganz;
+    wi[0] = (wi[0] ?? 0) + g.players[0].wille;
+    wi[1] = (wi[1] ?? 0) + g.players[1].wille;
+    if (g.endReason === "pass") passer[g.active] = (passer[g.active] ?? 0) + 1;
     if (g.endReason === "pass") ends.pass++;
     else ends.rounds++;
   }
   const avg = lengths.reduce((a, b) => a + b, 0) / lengths.length;
   console.log(`\nSelbstspiel: ${games} Partien · Ø ${avg.toFixed(1)} Züge · Aufgabe ${ends.pass} · Punktsieg ${ends.rounds}`);
+  console.log(`Siege: Spieler 1 ${String(wins[0])} · Spieler 2 ${String(wins[1])} · Remis ${String(wins[2])}`);
+  console.log(`Ø Eleganz ${((el[0] ?? 0) / games).toFixed(1)} / ${((el[1] ?? 0) / games).toFixed(1)} · Ø Wille ${((wi[0] ?? 0) / games).toFixed(1)} / ${((wi[1] ?? 0) / games).toFixed(1)} · aufgegeben von ${String(passer[0])} / ${String(passer[1])}`);
   console.log("Aufgabegründe:", passReasons);
+  console.log("Aufgegeben gegen:", [...stuckOn.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([id, n]) => `${id} ${String(n)}`).join(", "));
   console.log(
     "Ø Stufe je Runde:",
     [...scaleByRound.entries()]

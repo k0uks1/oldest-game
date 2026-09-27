@@ -86,6 +86,15 @@ describe("checkCounter – classic interactions", () => {
   });
 });
 
+describe("escalation floor", () => {
+  it("a tiny mythic form played late cannot lock the opponent out", () => {
+    // Floor 4: answering "Ein Wort" (Stufe 1) with a Stufe-5 form is measured from the floor, not from 1.
+    const c = check(onto, lx("lich"), lx("wort"), "entzieht_energie", undefined, 4);
+    assert.ok(!(c.steps.at(-1)?.text ?? "").startsWith("Maßlos"), c.steps.map((s) => s.text).join("\n"));
+    assert.equal(c.valid, true);
+  });
+});
+
 describe("taxonomy", () => {
   it("rust works on steel (stahl ⊂ eisen) but not on gold", () => {
     assert.equal(checkCounter(lx("rost"), lx("schwert"), "rostet").valid, true);

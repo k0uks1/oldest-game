@@ -30,10 +30,10 @@ Gestalt des Gegners besiegt – bis einer keine Antwort mehr findet.
 | Eröffnung | Spieler 1 beginnt mit Stufe ≤ 3 |
 | Konter | Gestalt + Mechanismus; das Ziel braucht eine passende Angriffsfläche |
 | Kraft | Stufe + Hebel des Mechanismus (+2 bei Schwäche) ≥ Stufe des Ziels |
-| Maß | höchstens 2 Stufen größer; mehr als 3 kleiner nur mit mythischem Hebel (Hoffnung, wahre Namen …) |
-| Wille | Start 20, max 30, Regeneration wächst mit den Runden; Größe ist teuer, Overkill kostet extra |
-| Eleganz | Siege von unten bringen Punkte und Wille zurück |
-| Eskalation | alle 2 Runden steigt die Mindeststufe |
+| Maß | höchstens 2 Stufen über max(Ziel, Mindeststufe); mehr als 3 kleiner nur mit mythischem Hebel (Hoffnung, wahre Namen …) |
+| Wille | Start 20, max 40, Regeneration wächst jede Runde; Größe ist teuer, Overkill kostet extra |
+| Eleganz | Siege von unten bringen Punkte und Wille zurück; die Eröffnung ist gratis und bringt 2 Eleganz |
+| Eskalation | alle 3 Züge steigt die Mindeststufe (ungerade Periode: beide Spieler trifft es abwechselnd zuerst) |
 | Echo | ein Mechanismus der letzten 2 Züge ist gesperrt; jede Gestalt nur einmal |
 | Ende | wer aufgibt, verliert; nach 10 Runden entscheidet die Eleganz |
 

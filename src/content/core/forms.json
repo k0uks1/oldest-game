@@ -11,7 +11,7 @@
   {"id": "schluessel", "name": "Schlüssel", "archetype": "key", "scale": 1, "plane": "materie", "tags": ["eisen", "magisch"], "verbs": ["bricht_pakt", "versiegelt"], "aliases": ["schluessel"], "flavor": "Jede Tür, jeder Pakt hat ein Schloss."},
   {"id": "samen", "name": "Samenkorn", "archetype": "plant", "scale": 1, "plane": "leben", "tags": ["pflanze", "hofft"], "verbs": ["fuellt"], "aliases": ["samen", "saat", "eichel"], "flavor": "Winzig – und doch wartet darin ein Wald."},
   {"id": "traene", "name": "Träne", "archetype": "wave", "scale": 1, "plane": "geist", "tags": ["wasser", "fuehlt"], "verbs": ["loescht", "erloest"], "aliases": ["traenen"], "flavor": "Eine aufrichtige Träne löst Flüche."},
-  {"id": "wort", "name": "Ein Wort", "archetype": "book", "scale": 1, "plane": "geist", "tags": ["koerperlos", "magisch"], "verbs": ["wahrer_name", "taeuscht"], "aliases": ["name", "zauberwort", "silbe"]},
+  {"id": "wort", "name": "Ein Wort", "archetype": "book", "scale": 1, "plane": "geist", "tags": ["koerperlos", "magisch", "zeitgebunden"], "verbs": ["wahrer_name", "taeuscht"], "aliases": ["name", "zauberwort", "silbe"]},
   {"id": "gluehwuermchen", "name": "Glühwürmchen", "archetype": "insect", "scale": 1, "plane": "leben", "tags": ["licht", "fliegt", "insekt"], "verbs": ["durchleuchtet"], "aliases": ["leuchtkaefer"]},
   {"id": "schneeflocke", "name": "Schneeflocke", "archetype": "crystal", "scale": 1, "plane": "materie", "tags": ["eis", "kristall", "zeitgebunden"], "verbs": ["gefriert"], "aliases": ["eiskristall", "eiszapfen", "frostblume"]},
   {"id": "heilkraut", "name": "Heilkraut", "archetype": "plant", "scale": 1, "plane": "leben", "tags": ["pflanze"], "verbs": ["heilt"], "aliases": ["kraut", "arznei", "medizin", "salbe", "kamille"]},
