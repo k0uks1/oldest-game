@@ -7,6 +7,7 @@
  *   npm run duel -- play "<was du wirst>" [--game <id>]
  *   npm run duel -- status [--game <id>]
  *   npm run duel -- pass [--game <id>]
+ *   npm run duel -- inspiration [anzahl]   (zufällige Begriffe aus echten Artikeln, scripts/selfplay-seeds.json)
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -109,6 +110,19 @@ switch (cmd) {
       if (out.failure.uncertain !== undefined) logUnknown({ text, kind: "strittig", why: out.failure.uncertain, attacker: out.failure.form.name, target: out.failure.target.name, reason: out.failure.reason });
     }
     console.log(`\n${status(s)}`);
+    break;
+  }
+  case "inspiration": {
+    // Seeded words from real articles – so self-play does not only depend on what agents invent.
+    const seeds = JSON.parse(readFileSync(join(import.meta.dirname, "selfplay-seeds.json"), "utf8")) as Record<string, string[]>;
+    const all = Object.values(seeds).flat();
+    const n = Number(rest[0] ?? "12");
+    const picked: string[] = [];
+    while (picked.length < Math.min(n, all.length)) {
+      const w = all[Math.floor(Math.random() * all.length)];
+      if (w !== undefined && !picked.includes(w)) picked.push(w);
+    }
+    console.log(`Inspiration: ${picked.join(", ")}`);
     break;
   }
   default:
