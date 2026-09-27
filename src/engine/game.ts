@@ -1,6 +1,6 @@
 import { eleganzFor, formCost, overkillSurcharge, underdogRefund } from "./cost.ts";
 import type { Ontology } from "./ontology/ontology.ts";
-import { checkCounter, DEFAULT_CONFIG, effectiveVerbs } from "./rules.ts";
+import { checkCounter, checkEscape, DEFAULT_CONFIG, effectiveVerbs, ESCAPE } from "./rules.ts";
 import type {
   CounterCheck,
   Form,
@@ -70,9 +70,12 @@ export function evaluateForm(onto: Ontology, state: GameState, form: Form): Move
   const wille = state.players[state.active].wille;
   const minScale = arenaMinScale(state);
   const cost = formCost(onto, form).total + overkillSurcharge(form.scale, Math.max(target.scale, minScale));
-  return effectiveVerbs(onto, form)
+  const verbs = [...effectiveVerbs(onto, form)];
+  if (Object.keys(state.config.escapeRoutes).some((r) => onto.formHas(form, r))) verbs.push(ESCAPE);
+  return verbs
     .map((verb) => {
-      const check = checkCounter(onto, form, target, verb, state.config, minScale);
+      const check =
+        verb === ESCAPE ? checkEscape(onto, form, target, state.config, minScale) : checkCounter(onto, form, target, verb, state.config, minScale);
       const echoed = echo.has(verb);
       const affordable = cost <= wille;
       const belowArena = form.scale < minScale && !isMythic(onto, state, verb);
@@ -86,7 +89,8 @@ export function evaluateForm(onto: Ontology, state: GameState, form: Form): Move
         playable: check.valid && !echoed && affordable && !belowArena,
       };
     })
-    .sort((a, b) => Number(b.playable) - Number(a.playable) || b.check.power - a.check.power);
+    // defeating beats escaping when both work
+    .sort((a, b) => Number(b.playable) - Number(a.playable) || Number(a.verb === ESCAPE) - Number(b.verb === ESCAPE) || b.check.power - a.check.power);
 }
 
 export function moveCost(onto: Ontology, state: GameState, form: Form): number {
@@ -146,11 +150,13 @@ export function play(onto: Ontology, state: GameState, form: Form, verb: string 
     return { ok: false, error: `Zu wenig Wille: ${form.name} kostet ${cost}, du hast ${me.wille}.` };
   }
 
-  const refund = target === null ? 0 : underdogRefund(form.scale, target.scale);
+  const refund = target === null || chosenVerb === ESCAPE ? 0 : underdogRefund(form.scale, target.scale);
   const eleganz =
     (target === null || check === null
       ? state.config.openingEleganz
-      : eleganzFor(form.scale, target.scale, check.weaknessHit)) + (discovery ? state.config.discoveryEleganz : 0);
+      : chosenVerb === ESCAPE
+        ? state.config.escapeEleganz
+        : eleganzFor(form.scale, target.scale, check.weaknessHit)) + (discovery ? state.config.discoveryEleganz : 0);
   const move: Move = { player: state.active, form, verb: chosenVerb, cost, eleganz, refund, check, discovery };
 
   const cap = state.config.maxWille;

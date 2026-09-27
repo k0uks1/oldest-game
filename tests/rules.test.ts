@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { coreOntology } from "../src/content/index.ts";
 import { formCost } from "../src/engine/cost.ts";
-import { checkCounter as check } from "../src/engine/rules.ts";
+import { attempt } from "../src/engine/attempt.ts";
+import { createGame, evaluateForm, play } from "../src/engine/game.ts";
+import { checkCounter as check, checkEscape, ESCAPE } from "../src/engine/rules.ts";
 import type { Form } from "../src/engine/types.ts";
 
 const onto = coreOntology();
@@ -120,5 +122,54 @@ describe("formCost", () => {
 
   it("is never below 1", () => {
     for (const e of onto.lexicon) assert.ok(formCost(onto, e).total >= 1, e.id);
+  });
+});
+
+describe("escape (Entkommen)", () => {
+  const f = (id: string): Form => {
+    const x = onto.formById(id);
+    assert.ok(x, id);
+    return x;
+  };
+
+  it("a hummingbird flies away from a lava flow", () => {
+    const r = checkEscape(onto, f("kolibri"), f("lavastrom"));
+    assert.ok(r.valid, r.steps.map((s) => s.text).join(" | "));
+  });
+
+  it("…but not from a dragon, which follows into the sky", () => {
+    assert.equal(checkEscape(onto, f("kolibri"), f("drache")).valid, false);
+  });
+
+  it("…nor from a siren's song, which reaches it anywhere", () => {
+    assert.equal(checkEscape(onto, f("kolibri"), f("sirene")).valid, false);
+  });
+
+  it("…nor from something as vast as the sun", () => {
+    assert.equal(checkEscape(onto, f("kolibri"), f("sonne")).valid, false);
+  });
+
+  it("a mole burrows away from a charging bull", () => {
+    assert.ok(checkEscape(onto, f("maulwurf"), f("stier")).valid);
+  });
+
+  it("is offered by the game layer, gives escape eleganz, no refund, and counts for echo", () => {
+    let g = createGame(["A", "B"]);
+    const opened = play(onto, g, f("wolf"), null);
+    assert.ok(opened.ok);
+    g = opened.value;
+    const r = attempt(onto, g, f("kolibri"), ESCAPE);
+    assert.ok(r.kind === "success", r.kind === "failure" ? r.failure.reason : "");
+    assert.equal(r.move.verb, ESCAPE);
+    assert.equal(r.move.eleganz, g.config.escapeEleganz);
+    assert.equal(r.move.refund, 0);
+    assert.equal(r.state.history.at(-1)?.form.id, "kolibri");
+  });
+
+  it("defeating is preferred over escaping when both work", () => {
+    const g0 = play(onto, createGame(["A", "B"]), f("kolibri"), null);
+    assert.ok(g0.ok);
+    const opts = evaluateForm(onto, g0.value, f("adler")).filter((o) => o.playable);
+    if (opts.length > 1) assert.notEqual(opts[0]?.verb, ESCAPE);
   });
 });

@@ -1,3 +1,4 @@
+import { ESCAPE } from "../engine/rules.ts";
 import type { Ontology } from "../engine/ontology/ontology.ts";
 import { parseForm, suggest } from "../engine/parse.ts";
 import { clampScale } from "../engine/rules.ts";
@@ -68,7 +69,7 @@ const TOOL: ToolDef = {
       weaknesses: { type: "array", items: { type: "string" }, maxItems: 3, description: "Offensichtliche Schwächen (müssen Eigenschaften sein)." },
       intended_mechanism: {
         type: ["string", "null"],
-        description: "Mechanismus-ID, falls der Spieler beschreibt WIE die Gestalt angreift, sonst null.",
+        description: "Mechanismus-ID, falls der Spieler beschreibt WIE die Gestalt angreift, sonst null. \"entkommt\", wenn die Gestalt ausweichen/fliehen will statt anzugreifen.",
       },
       new_properties: {
         type: "array",
@@ -152,6 +153,7 @@ REGELN FÜR DICH:
 - Jede Gestalt braucht Angriffsfläche und mindestens eine plausible Schwäche.
 - 1–3 Mechanismen, die zur Gestalt passen. Elemente bringen ihre Mechanismen selbst mit (Feuer verbrennt …).
 - intended_mechanism nur setzen, wenn der Spieler ausdrücklich beschreibt, WIE angegriffen wird.
+  Beschreibt er Flucht oder Ausweichen („fliegt davon“, „taucht ab“, „gräbt sich ein“), setze "entkommt".
 - Keine Erklärungen, nur das Werkzeug aufrufen.`;
   systemCache.set(onto, prompt);
   return prompt;
@@ -212,7 +214,7 @@ export function formFromLlm(onto: Ontology, input: unknown, text: string): LlmPa
     }
     return ids;
   };
-  const resolveVerb = (k: string): string | undefined => (onto.verbs.has(k) ? k : onto.resolveVerb(k));
+  const resolveVerb = (k: string): string | undefined => (k === ESCAPE || onto.verbs.has(k) ? k : onto.resolveVerb(k));
 
   const base = typeof o["base"] === "string" ? (onto.formById(o["base"]) ?? null) : null;
   const added = resolveTags(strings(o["properties"]));

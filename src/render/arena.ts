@@ -74,6 +74,7 @@ interface Fighter {
   reveal: number;
   alpha: number;
   offsetX: number;
+  offsetY: number;
   flash: number;
   readonly seed: number;
   readonly aura: Aura;
@@ -345,6 +346,7 @@ export class Arena {
       reveal: hidden ? 0 : 1,
       alpha: 1,
       offsetX: 0,
+      offsetY: 0,
       flash: 0,
       seed: hash32(form.id),
       aura: this.auraFor(form),
@@ -425,6 +427,29 @@ export class Arena {
     this.disintegrate(side);
     await wait(750);
     this.fighters[side] = null;
+  }
+
+  /**
+   * An escape: the target lashes out, the evader slips away (up into the air or down
+   * into water/earth), the blow hits nothing and the target withdraws into the dark.
+   */
+  async evade(side: Side, targetFamily: string, direction: "up" | "down"): Promise<void> {
+    const other: Side = side === 0 ? 1 : 0;
+    const evader = this.fighters[side];
+    const target = this.fighters[other];
+    if (evader === null) return;
+    const dy = direction === "up" ? -30 : 16;
+    const dodge = this.tween(this.reducedMotion ? 50 : 420, (t) => (evader.offsetY = dy * Math.sin(t * Math.PI * 0.5)));
+    if (target !== null) await this.strike(other, targetFamily, true);
+    await dodge;
+    this.onCue?.("fizzle");
+    this.burst(SIDE_X[side], GROUND_Y - 30 + dy, evader.sprite.palette.glow, 20);
+    await wait(250);
+    await this.tween(this.reducedMotion ? 50 : 500, (t) => (evader.offsetY = dy * (1 - t)));
+    if (target !== null) {
+      await this.tween(this.reducedMotion ? 50 : 700, (t) => (target.alpha = 1 - t));
+      this.fighters[other] = null;
+    }
   }
 
   /** The held breath before the outcome: the hit hangs in the air, the target trembles. */
@@ -694,7 +719,7 @@ export class Arena {
     const { width, height } = f.sprite.pixels;
     const bob = this.reducedMotion ? 0 : Math.round(Math.sin(this.time * (f.flying ? 2.2 : 1.6) + (f.seed % 7)) * (f.flying ? 3 : 1));
     const lift = f.flying ? 10 : 0;
-    return { x: Math.round(SIDE_X[side] - width / 2 + f.offsetX), y: Math.round(GROUND_Y - height - lift + bob), w: width, h: height };
+    return { x: Math.round(SIDE_X[side] - width / 2 + f.offsetX), y: Math.round(GROUND_Y - height - lift + bob + f.offsetY), w: width, h: height };
   }
 
   private drawLightPool(side: Side, f: Fighter): void {
@@ -712,6 +737,16 @@ export class Arena {
 
   private drawFighter(side: Side, f: Fighter): void {
     if (f.alpha <= 0) return;
+    this.base.save();
+    this.glow.save();
+    this.base.globalAlpha = f.alpha;
+    this.glow.globalAlpha = f.alpha;
+    this.drawFighterBody(side, f);
+    this.base.restore();
+    this.glow.restore();
+  }
+
+  private drawFighterBody(side: Side, f: Fighter): void {
     const b = this.base;
     const { x, y, w, h } = this.fighterRect(side, f);
     // shadow
@@ -737,11 +772,11 @@ export class Arena {
     }
     if (f.reveal > 0) {
       b.save();
-      b.globalAlpha = f.reveal;
+      b.globalAlpha = f.reveal * f.alpha;
       blit(b, f.sprite.image);
       b.restore();
       this.glow.save();
-      this.glow.globalAlpha = f.reveal;
+      this.glow.globalAlpha = f.reveal * f.alpha;
       blit(this.glow, f.sprite.glow);
       this.glow.restore();
     }
@@ -752,7 +787,7 @@ export class Arena {
     }
     if (f.flash > 0) {
       b.save();
-      b.globalAlpha = f.flash;
+      b.globalAlpha = f.flash * f.alpha;
       b.globalCompositeOperation = "lighter";
       if (side === 1) {
         b.translate(x + w, 0);

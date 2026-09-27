@@ -72,6 +72,11 @@ mythic leverage ≥ 4) → power = scale + leverage (+2 weakness) ≥ target sca
 one use per form, Wille budget, and discovery eleganz ("Einfallsreichtum": `play(…, discovery)` –
 the flag comes from validated live learning, never from Claude directly).
 
+**Escape (`checkEscape`, pseudo-mechanism `entkommt`)**: instead of defeating, a form may get out of reach –
+it needs an escape route tag (`config.escapeRoutes`: fliegt / schwimmt / graebt), the target must not have a
+tag that follows along that route, at least one *physical* mechanism of the target must reach the evader, no
+non-physical one may, and the target must be ≤ `maxEscapeScale`. Echo applies; defeating is preferred.
+
 ## UI principles
 
 - As little as possible on screen: the arena, one glowing input line, a sigil (menu, also `Esc`).

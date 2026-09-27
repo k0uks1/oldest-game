@@ -1,3 +1,4 @@
+import { ESCAPE } from "../engine/rules.ts";
 import type { Ontology } from "../engine/ontology/ontology.ts";
 import type { Failure } from "../engine/attempt.ts";
 import type { GameState, Move } from "../engine/types.ts";
@@ -20,7 +21,14 @@ export async function narrateWithClaude(
   const target = index > 0 ? state.history[index - 1]?.form : undefined;
   const verb = move.verb === null ? undefined : onto.verbs.get(move.verb)?.spec;
   const facts =
-    target === undefined || verb === undefined
+    target !== undefined && move.verb === ESCAPE
+      ? [
+          `Ausweichender: ${move.form.name} (Stufe ${String(move.form.scale)})`,
+          `Bedrohung: ${target.name} (Stufe ${String(target.scale)}) – greift an, trifft aber nicht.`,
+          "Ausgang: ENTKOMMEN – niemand wird vernichtet; die Bedrohung zieht sich zurück, der Ausweichende bleibt.",
+          ...(move.check?.steps.slice(1).map((s) => s.text) ?? []),
+        ].join("\n")
+      : target === undefined || verb === undefined
       ? `Eröffnung: ${state.players[move.player].name} nimmt die Gestalt „${move.form.name}“ an.`
       : [
           `Angreifer: ${move.form.name} (Stufe ${String(move.form.scale)})`,
