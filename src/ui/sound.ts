@@ -35,6 +35,11 @@ export class Sound {
     return this.muted;
   }
 
+  /** The shared AudioContext once unlocked (music plays through it too). */
+  context(): AudioContext | null {
+    return this.ctx;
+  }
+
   /** Must be called from a user gesture at least once. */
   unlock(): void {
     if (this.ctx !== null) {
