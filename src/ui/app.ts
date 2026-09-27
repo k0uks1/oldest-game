@@ -22,7 +22,7 @@ import { Ontology } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
 import { parseWithClaude } from "../llm/parser.ts";
 import { narrateEnd, narrateFailure, narrateMove } from "../narrate/offline.ts";
-import { Arena, attackOutcome, attackStyle, type AttackStyle } from "../render/arena.ts";
+import { Arena, attackOutcome, attackStyle, easterEggFor, type AttackStyle } from "../render/arena.ts";
 import { clear, h } from "./dom.ts";
 import { Music } from "./music.ts";
 import { Sound } from "./sound.ts";
@@ -526,6 +526,8 @@ export class App {
     const discovery = novelty?.kind === "discovery";
     await this.spellName(form.name, discovery);
     await this.arena.reveal(actor);
+    const egg = easterEggFor(form.name);
+    if (egg !== null) await this.arena.easterEgg(egg, actor);
     if (discovery) {
       this.els.revealSub.textContent =
         novelty.extra.length > 0 ? `✦ zum ersten Mal beschworen · ${novelty.extra.join(" · ")}` : "✦ zum ersten Mal beschworen";

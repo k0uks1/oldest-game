@@ -127,3 +127,10 @@ Welche Tags welche Gewandung auslösen:
 |---|---|---|
 | **Claude zeichnet mit** | Für eine wirklich neue Gestalt (ohne Anker im Lexikon) liefert Claude ein 16×16-Pixelbild in derselben Zeichensprache wie die eingebauten Masken. Es wird validiert: Größe, erlaubte Zeichen (mit Toleranz für Leerzeichen und fremde Zeichen), ein Füllgrad zwischen 10 und 85 % und eine zusammenhängende Silhouette statt Rauschen. Danach wird es im Grimoire gespeichert und wie jede Figur schattiert, beleuchtet und konturiert. Ist das Bild ungültig, greift der Archetyp. | `src/engine/pixelart.ts`, `FormSpec.sprite`, Werkzeugfeld `pixel_art` |
 | **Sechs neue Grundformen** | Tuch, Kiste, Flasche, Fahrzeug, Haus und Becher kommen hinzu. 19 bestehende Gestalten nutzen sie jetzt, etwa Teppich, Käfig, Flasche, Weihwasser, Auto, Bus, Lebkuchenhaus und Kaffee. | `src/render/masks.ts` |
+
+## Atmosphäre und Easter Eggs (Nutzerwünsche: „Soundtrack aufwändiger, atmosphärischer“, „die Atombombe, die TATSÄCHLICH explodiert“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Eine Halle aus Klang** | Alles klingt durch einen erzeugten Steinhallen-Nachhall (2,8 s). Die Musik hat vier Abschnitte (A A B C) mit eigenen Akkordfolgen. Dazu kommen ein langsam atmendes Flächen-Pad, ein Bass-Oktavsprung, eine Melodie als Motiv mit Antwort und eine ferne Glocke zu Beginn jedes Abschnitts. Zwischendurch tropft Wasser, und Wind zieht durch die Gänge. Der Chiptune-Charakter bleibt. | `src/ui/music.ts` |
+| **Easter Eggs** | Die Atombombe explodiert wirklich: Die Arena wird weiß, Druckwellen breiten sich aus, ein Atompilz steigt auf, Ziegel fliegen aus der Wand, und ein tiefer Knall ertönt. Meteoriten schlagen vom Himmel ein, der Regenbogen spannt sich über die Arena, bei Konfetti und Party regnet es Konfetti, und das Schwarze Loch saugt alle Partikel in einen Strudel. | `easterEggFor`, `Arena.easterEgg`, Klang „boom“ |

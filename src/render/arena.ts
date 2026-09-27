@@ -20,7 +20,23 @@ const TORCH_X = [36, 444] as const;
 export type Side = 0 | 1;
 
 /** Moments the UI may want to underline with sound. */
-export type ArenaCue = "summon" | "reveal" | "strike" | "impact" | "fizzle" | "discovery";
+export type ArenaCue = "summon" | "reveal" | "strike" | "impact" | "fizzle" | "discovery" | "boom";
+
+/** Special spectacles for a few forms – pure show, no rules involved. */
+export type EasterEgg = "nuke" | "meteor" | "rainbow" | "confetti" | "vortex";
+
+const EGG_PATTERNS: readonly (readonly [RegExp, EasterEgg])[] = [
+  [/atom|nuklear|kernwaffe|a-bombe|wasserstoffbombe|nuke/i, "nuke"],
+  [/meteor|asteroid|komet|sternschnuppe/i, "meteor"],
+  [/regenbogen|rainbow/i, "rainbow"],
+  [/konfetti|party|karneval|fasching|geburtstag|feuerwerk|silvester/i, "confetti"],
+  [/schwarzes loch|singularit|wurmloch|mahlstrom|strudel/i, "vortex"],
+];
+
+/** Which spectacle (if any) a form's name asks for. */
+export function easterEggFor(name: string): EasterEgg | null {
+  return EGG_PATTERNS.find(([re]) => re.test(name))?.[1] ?? null;
+}
 
 interface Brick {
   readonly x: number;
@@ -273,6 +289,10 @@ export class Arena {
   private readonly motes: Mote[] = [];
   private readonly eyes: Eye[] = [];
   private witnesses = 0;
+  /** Rainbow arc fading over the arena. */
+  private rainbow = 0;
+  /** Vortex pulling particles to a point. */
+  private vortex: { x: number; y: number; life: number } | null = null;
   /** Arena fields ("Nässe", "Glut" …) – intensity per field id, eased towards 0/1. */
   private readonly fieldFx = new Map<string, { level: number; target: number }>();
   /** Discovery star floating above a fighter. */
@@ -326,6 +346,79 @@ export class Arena {
 
   private field(id: string): number {
     return this.fieldFx.get(id)?.level ?? 0;
+  }
+
+  /**
+   * Play a spectacle for the form on `side`. The nuke really explodes: white-out, shock wave,
+   * a mushroom cloud rising into the sky and the whole dungeon shaking.
+   */
+  async easterEgg(egg: EasterEgg, side: Side): Promise<void> {
+    const f = this.fighters[side];
+    const x = f === null ? 240 : SIDE_X[side];
+    const r = this.rand;
+    const rm = this.reducedMotion;
+    switch (egg) {
+      case "nuke": {
+        this.onCue?.("boom");
+        const gx = 240;
+        this.flash = 1;
+        this.flashColor = "#ffffff";
+        this.shake = rm ? 0 : 14;
+        for (let k = 0; k < 4; k++) this.rings.push({ x: gx, y: GROUND_Y, r: 4, life: -k * 0.12, max: 1.4, color: k % 2 === 0 ? "#fff3a0" : "#ff8a30", grow: 260 });
+        // stem and cap of the mushroom cloud
+        for (let i = 0; i < 760; i++) {
+          const stem = i < 260;
+          const t = r();
+          const ang = r() * Math.PI * 2;
+          const rad = Math.sqrt(r());
+          const px = stem ? gx + (r() - 0.5) * (10 + t * 16) : gx + Math.cos(ang) * rad * 85;
+          const py = stem ? GROUND_Y - t * 110 : GROUND_Y - 125 + Math.sin(ang) * rad * 32;
+          const c = t < 0.15 ? "#ffffff" : t < 0.45 ? "#ffc64a" : t < 0.75 ? "#ff6a20" : "#7a3a2a";
+          this.particles.push({ x: px, y: py, vx: (r() - 0.5) * (stem ? 6 : 24), vy: stem ? -10 - r() * 14 : -6 - r() * 10, life: -r() * 0.5, max: 2.8 + r() * 1.4, color: c, size: r() < 0.5 ? 3 : 2, gravity: 0, glow: t < 0.7 });
+        }
+        for (let i = 0; i < 160; i++) {
+          const a = r() * Math.PI;
+          this.particles.push({ x: gx, y: GROUND_Y - 2, vx: Math.cos(a) * (120 + r() * 120), vy: -Math.sin(a) * 30, life: 0, max: 1 + r(), color: "#6a5040", size: 2, gravity: 40, glow: false });
+        }
+        this.cosmicTarget = Math.max(this.cosmicTarget, 0.35); // bricks blown out of the wall
+        await wait(rm ? 200 : 1600);
+        return;
+      }
+      case "meteor": {
+        const tx = x;
+        const steps = 30;
+        for (let i = 0; i < steps; i++) {
+          const t = i / steps;
+          const px = tx - 160 + 160 * t;
+          const py = -10 + (GROUND_Y + 10) * t;
+          this.particles.push({ x: px, y: py, vx: -20, vy: -10, life: -t * 0.6, max: 0.5, color: t > 0.8 ? "#ffffff" : "#ff8a30", size: 3, gravity: 0, glow: true });
+        }
+        await wait(rm ? 100 : 620);
+        this.flash = 0.4;
+        this.flashColor = "#ffc64a";
+        this.shake = rm ? 0 : 7;
+        this.burst(tx, GROUND_Y - 6, "#ff8a30", 70);
+        this.rings.push({ x: tx, y: GROUND_Y, r: 4, life: 0, max: 0.8, color: "#ffc64a" });
+        await wait(300);
+        return;
+      }
+      case "rainbow":
+        this.rainbow = 1;
+        await wait(rm ? 100 : 500);
+        return;
+      case "confetti": {
+        const colors = ["#ff6a6a", "#ffd86a", "#7dff6a", "#7fc6e8", "#c8a0ff", "#ff9ad0"];
+        for (let i = 0; i < 180; i++) {
+          this.particles.push({ x: r() * WIDTH, y: -5 - r() * 40, vx: (r() - 0.5) * 30, vy: 20 + r() * 40, life: -r() * 0.8, max: 3 + r() * 2, color: colors[i % colors.length] ?? "#ffffff", size: r() < 0.5 ? 2 : 1, gravity: 10, glow: false });
+        }
+        await wait(rm ? 100 : 400);
+        return;
+      }
+      case "vortex":
+        this.vortex = { x, y: GROUND_Y - 40, life: 0 };
+        await wait(rm ? 100 : 900);
+        return;
+    }
   }
 
   /** How many eyes watch from the dark (grows with the duel). */
@@ -823,6 +916,25 @@ export class Arena {
     this.updateCosmos(dt);
     for (const fx of this.fieldFx.values()) fx.level += (fx.target - fx.level) * Math.min(1, dt * 1.5);
     this.emitFieldParticles(dt);
+    this.rainbow = Math.max(0, this.rainbow - dt * 0.12);
+    if (this.vortex !== null) {
+      const v = this.vortex;
+      v.life += dt;
+      if (v.life > 2.5) this.vortex = null;
+      else {
+        for (const p of this.particles) {
+          const dx = v.x - p.x;
+          const dy = v.y - p.y;
+          const d = Math.max(8, Math.hypot(dx, dy));
+          p.vx += (dx / d) * 260 * dt - (dy / d) * 120 * dt;
+          p.vy += (dy / d) * 260 * dt + (dx / d) * 120 * dt;
+        }
+        if (this.rand() < dt * 60) {
+          const a = this.rand() * Math.PI * 2;
+          this.particles.push({ x: v.x + Math.cos(a) * 120, y: v.y + Math.sin(a) * 60, vx: 0, vy: 0, life: 0, max: 1.2, color: this.rand() < 0.5 ? "#c8a0ff" : "#2c1840", size: 1, gravity: 0, glow: true });
+        }
+      }
+    }
     for (const m of this.motes) {
       m.phase += dt;
       m.x += (m.vx + Math.sin(m.phase * 0.7) * 2) * dt;
@@ -1012,6 +1124,23 @@ export class Arena {
     }
   }
 
+  private drawRainbow(): void {
+    if (this.rainbow <= 0.01) return;
+    const colors = ["#ff5a5a", "#ffa040", "#ffe060", "#70e060", "#60a0ff", "#9a6aff"];
+    for (const ctx of [this.base, this.glow]) {
+      ctx.globalAlpha = Math.min(1, this.rainbow * 1.5) * (ctx === this.glow ? 0.5 : 0.8);
+      for (const [i, c] of colors.entries()) {
+        ctx.strokeStyle = c;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(240, GROUND_Y, 190 - i * 2, 150 - i * 2, 0, Math.PI, 2 * Math.PI);
+        ctx.stroke();
+      }
+    }
+    this.base.globalAlpha = 1;
+    this.glow.globalAlpha = 1;
+  }
+
   private drawBolts(): void {
     for (const bolt of this.bolts) {
       const a = Math.max(0, 1 - bolt.life / bolt.max) * (Math.floor(bolt.life * 30) % 2 === 0 ? 1 : 0.6);
@@ -1069,6 +1198,7 @@ export class Arena {
     this.drawEyes();
     this.drawTorches();
     this.drawMotes();
+    this.drawRainbow();
     this.drawRune();
     for (const [side, f] of this.fighters.entries()) if (f !== null) this.drawLightPool(side as Side, f);
     for (const [side, f] of this.fighters.entries()) if (f !== null) this.drawFighter(side as Side, f);
