@@ -8,12 +8,13 @@ import menschen from "./core/forms/menschen.json" with { type: "json" };
 import mythos from "./core/forms/mythos.json" with { type: "json" };
 import natur from "./core/forms/natur.json" with { type: "json" };
 import tiere from "./core/forms/tiere.json" with { type: "json" };
+import alltag from "./core/forms/alltag.json" with { type: "json" };
 import modifiers from "./core/modifiers.json" with { type: "json" };
 import tags from "./core/tags.json" with { type: "json" };
 import verbs from "./core/verbs.json" with { type: "json" };
 
 /** Forms are split by theme to keep files reviewable; order = lookup priority for aliases. */
-const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte];
+const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte, alltag];
 
 /** The built-in content pack ("Grundspiel"). */
 export const CORE_PACK_RAW: unknown = {

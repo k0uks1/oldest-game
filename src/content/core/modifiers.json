@@ -47,5 +47,6 @@
   {"id": "namenlos", "label": "namenlos", "words": ["namenlos", "unbenannt"], "prefixes": [], "remove": ["benannt"]},
   {"id": "rostig", "label": "rostig", "words": ["rostig", "verrostet", "morsch", "bruechig"], "prefixes": [], "add": ["zeitgebunden"], "weak": ["metall", "holz"]},
   {"id": "silber", "label": "silbern", "words": ["silbern", "silber"], "prefixes": ["silber"], "add": ["silber"]},
-  {"id": "vogel", "label": "gefiedert", "words": ["gefiedert"], "prefixes": ["vogel"], "add": ["fliegt"]}
+  {"id": "vogel", "label": "gefiedert", "words": ["gefiedert"], "prefixes": ["vogel"], "add": ["fliegt"]},
+  {"id": "gelangweilt", "label": "gelangweilt", "words": ["gelangweilt", "lustlos", "desinteressiert", "muede", "gaehnend"], "remove": ["neugierig"], "verbs": ["langweilt"]}
 ]

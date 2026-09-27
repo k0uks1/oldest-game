@@ -71,5 +71,9 @@
   {"id": "zerfrisst", "label": "zerfrisst", "family": "leben", "leverage": 2, "targets": ["holz", "pflanze", "stoff"], "blockedBy": ["metall", "stein"], "hint": "Termiten, Motten, Heuschrecken – Hunger mit tausend Mäulern.", "phrase": "zerfrisst {B}"},
   {"id": "verdorrt", "label": "lässt verdorren", "family": "element", "leverage": 2, "targets": ["pflanze"], "blockedBy": ["wasser"], "hint": "Dürre gegen alles, was wächst.", "phrase": "lässt {B} verdorren"},
   {"id": "verzaubert", "label": "verzaubert", "family": "magie", "leverage": 2, "targets": ["denkt", "fuehlt"], "blockedBy": ["heilig", "wahnsinnig", "konstrukt"], "hint": "Ein Bann über Herz und Verstand.", "phrase": "verzaubert {B}"},
-  {"id": "verwandelt", "label": "verwandelt", "family": "magie", "leverage": 2, "targets": ["mensch", "tier"], "blockedBy": ["heilig", "magisch"], "hint": "Aus dem Prinzen wird ein Frosch.", "phrase": "verwandelt {B} in eine Kröte"}
+  {"id": "verwandelt", "label": "verwandelt", "family": "magie", "leverage": 2, "targets": ["mensch", "tier"], "blockedBy": ["heilig", "magisch"], "hint": "Aus dem Prinzen wird ein Frosch.", "phrase": "verwandelt {B} in eine Kröte"},
+  {"id": "langweilt", "label": "langweilt", "family": "geist", "leverage": 2, "targets": ["neugierig", "hofft", "traeumt"], "blockedBy": ["konstrukt", "wahnsinnig", "leer"], "hint": "Nichts tötet das Staunen so gründlich wie Langeweile."},
+  {"id": "verwaltet", "label": "verwaltet", "family": "geist", "leverage": 2, "targets": ["chaotisch", "neugierig", "rachsuechtig"], "blockedBy": ["geordnet", "tier", "koerperlos"], "hint": "Formulare, Fristen, Stempel – jede Leidenschaft verdorrt auf dem Dienstweg."},
+  {"id": "verklagt", "label": "verklagt", "family": "geist", "leverage": 2, "targets": ["gierig", "geordnet"], "blockedBy": ["chaotisch", "tier", "wahnsinnig"], "hint": "Wer nach Regeln spielt, verliert gegen Regeln."},
+  {"id": "kurzschluss", "label": "schließt kurz", "family": "element", "leverage": 2, "targets": ["elektrisch"], "blockedBy": [], "hint": "Ein Funke am falschen Ort, und alles steht still."}
 ]
