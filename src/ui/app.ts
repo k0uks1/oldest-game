@@ -414,6 +414,8 @@ export class App {
     img.width = sprite.width;
     img.height = sprite.height;
     img.getContext("2d")?.drawImage(sprite, 0, 0);
+    // integer upscale for the preview (2× for small/medium sprites, 1× for cosmic ones)
+    img.style.width = `${String(sprite.width * (sprite.width <= 66 ? 2 : 1))}px`;
     spriteBox.append(img);
 
     const declared = new Set(form.tags);

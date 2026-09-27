@@ -108,8 +108,11 @@ body {
 
 canvas.arena {
   width: 100%;
+  max-width: 100%;
+  height: auto;
   aspect-ratio: 16 / 9;
-  image-rendering: pixelated;
+  /* The canvas is already upscaled 4× with nearest-neighbour; smooth downscaling keeps pixels even. */
+  image-rendering: auto;
   display: block;
 }
 
@@ -313,9 +316,7 @@ canvas.arena {
 }
 canvas.sprite {
   image-rendering: pixelated;
-  width: auto;
   max-width: 132px;
-  zoom: 1;
 }
 .info {
   grid-area: info;
