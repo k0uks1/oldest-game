@@ -153,3 +153,16 @@ describe("attempt – playing without knowing", () => {
     }
   });
 });
+
+describe("rule-blocked attempts", () => {
+  it("scissors vs. net in a grown arena: rejected with an explanation, no Wille lost", () => {
+    const g0 = must(play(createGame(["A", "B"]), lx("netz"), null));
+    const m = g0.history[0];
+    assert.ok(m);
+    const g: GameState = { ...g0, history: [m, m, m] }; // floor rises to 2 at move 4
+    const r = attempt(onto, g, lx("schere"), null);
+    assert.equal(r.kind, "rejected");
+    assert.ok(r.kind === "rejected" && r.reason.includes("Arena ist gewachsen"));
+    assert.equal(r.state, g);
+  });
+});

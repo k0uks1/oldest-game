@@ -49,6 +49,20 @@ export function attempt(onto: Ontology, state: GameState, form: Form, intendedVe
     return { kind: "rejected", state, reason: r.error };
   }
 
+  // The matchup works, only a game rule stands in the way (echo, arena floor): say so, charge nothing.
+  // "A knife cuts a net" stays true – it is just too small for this round.
+  const blockedByRule = options.find((o) => o.check.valid && o.affordable && (o.echoed || o.belowArena));
+  if (blockedByRule !== undefined) {
+    const verb = onto.verbs.get(blockedByRule.verb)?.spec.label ?? blockedByRule.verb;
+    return {
+      kind: "rejected",
+      state,
+      reason: blockedByRule.echoed
+        ? `${form.name} ${verb} ${target.name} – aber dieser Weg wurde gerade erst beschritten (Echo). Finde einen anderen.`
+        : `${form.name} ${verb} ${target.name} – doch die Arena ist gewachsen: In dieser Runde braucht es mindestens Stufe ${String(arenaMinScale(state))} (oder einen mythischen Hebel).`,
+    };
+  }
+
   const me = state.players[state.active];
   const cost = moveCost(onto, state, form);
   if (cost > me.wille) {
