@@ -1,7 +1,7 @@
 import type { Ontology } from "../engine/ontology/ontology.ts";
 import { hash32, rng } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
-import { ATTIRE, FIGURES } from "./figures.ts";
+import { ATTIRE, FIGURES, VARIANTS, type VariantWhen } from "./figures.ts";
 import { MASKS } from "./masks.ts";
 import { hexToRgb, paletteFor, type SpritePalette } from "./palette.ts";
 
@@ -105,11 +105,26 @@ export function spriteSize(scale: number): number {
  * archetype has one, otherwise the 16×16 mask – then EPX up to the target size.
  */
 export function buildGrid(onto: Ontology, form: Form): Grid {
-  const figure = FIGURES[form.archetype];
+  const figure = variantFor(onto, form) ?? FIGURES[form.archetype];
   let grid = figure === undefined ? toGrid(MASKS[form.archetype]) : dress(onto, form, toGrid(figure));
   const target = spriteSize(form.scale);
   while (grid.length < target) grid = epx(grid);
   return grid;
+}
+
+/** The first shape variant of the form's archetype whose condition holds. */
+export function variantFor(onto: Ontology, form: Form): readonly string[] | undefined {
+  const list = VARIANTS[form.archetype];
+  if (list === undefined) return undefined;
+  const verbs = new Set(onto.compileForm(form).verbs);
+  const ok = (w: VariantWhen): boolean =>
+    (w.all ?? []).every((t) => onto.formHas(form, t)) &&
+    !(w.none ?? []).some((t) => onto.formHas(form, t)) &&
+    (w.anyVerb === undefined || w.anyVerb.some((v) => verbs.has(v))) &&
+    (w.allVerb ?? []).every((v) => verbs.has(v)) &&
+    !(w.noVerb ?? []).some((v) => verbs.has(v)) &&
+    form.scale >= (w.minScale ?? 0);
+  return list.find((v) => ok(v.when))?.rows;
 }
 
 /** Apply every attire overlay whose tag condition the form's closure satisfies. */
