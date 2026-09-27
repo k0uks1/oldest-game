@@ -1,19 +1,29 @@
 import { Ontology } from "../engine/ontology/ontology.ts";
 import { parsePack, type ContentPack } from "../engine/ontology/pack.ts";
-import forms from "./core/forms.json" with { type: "json" };
+import dinge from "./core/forms/dinge.json" with { type: "json" };
+import grundstock from "./core/forms/grundstock.json" with { type: "json" };
+import konzepte from "./core/forms/konzepte.json" with { type: "json" };
+import kosmos from "./core/forms/kosmos.json" with { type: "json" };
+import menschen from "./core/forms/menschen.json" with { type: "json" };
+import mythos from "./core/forms/mythos.json" with { type: "json" };
+import natur from "./core/forms/natur.json" with { type: "json" };
+import tiere from "./core/forms/tiere.json" with { type: "json" };
 import modifiers from "./core/modifiers.json" with { type: "json" };
 import tags from "./core/tags.json" with { type: "json" };
 import verbs from "./core/verbs.json" with { type: "json" };
+
+/** Forms are split by theme to keep files reviewable; order = lookup priority for aliases. */
+const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte];
 
 /** The built-in content pack ("Grundspiel"). */
 export const CORE_PACK_RAW: unknown = {
   id: "core",
   name: "Grundspiel",
-  version: "1.0.0",
+  version: "1.1.0",
   tags,
   verbs,
   modifiers,
-  forms,
+  forms: FORM_FILES.flat(),
 };
 
 export function loadPack(raw: unknown): ContentPack {

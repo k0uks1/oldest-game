@@ -198,7 +198,9 @@ export class Ontology {
       for (const spec of entries) {
         const form = this.formsById.get(spec.id);
         if (form === undefined) continue;
-        const keys = pass === "name" ? [spec.name, spec.id] : [...(spec.aliases ?? []), ...normalize(spec.name).split(" ")];
+        // Multi-word names: only the last word (the German head noun) becomes an alias –
+        // "Leere Rüstung" → "rüstung", not "leere".
+        const keys = pass === "name" ? [spec.name, spec.id] : [...(spec.aliases ?? []), normalize(spec.name).split(" ").at(-1) ?? ""];
         for (const raw of keys) {
           const k = lookupKey(raw);
           if (k.length < 3) continue;
