@@ -8,7 +8,7 @@
   {"id": "donner", "name": "Donner", "archetype": "cloud", "scale": 3, "plane": "materie", "tags": ["luft", "chaotisch"], "verbs": ["uebertoent", "aengstigt"], "aliases": ["donnerschlag", "donnergrollen"]},
   {"id": "regenbogen", "name": "Regenbogen", "archetype": "wave", "scale": 4, "plane": "geist", "tags": ["licht", "hofft", "zeitgebunden", "koerperlos"], "verbs": ["fuellt", "erloest"], "weak": ["zeitgebunden"], "aliases": ["regenbogenbrücke", "bifröst"]},
   {"id": "wind", "name": "Wind", "archetype": "cloud", "scale": 2, "plane": "materie", "tags": ["luft", "koerperlos"], "verbs": ["verweht"], "aliases": ["brise", "windhauch", "böe"]},
-  {"id": "mahlstrom", "name": "Mahlstrom", "archetype": "wave", "scale": 5, "plane": "materie", "tags": ["wasser", "chaotisch", "masse"], "verbs": ["ertraenkt", "verschlingt"], "aliases": ["strudel", "charybdis", "wirbelstrom"]},
+  {"id": "mahlstrom", "name": "Mahlstrom", "archetype": "wave", "scale": 5, "plane": "materie", "tags": ["wasser", "chaotisch", "masse"], "verbs": ["ertraenkt", "verschlingt"], "aliases": ["strudel", "wirbelstrom"]},
   {"id": "fluss", "name": "Fluss", "archetype": "wave", "scale": 5, "plane": "materie", "tags": ["wasser", "zeitgebunden", "erinnert"], "verbs": ["erodiert", "ertraenkt", "loescht"], "aliases": ["strom", "bach", "styx"]},
   {"id": "wasserfall", "name": "Wasserfall", "archetype": "wave", "scale": 4, "plane": "materie", "tags": ["wasser", "masse"], "verbs": ["zermalmt", "ertraenkt"], "aliases": ["katarakt"]},
   {"id": "sumpf", "name": "Sumpf", "archetype": "blob", "scale": 5, "plane": "leben", "tags": ["wasser", "erde", "gift", "krankheit"], "verbs": ["ertraenkt", "begraebt", "infiziert"], "aliases": ["moor", "morast", "sumpfland"]},

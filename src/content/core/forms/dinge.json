@@ -1,6 +1,6 @@
 [
   {"id": "axt", "name": "Axt", "archetype": "weapon", "scale": 2, "plane": "materie", "tags": ["stahl", "holz"], "verbs": ["zerschlaegt", "zerschneidet"], "aliases": ["beil", "streitaxt"]},
-  {"id": "kriegshammer", "name": "Kriegshammer", "archetype": "weapon", "scale": 3, "plane": "materie", "tags": ["eisen", "holz"], "verbs": ["zerschlaegt", "sprengt"], "aliases": ["hammer", "streithammer", "mjölnir"]},
+  {"id": "kriegshammer", "name": "Kriegshammer", "archetype": "weapon", "scale": 3, "plane": "materie", "tags": ["eisen", "holz"], "verbs": ["zerschlaegt", "sprengt"], "aliases": ["hammer", "streithammer"]},
   {"id": "speer", "name": "Speer", "archetype": "weapon", "scale": 2, "plane": "materie", "tags": ["eisen", "holz"], "verbs": ["durchbohrt"], "aliases": ["lanze", "pike", "dreizack"]},
   {"id": "bogen", "name": "Bogen", "archetype": "weapon", "scale": 2, "plane": "materie", "tags": ["holz"], "verbs": ["durchbohrt"], "aliases": ["pfeil", "langbogen", "armbrust"]},
   {"id": "kanone", "name": "Kanone", "archetype": "tower", "scale": 4, "plane": "materie", "tags": ["bronze", "feuer"], "verbs": ["sprengt", "zerschlaegt"], "aliases": ["geschütz", "kanonenkugel"]},
