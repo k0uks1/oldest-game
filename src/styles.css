@@ -428,155 +428,48 @@ canvas.arena {
   color: var(--faint);
 }
 
-/* ── Debug details (only with ?debug) ───────────────────────────────────── */
+/* ── Reveal: the name is spelled out over the arena ─────────────────────── */
 
-.details {
-  max-width: 860px;
-  width: 100%;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-areas:
-    "sprite info"
-    "verbs verbs";
-  gap: 10px 14px;
-  padding: 10px;
-  background: #120e1c;
-  border: 2px dashed var(--line);
+.reveal-name {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  text-align: center;
+  font-family: var(--title);
+  font-size: clamp(34px, 6vw, 72px);
+  line-height: 1;
+  color: #fff4d8;
+  text-shadow:
+    0 0 12px rgba(255, 200, 120, 0.9),
+    0 0 40px rgba(232, 100, 28, 0.6),
+    3px 3px 0 #2a0a04;
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+  text-wrap: balance;
 }
-.details::before {
-  content: "DEBUG";
-  grid-column: 1 / -1;
-  font-size: 14px;
-  letter-spacing: 2px;
+.reveal-name.show {
+  opacity: 1;
+}
+
+.chronicle .why {
+  margin-top: 4px;
+  font-size: 16px;
   color: var(--faint);
 }
-.details > .hint,
-.details > .warn {
-  grid-column: 1 / -1;
-  margin: 0;
-}
-.sprite-box {
-  grid-area: sprite;
-  display: grid;
-  place-items: end center;
-  width: 136px;
-  min-height: 90px;
-}
-canvas.sprite {
-  image-rendering: pixelated;
-  max-width: 132px;
-}
-.info {
-  grid-area: info;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-.info .title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.info .name {
-  font-size: 26px;
-  color: var(--gold);
-}
-.badge {
-  font-size: 15px;
-  padding: 0 6px;
-  border: 2px solid var(--line);
-  color: var(--muted);
-  text-transform: uppercase;
-}
-.note,
-.meta,
-.flavor {
-  font-size: 18px;
-  color: var(--muted);
-}
-.flavor {
-  font-style: italic;
-}
-.meta strong {
-  color: var(--text);
-}
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.tag {
-  font-size: 16px;
-  padding: 0 5px;
-  background: #1c1728;
-  border: 1px solid #2c2640;
-  color: var(--muted);
-}
-.tag.own {
-  color: var(--text);
-  border-color: var(--line-hi);
-}
-.tag.weak {
-  color: var(--bad);
-  border-color: #6e1024;
-}
-.verbs {
-  grid-area: verbs;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 6px;
-}
-.verb {
-  font: inherit;
-  text-align: left;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0 8px;
-  padding: 6px 8px;
-  color: var(--text);
-  background: #1a1526;
-  border: 2px solid var(--line);
+.chronicle .why summary {
   cursor: pointer;
+  list-style: none;
 }
-.verb .vlabel {
-  font-size: 20px;
+.chronicle .why summary::-webkit-details-marker {
+  display: none;
 }
-.verb .vlev {
-  font-size: 16px;
+.chronicle .why ol {
+  margin: 4px 0 0;
+  padding-left: 20px;
   color: var(--muted);
-}
-.verb .vwhy {
-  grid-column: 1 / -1;
-  font-size: 16px;
-  color: var(--muted);
-}
-.verb.ok .vwhy {
-  color: #9ad880;
-}
-.verb.no {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.verb.no .vwhy {
-  color: #d08080;
-}
-.verb.selected {
-  border-color: var(--gold);
-  background: #2a2010;
-}
-.hint {
-  color: var(--muted);
-  font-size: 18px;
-}
-.warn {
-  color: var(--bad);
-  font-size: 18px;
-}
-.status {
-  color: var(--gold);
 }
 
 /* ── Modals ─────────────────────────────────────────────────────────────── */
@@ -721,13 +614,6 @@ canvas.sprite {
   .btn.primary {
     font-size: 20px;
     padding: 6px 12px;
-  }
-  .details {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "sprite"
-      "info"
-      "verbs";
   }
   .modal .names {
     grid-template-columns: 1fr;

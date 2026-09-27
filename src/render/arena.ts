@@ -22,6 +22,10 @@ export type Side = 0 | 1;
 interface SpriteEntry {
   readonly image: HTMLCanvasElement;
   readonly glow: HTMLCanvasElement;
+  /** Solid dark shape – what you see before the reveal. */
+  readonly silhouette: HTMLCanvasElement;
+  /** Only the outline, in the form's glow colour (drawn into the bloom layer). */
+  readonly rim: HTMLCanvasElement;
   readonly pixels: PixelImage;
   readonly palette: SpritePalette;
 }
@@ -31,6 +35,8 @@ interface Fighter {
   readonly sprite: SpriteEntry;
   /** 0..1 materialisation progress. */
   appear: number;
+  /** 0 = unknown silhouette, 1 = fully revealed. */
+  reveal: number;
   alpha: number;
   offsetX: number;
   flash: number;
@@ -193,11 +199,14 @@ export class Arena {
     const cached = this.spriteCache.get(key);
     if (cached !== undefined) return cached;
     const pixels = renderSprite(this.onto, form);
+    const palette = paletteFor(this.onto, form);
     const entry: SpriteEntry = {
       image: toCanvas(pixels),
       glow: toCanvas(renderGlow(this.onto, form)),
+      silhouette: toCanvas(silhouetteOf(pixels, "#07050c")),
+      rim: toCanvas(rimOf(pixels, palette.glow)),
       pixels,
-      palette: paletteFor(this.onto, form),
+      palette,
     };
     if (this.spriteCache.size > 200) this.spriteCache.clear();
     this.spriteCache.set(key, entry);
@@ -215,13 +224,17 @@ export class Arena {
     return { kind: "none", color: glow };
   }
 
-  /** Materialise a form on one side. */
-  summon(side: Side, form: Form): Promise<void> {
+  /**
+   * Materialise a form on one side. With `hidden` it rises as a dark silhouette
+   * and stays unknown until {@link reveal} is called.
+   */
+  summon(side: Side, form: Form, hidden = false): Promise<void> {
     const sprite = this.sprite(form);
     this.fighters[side] = {
       form,
       sprite,
       appear: 0,
+      reveal: hidden ? 0 : 1,
       alpha: 1,
       offsetX: 0,
       flash: 0,
@@ -245,7 +258,21 @@ export class Arena {
         glow: true,
       });
     }
-    return wait(this.reducedMotion ? 150 : 700);
+    return wait(this.reducedMotion ? 150 : hidden ? 1100 : 700);
+  }
+
+  /** Burst of light: the silhouette becomes the real thing. */
+  async reveal(side: Side): Promise<void> {
+    const f = this.fighters[side];
+    if (f === null) return;
+    const cy = GROUND_Y - f.sprite.pixels.height / 2;
+    this.rings.push({ x: SIDE_X[side], y: cy, r: 4, life: 0, max: 0.6, color: f.sprite.palette.glow });
+    this.burst(SIDE_X[side], cy, f.sprite.palette.glow, 60);
+    this.flash = 0.25;
+    this.flashColor = f.sprite.palette.glow;
+    await this.tween(this.reducedMotion ? 50 : 380, (t) => (f.reveal = t));
+    f.flash = 0.8;
+    await wait(this.reducedMotion ? 50 : 350);
   }
 
   /** Attacker on `side` strikes the other side, which is destroyed. */
@@ -256,6 +283,7 @@ export class Arena {
     if (attacker === null) return;
     await this.strike(side, family, false);
     if (target === null) return;
+    await this.suspense(other);
     target.flash = 1;
     this.shake = weaknessHit ? 8 : 5;
     this.flash = weaknessHit ? 0.55 : 0.35;
@@ -273,6 +301,7 @@ export class Arena {
     const other: Side = side === 0 ? 1 : 0;
     const target = this.fighters[other];
     await this.strike(side, family, true);
+    await this.suspense(other);
     const x = SIDE_X[other] + (side === 0 ? -1 : 1) * ((target?.sprite.pixels.width ?? 40) / 2 + 6);
     this.rings.push({ x, y: GROUND_Y - 30, r: 3, life: 0, max: 0.45, color: "#e8e0f0" });
     this.burst(x, GROUND_Y - 30, "#e8e0f0", 24);
@@ -284,6 +313,19 @@ export class Arena {
     this.disintegrate(side);
     await wait(750);
     this.fighters[side] = null;
+  }
+
+  /** The held breath before the outcome: the hit hangs in the air, the target trembles. */
+  private async suspense(side: Side): Promise<void> {
+    if (this.reducedMotion) return;
+    const f = this.fighters[side];
+    const t0 = this.time;
+    this.shake = 1.5;
+    while (this.time - t0 < 0.55) {
+      if (f !== null) f.offsetX = Math.round(Math.sin((this.time - t0) * 60)) * 1;
+      await wait(16);
+    }
+    if (f !== null) f.offsetX = 0;
   }
 
   private async strike(side: Side, family: string, stopShort: boolean): Promise<void> {
@@ -556,8 +598,20 @@ export class Arena {
       }
       ctx.restore();
     };
-    blit(b, f.sprite.image);
-    blit(this.glow, f.sprite.glow);
+    if (f.reveal < 1) {
+      blit(b, f.sprite.silhouette);
+      blit(this.glow, f.sprite.rim);
+    }
+    if (f.reveal > 0) {
+      b.save();
+      b.globalAlpha = f.reveal;
+      blit(b, f.sprite.image);
+      b.restore();
+      this.glow.save();
+      this.glow.globalAlpha = f.reveal;
+      blit(this.glow, f.sprite.glow);
+      this.glow.restore();
+    }
     // materialisation scanline
     if (f.appear < 1) {
       this.glow.fillStyle = f.sprite.palette.glow;
@@ -625,6 +679,46 @@ export class Arena {
       ctx.globalAlpha = 1;
     }
   }
+}
+
+function silhouetteOf(img: PixelImage, color: string): PixelImage {
+  const [r, g, b] = rgbOf(color);
+  const data = new Uint8ClampedArray(img.data.length);
+  for (let i = 0; i < data.length; i += 4) {
+    if ((img.data[i + 3] ?? 0) === 0) continue;
+    data[i] = r;
+    data[i + 1] = g;
+    data[i + 2] = b;
+    data[i + 3] = 255;
+  }
+  return { width: img.width, height: img.height, data };
+}
+
+/** Outline pixels = opaque pixels with a transparent 4-neighbour. */
+function rimOf(img: PixelImage, color: string): PixelImage {
+  const [r, g, b] = rgbOf(color);
+  const { width: w, height: h } = img;
+  const alpha = (x: number, y: number): number => (x < 0 || y < 0 || x >= w || y >= h ? 0 : (img.data[(y * w + x) * 4 + 3] ?? 0));
+  const data = new Uint8ClampedArray(img.data.length);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (alpha(x, y) === 0) continue;
+      if (alpha(x - 1, y) > 0 && alpha(x + 1, y) > 0 && alpha(x, y - 1) > 0 && alpha(x, y + 1) > 0) continue;
+      const i = (y * w + x) * 4;
+      data[i] = r;
+      data[i + 1] = g;
+      data[i + 2] = b;
+      data[i + 3] = 200;
+    }
+  }
+  return { width: w, height: h, data };
+}
+
+function rgbOf(hex: string): [number, number, number] {
+  let h = hex.replace("#", "");
+  if (h.length === 3) h = Array.from(h, (c) => c + c).join("");
+  const n = Number.parseInt(h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 function hexA(hex: string, a: number): string {
