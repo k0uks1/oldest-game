@@ -54,8 +54,8 @@ export interface MoveOption {
 
 /** Minimum scale a counter needs in the current round ("Eskalation"). */
 export function arenaMinScale(state: GameState): number {
-  const round = roundNumberFor(state.history.length + 1);
-  return 1 + Math.floor((round - 1) / Math.max(1, state.config.escalateEvery));
+  const move = state.history.length + 1;
+  return 1 + Math.floor((move - 1) / Math.max(1, state.config.escalateEveryMoves));
 }
 
 export function isMythic(onto: Ontology, state: GameState, verb: string): boolean {
@@ -68,11 +68,11 @@ export function evaluateForm(onto: Ontology, state: GameState, form: Form): Move
   if (target === null) return [];
   const echo = echoedVerbs(state);
   const wille = state.players[state.active].wille;
-  const cost = formCost(onto, form).total + overkillSurcharge(form.scale, target.scale);
   const minScale = arenaMinScale(state);
+  const cost = formCost(onto, form).total + overkillSurcharge(form.scale, Math.max(target.scale, minScale));
   return effectiveVerbs(onto, form)
     .map((verb) => {
-      const check = checkCounter(onto, form, target, verb, state.config);
+      const check = checkCounter(onto, form, target, verb, state.config, minScale);
       const echoed = echo.has(verb);
       const affordable = cost <= wille;
       const belowArena = form.scale < minScale && !isMythic(onto, state, verb);
@@ -91,7 +91,7 @@ export function evaluateForm(onto: Ontology, state: GameState, form: Form): Move
 
 export function moveCost(onto: Ontology, state: GameState, form: Form): number {
   const target = currentTarget(state);
-  return formCost(onto, form).total + (target === null ? 0 : overkillSurcharge(form.scale, target.scale));
+  return formCost(onto, form).total + (target === null ? 0 : overkillSurcharge(form.scale, Math.max(target.scale, arenaMinScale(state))));
 }
 
 /**
@@ -140,14 +140,17 @@ export function play(onto: Ontology, state: GameState, form: Form, verb: string 
     chosenVerb = option.verb;
   }
 
-  const cost = moveCost(onto, state, form);
+  // The opening is free – a small compensation for moving first.
+  const cost = target === null ? 0 : moveCost(onto, state, form);
   if (cost > me.wille) {
     return { ok: false, error: `Zu wenig Wille: ${form.name} kostet ${cost}, du hast ${me.wille}.` };
   }
 
   const refund = target === null ? 0 : underdogRefund(form.scale, target.scale);
   const eleganz =
-    target === null || check === null ? 0 : eleganzFor(form.scale, target.scale, check.weaknessHit);
+    target === null || check === null
+      ? state.config.openingEleganz
+      : eleganzFor(form.scale, target.scale, check.weaknessHit);
   const move: Move = { player: state.active, form, verb: chosenVerb, cost, eleganz, refund, check };
 
   const cap = state.config.maxWille;
