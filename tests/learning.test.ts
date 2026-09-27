@@ -92,11 +92,12 @@ describe("live learning", () => {
 
 describe("learned pack persistence (local server)", () => {
   it("validates and writes the pack file, then serves it back", async () => {
-    const { mkdtempSync } = await import("node:fs");
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
-    const { handleLearned } = await import("../server/learned.ts");
-    const file = join(mkdtempSync(join(tmpdir(), "og-learned-")), "pack.json");
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const server = await import("../server/learned.ts");
+    const handleLearned = (req: Request, f: string) => server.handleLearned(req, f);
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "og-learned-")), "pack.json");
     const r = formFromLlm(onto, kaese, "stinkender Käse");
     assert.ok(r);
     const l = learn([core], emptyLearnedPack(), "stinkender Käse", r.form, r.delta);

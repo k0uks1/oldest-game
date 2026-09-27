@@ -709,7 +709,7 @@ export class App {
               },
             },
             h("span", { class: "ename" }, `${learnedIds.has(f.id) ? "✦ " : ""}${f.name}`),
-            h("span", { class: "escale" }, `${SCALE_NAMES[f.scale] ?? ""}`),
+            h("span", { class: "escale" }, SCALE_NAMES[f.scale] ?? ""),
             this.debug
               ? h("span", { class: "everbs" }, this.onto.compileForm(f).verbs.map((v) => this.onto.verbs.get(v)?.spec.label ?? v).join(", "))
               : null,
