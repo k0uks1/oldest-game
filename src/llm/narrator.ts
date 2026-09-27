@@ -11,7 +11,7 @@ import { callClaude, type LlmSettings } from "./client.ts";
 export function brief(raw: string, maxChars: number): string {
   const text = raw.replace(/\s+/g, " ").replace(/^["„»«]+|["“»«]+$/g, "").trim();
   if (text.length <= maxChars) return text;
-  const first = (text.match(/^[^.!?…]+[.!?…]+/) ?? [""])[0].trim();
+  const first = (/^[^.!?…]+[.!?…]+/.exec(text) ?? [""])[0].trim();
   if (first !== "" && first.length <= maxChars) return first;
   const cut = text.slice(0, maxChars);
   return `${cut.slice(0, cut.lastIndexOf(" ") > 40 ? cut.lastIndexOf(" ") : maxChars).trim()} …`;
