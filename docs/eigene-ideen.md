@@ -40,3 +40,25 @@ Jede Idee lässt sich einzeln zurückdrehen. Unter jedem Eintrag steht, wo sie i
 |---|---|---|
 | **Epilog** | Am Ende erzählt Claude das ganze Duell in zwei bis drei Sätzen als Legende nach. Es bekommt dafür nur die Kette der Gestalten und den feststehenden Ausgang. Ohne Claude bleibt der Satz aus den Textbausteinen stehen. | `narrateEpilogueWithClaude` |
 | **Kette der Gestalten** | Der Endbildschirm zeigt alle Beschwörungen als Kette: `Ritter → Rost → …`. | `showEnd` |
+
+## Figuren (PR „feat/sprites“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Volumen statt Rauschen** | Jede Silhouette bekommt über ein Distanzfeld eine Kuppelform und wird von oben links beleuchtet. Das Rauschen ist zurückgenommen; nur raue Materialien wie Stein, Erde, Holz, Knochen und Pflanzen bleiben körnig. Wo zwei Flächen aufeinandertreffen, entsteht eine Falte (Gürtel, Rüstungsplatten). Die Kontur ist selektiv: auf der Lichtseite in der dunkelsten Farbe der Gestalt, im Schatten fast schwarz. | `renderGrid` in `src/render/sprite.ts` |
+| **Detailfiguren 32×32** | Menschen, Tiere, Vögel, Schlangen, Drachen und Riesen haben eigene, doppelt so feine Grundfiguren. | `FIGURES` in `src/render/figures.ts` |
+| **Gewandung nach Eigenschaften** | Die Kleidung ergibt sich aus den Tags, nie aus der Form-ID. Dadurch wird auch ein gelernter „Hofmagier“ oder „Tempelritter“ passend angezogen. | `ATTIRE`, `dress()` |
+| **Stoff hat eine eigene Farbe** | Menschen ohne zweites Material tragen eine gedeckte Stofffarbe, die pro Gestalt fest gewählt wird. Tiere bekommen stattdessen einen helleren Bauch; Grün aus der Ebenen-Palette gibt es dafür nicht mehr. | `CLOTH`, `lighter()` in `src/render/palette.ts` |
+
+Welche Tags welche Gewandung auslösen:
+
+| Gewandung | Ausgelöst durch |
+|---|---|
+| Rüstung mit Visier (und Federbusch, wenn stolz) | gepanzert |
+| Robe, Spitzhut und Stab | magisch |
+| Kapuze mit glimmenden Augen | schatten |
+| Krone | stolz + geordnet |
+| Hörner und Schwanz | dämonisch |
+| Heiligenschein | heilig |
+| Flügel | fliegt, bei Nicht-Vögeln |
+| Klinge | Metall, bei Menschen |

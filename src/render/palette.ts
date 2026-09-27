@@ -1,4 +1,5 @@
 import type { Ontology } from "../engine/ontology/ontology.ts";
+import { hash32 } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 
 /** Four-step ramp: shadow, base, light, highlight. */
@@ -58,16 +59,40 @@ const PLANE_DEFAULT: Readonly<Record<Form["plane"], Swatch>> = {
 
 export const OUTLINE = "#0b0812";
 
+/** Muted cloth colours for people without a second material – picked per form, stable. */
+const CLOTH: readonly Ramp[] = [
+  ["#2a1414", "#6a2626", "#a84436", "#d8805c"],
+  ["#141c30", "#27406a", "#4470a4", "#8cb0d8"],
+  ["#16240f", "#2f4a22", "#58783a", "#a0b870"],
+  ["#261a10", "#54391f", "#8a6236", "#c49a64"],
+  ["#1e1a26", "#433c52", "#716a84", "#b4aec4"],
+  ["#2a2010", "#5c4818", "#96782c", "#d4b460"],
+];
+
+/** A lighter take on the same ramp – bellies, breasts, inner wings. */
+function lighter(r: Ramp): Ramp {
+  return [r[1], r[2], r[3], mix(r[3], "#ffffff", 0.45)];
+}
+
+function mix(a: string, b: string, t: number): string {
+  const [ar, ag, ab] = hexToRgb(a);
+  const [br, bg, bb] = hexToRgb(b);
+  const c = (x: number, y: number): string => Math.round(x + (y - x) * t).toString(16).padStart(2, "0");
+  return `#${c(ar, br)}${c(ag, bg)}${c(ab, bb)}`;
+}
+
 export function paletteFor(onto: Ontology, form: Form): SpritePalette {
   const matches = SWATCHES.filter(([tag]) => onto.formHas(form, tag)).map(([, s]) => s);
   const fallback = PLANE_DEFAULT[form.plane];
   const main = matches[0] ?? fallback;
-  const second = matches[1] ?? (main === fallback ? PLANE_DEFAULT.abstrakt : fallback);
+  const secondRamp: Ramp =
+    matches[1]?.ramp ??
+    (form.archetype === "humanoid" || form.archetype === "giant" ? (CLOTH[hash32(form.id) % CLOTH.length] ?? main.ramp) : lighter(main.ramp));
   const emissive =
     ["feuer", "licht", "heilig", "blitz"].some((t) => onto.formHas(form, t)) ||
     form.archetype === "star" ||
     form.archetype === "flame";
-  return { main: main.ramp, second: second.ramp, glow: main.glow, outline: OUTLINE, emissive };
+  return { main: main.ramp, second: secondRamp, glow: main.glow, outline: OUTLINE, emissive };
 }
 
 export function hexToRgb(hex: string): [number, number, number] {
