@@ -68,7 +68,7 @@ describe("game flow", () => {
     const move = g.history.at(-1);
     assert.ok(move);
     assert.ok(move.refund > 0, "rust (1) beating knight (3) should refund");
-    assert.equal(g.players[1].wille, Math.min(30, before - move.cost + move.refund));
+    assert.equal(g.players[1].wille, Math.min(g.config.maxWille, before - move.cost + move.refund));
     assert.ok(g.players[1].eleganz > 0);
   });
 

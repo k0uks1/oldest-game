@@ -30,7 +30,7 @@ export function formCost(onto: Ontology, form: Form): CostBreakdown {
 /** Surcharge for playing something bigger than the target ("Overkill"). */
 export function overkillSurcharge(attackerScale: number, targetScale: number): number {
   const gap = attackerScale - targetScale;
-  return gap <= 0 ? 0 : 2 * gap * gap;
+  return gap <= 0 ? 0 : gap * (gap + 1);
 }
 
 /** Wille refunded for a successful counter from below. */

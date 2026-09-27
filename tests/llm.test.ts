@@ -120,3 +120,14 @@ describe("key hygiene", () => {
     assert.ok(!scanText("placeholder: sk-ant-…"));
   });
 });
+
+describe("narration stays short", () => {
+  it("keeps whole sentences that fit, otherwise cuts at a word", async () => {
+    const { brief } = await import("../src/llm/narrator.ts");
+    assert.equal(brief("Kurz und gut.", 150), "Kurz und gut.");
+    const long = "Der Drache speit Feuer über die Arena. " + "Die Flammen lecken an jedem Stein und jeder Säule, bis nichts mehr bleibt als Asche und Rauch und Stille.".repeat(3);
+    const b = brief(long, 150);
+    assert.equal(b, "Der Drache speit Feuer über die Arena.");
+    assert.ok(brief("x ".repeat(200), 150).length <= 152);
+  });
+});

@@ -72,10 +72,11 @@ export function attempt(onto: Ontology, state: GameState, form: Form, intendedVe
   const me = state.players[state.active];
   const cost = moveCost(onto, state, form);
   if (cost > me.wille) {
-    return { kind: "rejected", state, reason: `Dein Wille reicht nicht, um ${form.name} zu beschwören.` };
+    return { kind: "rejected", state, reason: `Dein Wille reicht nicht: ${form.name} kostet ${String(cost)}, du hast ${String(me.wille)}. Versuch etwas Kleineres.` };
   }
   const closest = closestOption(options);
-  const paid = Math.min(me.wille, cost + state.config.failurePenalty);
+  // A shattered form costs half its price plus a small penalty – guessing is not free, but not ruinous.
+  const paid = Math.min(me.wille, Math.ceil(cost / 2) + state.config.failurePenalty);
   const doubt = onto.rulingFor(form.id, target.id) === undefined ? uncertainty(options) : undefined;
   const failure: Failure = {
     player: state.active,
