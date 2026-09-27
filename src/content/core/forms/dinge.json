@@ -18,7 +18,7 @@
   {"id": "streichholz", "name": "Streichholz", "archetype": "weapon", "scale": 1, "plane": "materie", "tags": ["holz", "feuer"], "verbs": ["verbrennt"], "aliases": ["zündholz", "feuerzeug"]},
   {"id": "oelfass", "name": "Ölfass", "archetype": "tower", "scale": 2, "plane": "materie", "tags": ["oel", "holz"], "verbs": ["erstickt"], "weak": ["oel"], "aliases": ["öl", "lampenöl"], "flavor": "Ein Funke genügt."},
   {"id": "pulverfass", "name": "Pulverfass", "archetype": "tower", "scale": 2, "plane": "materie", "tags": ["holz", "feuer", "chaotisch"], "verbs": ["sprengt"], "weak": ["feuer"], "aliases": ["schießpulver", "sprengstoff", "dynamit", "bombe"]},
-  {"id": "feuerwerk", "name": "Feuerwerk", "archetype": "star", "scale": 2, "plane": "materie", "tags": ["feuer", "licht", "papier", "chaotisch"], "verbs": ["blendet", "uebertoent"], "aliases": ["rakete", "böller"]},
+  {"id": "feuerwerk", "name": "Feuerwerk", "archetype": "star", "scale": 2, "plane": "materie", "tags": ["feuer", "licht", "papier", "chaotisch"], "verbs": ["blendet", "uebertoent"], "aliases": ["böller"]},
   {"id": "hexenbesen", "name": "Hexenbesen", "archetype": "weapon", "scale": 2, "plane": "materie", "tags": ["holz", "magisch", "fliegt"], "verbs": ["verweht"], "aliases": ["besen", "reisigbesen"]},
   {"id": "schaufel", "name": "Schaufel", "archetype": "weapon", "scale": 2, "plane": "materie", "tags": ["eisen", "holz"], "verbs": ["begraebt"], "aliases": ["spaten", "totengräberschaufel"]},
   {"id": "sense", "name": "Sense", "archetype": "weapon", "scale": 3, "plane": "materie", "tags": ["stahl", "holz"], "verbs": ["zerschneidet"], "aliases": ["sichel"]},
