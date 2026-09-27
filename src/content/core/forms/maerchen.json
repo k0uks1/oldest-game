@@ -48,6 +48,6 @@
   {"id": "bohnenranke", "name": "Bohnenranke", "archetype": "tree", "scale": 5, "plane": "leben", "tags": ["pflanze", "magisch"], "verbs": ["fesselt", "ueberrennt"], "weak": ["pflanze"], "aliases": ["zauberbohne", "bohnenstange"]},
   {"id": "goldene_harfe", "name": "Goldene Harfe", "archetype": "book", "scale": 2, "plane": "materie", "tags": ["gold", "magisch", "fuehlt"], "verbs": ["einschlaefern", "lockt"], "weak": ["gold"]},
   {"id": "tausendschoen", "name": "Die Zwölf Tanzenden Prinzessinnen", "archetype": "swarm", "scale": 3, "plane": "leben", "tags": ["mensch", "schwarm", "traeumt", "stolz"], "verbs": ["verfuehrt", "taeuscht"], "weak": ["traeumt"], "aliases": ["tanzende prinzessinnen"]},
-  {"id": "kuckucksuhr", "name": "Kuckucksuhr", "archetype": "tower", "scale": 2, "plane": "materie", "tags": ["holz", "geordnet"], "verbs": ["uebertoent", "weckt"], "weak": ["holz"], "aliases": ["kuckuck"]},
+  {"id": "kuckucksuhr", "name": "Kuckucksuhr", "archetype": "tower", "scale": 2, "plane": "materie", "tags": ["holz", "geordnet"], "verbs": ["uebertoent", "weckt"], "weak": ["holz"], "aliases": []},
   {"id": "schwarzer_mann", "name": "Der Schwarze Mann", "archetype": "ghost", "scale": 4, "plane": "geist", "tags": ["schatten", "traum", "koerperlos"], "verbs": ["aengstigt", "verdunkelt"], "weak": ["traum"], "aliases": ["butzemann", "buhmann"], "flavor": "Wer hat Angst vor ihm? Niemand, der das Licht anlässt."}
 ]
