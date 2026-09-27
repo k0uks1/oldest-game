@@ -183,7 +183,7 @@ export function addRuling(base: readonly ContentPack[], learned: ContentPack, ru
  * discarding the whole pack. Returns undefined if nothing usable remains.
  */
 export function reconcileLearned(base: readonly ContentPack[], pack: ContentPack): ContentPack | undefined {
-  const ids = <T extends { readonly id: string }>(pick: (p: ContentPack) => readonly T[]): Set<string> =>
+  const ids = (pick: (p: ContentPack) => readonly { readonly id: string }[]): Set<string> =>
     new Set(base.flatMap((p) => pick(p).map((x) => x.id)));
   const tags = ids((p) => p.tags);
   const verbs = ids((p) => p.verbs);

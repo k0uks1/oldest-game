@@ -718,7 +718,7 @@ export class App {
     }
     if (floor > this.shownFloor && s.phase === "playing" && floor > 1) {
       this.els.round.classList.remove("grew");
-      void this.els.round.offsetWidth;
+      this.els.round.getBoundingClientRect(); // reflow, so the animation restarts
       this.els.round.classList.add("grew");
     }
     this.shownFloor = s.phase === "playing" ? floor : 1;
