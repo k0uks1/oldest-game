@@ -11,12 +11,13 @@ import tiere from "./core/forms/tiere.json" with { type: "json" };
 import alltag from "./core/forms/alltag.json" with { type: "json" };
 import maerchen from "./core/forms/maerchen.json" with { type: "json" };
 import fields from "./core/fields.json" with { type: "json" };
+import film from "./core/forms/film.json" with { type: "json" };
 import modifiers from "./core/modifiers.json" with { type: "json" };
 import tags from "./core/tags.json" with { type: "json" };
 import verbs from "./core/verbs.json" with { type: "json" };
 
 /** Forms are split by theme to keep files reviewable; order = lookup priority for aliases. */
-const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte, alltag, maerchen];
+const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte, alltag, maerchen, film];
 
 /** The built-in content pack ("Grundspiel"). */
 export const CORE_PACK_RAW: unknown = {
