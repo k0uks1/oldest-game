@@ -22,6 +22,7 @@ import { parseWithClaude } from "../llm/parser.ts";
 import { narrateEnd, narrateFailure, narrateMove } from "../narrate/offline.ts";
 import { Arena, attackOutcome, attackStyle, type AttackStyle } from "../render/arena.ts";
 import { clear, h } from "./dom.ts";
+import { Music } from "./music.ts";
 import { Sound } from "./sound.ts";
 
 function sleep(ms: number): Promise<void> {
@@ -109,6 +110,7 @@ export class App {
   private state: GameState;
   private readonly arena: Arena;
   private readonly sound = new Sound();
+  private readonly music = new Music();
   private busy = false;
   private settings: LlmSettings = loadSettings();
   /** Proxy auto-detected at runtime (local `npm start` server) – never persisted. */
@@ -237,7 +239,7 @@ export class App {
       this.els.input.focus();
       return;
     }
-    this.sound.unlock();
+    this.unlockAudio();
     this.sound.play("menu");
     const item = (label: string, fn: () => void, cls = ""): HTMLElement =>
       h(
@@ -289,6 +291,10 @@ export class App {
           this.sound.toggle();
           this.toggleMenu(true);
         }),
+        item(this.music.muted ? "Musik: aus" : "Musik: an", () => {
+          this.music.toggle();
+          this.toggleMenu(true);
+        }),
         item("Claude", () => {
           this.toggleMenu(false);
           this.showSettings();
@@ -304,6 +310,13 @@ export class App {
       if (e.target === layer) this.toggleMenu(false);
     };
     layer.querySelector<HTMLButtonElement>(".menu-item")?.focus();
+  }
+
+  /** First user gesture: start effects and music. */
+  private unlockAudio(): void {
+    this.sound.unlock();
+    const ctx = this.sound.context();
+    if (ctx !== null) this.music.attach(ctx);
   }
 
   private discoveredCount(): number {
@@ -355,6 +368,7 @@ export class App {
     this.arena.clear();
     this.retry = false;
     this.discoveries = [];
+    this.music.restart(names.join("").length * 31 + Date.now() % 997);
     this.lastWille = [this.state.players[0].wille, this.state.players[1].wille];
     clear(this.els.chronicle);
     this.hideCaption();
@@ -376,7 +390,7 @@ export class App {
   private async onSubmit(): Promise<void> {
     const text = this.els.input.value.trim();
     if (text === "" || this.busy || this.state.phase === "finished") return;
-    this.sound.unlock();
+    this.unlockAudio();
     if (this.debug) {
       const r = parseForm(this.onto, text);
       if (!r.ok) {
@@ -595,6 +609,7 @@ export class App {
     const last = s.history.at(-1);
     for (const p of [0, 1] as const) this.els.plates[p].textContent = last?.player === p ? last.form.name : "";
     this.arena.setTier(s.phase === "finished" ? arenaMinScale(s) - 1 : arenaMinScale(s));
+    this.music.setTier(s.phase === "finished" ? 1 : arenaMinScale(s));
     this.arena.setWitnesses(Math.floor(s.history.length / 2) + this.discoveries.length);
     const line = this.els.input.parentElement;
     line?.classList.toggle("p0", s.active === 0);
@@ -715,7 +730,7 @@ export class App {
         this.settings = { ...this.settings, apiKey: k, rememberSecrets: remember.checked };
         saveSettings(this.settings);
       }
-      this.sound.unlock();
+      this.unlockAudio();
       this.closeModal();
       this.newGame([n0.value.trim() || "Spieler 1", n1.value.trim() || "Spieler 2"]);
     };

@@ -89,3 +89,9 @@ Welche Tags welche Gewandung auslösen:
 | **Gnade** | Wer befriedet (heilt, erlöst, befreundet, löst ein Rätsel), bekommt +1 Eleganz. Gewaltlos zu gewinnen lohnt sich. | `GameConfig.mercyEleganz/mercyOutcomes` |
 | **Schreck** | Tags können festlegen, was ihre Träger erschreckt: `furchtsam` erschrickt vor Übertönen, Blenden, Blitz und Feuer, `sonnenscheu` vor Licht. Ein Schreck zählt wie ein Treffer in die Schwäche (+2), und das Ziel flieht. Der Knall schlägt das Pferd in die Flucht; der Wolf zuckt vor der Fackel nicht. | `TagSpec.startledBy`, Schritt „Schreck“ in `checkCounter` |
 | **Verstecken** | Das ist ein zweiter Weg neben dem Entkommen: Wer getarnt ist (Chamäleon, Ninja, Spion, Dieb, Fuchs …) oder im Schatten lebt, versteckt sich vor körperlichen Angriffen. Licht, Feuer und Blitz finden jedes Versteck. In der Arena verblasst die Gestalt kurz. | `escapeRoutes.tarnt/schatten`, `hidingRoutes`, Tag `tarnt` |
+
+## Musik (Wunsch des Nutzers: „klassische Retro-Dungeon-Musik“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Musik, die mit der Arena wächst** | Ein Chiptune-Sequencer ohne Audiodateien spielt a-Moll mit harmonischer Wendung (Am – F – Dm – E) und einem NES-typischen 12,5-%-Puls. Mit jeder Eskalationsstufe kommt eine Schicht dazu: erst Bordun und Bass, dann Arpeggio, Hi-Hats, eine Melodie, die pro Duell neu gewürfelt wird, und schließlich die Kick. Auch das Tempo steigt. Die Musik startet mit der ersten Eingabe und lässt sich im Menü abschalten. | `src/ui/music.ts` |
