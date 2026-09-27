@@ -26,9 +26,28 @@ export interface LlmSettings {
    * The real game always runs with Claude.
    */
   readonly debugOffline: boolean;
+  /**
+   * Persist the API key / access code in localStorage. Off by default: on a shared origin
+   * such as `<user>.github.io` every page (other repos, PR previews) could read it.
+   * Without it, secrets live only in memory for the current tab.
+   */
+  readonly rememberSecrets: boolean;
 }
 
-export const DEFAULT_SETTINGS: LlmSettings = { apiKey: "", model: DEFAULT_MODEL, proxyUrl: "", accessCode: "", debugOffline: false };
+export const DEFAULT_SETTINGS: LlmSettings = {
+  apiKey: "",
+  model: DEFAULT_MODEL,
+  proxyUrl: "",
+  accessCode: "",
+  debugOffline: false,
+  rememberSecrets: false,
+};
+
+/** True when the page runs on a shared/public origin rather than localhost or a local file. */
+export function isHostedOrigin(): boolean {
+  if (typeof location === "undefined" || location.protocol === "file:") return false;
+  return !["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+}
 
 const STORAGE_KEY = "oldest-game:llm";
 
@@ -39,21 +58,30 @@ export function loadSettings(): LlmSettings {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return DEFAULT_SETTINGS;
     const o = parsed as Record<string, unknown>;
-    return {
+    const settings: LlmSettings = {
       apiKey: typeof o["apiKey"] === "string" ? o["apiKey"] : "",
       model: typeof o["model"] === "string" && o["model"] !== "" ? o["model"] : DEFAULT_MODEL,
       proxyUrl: typeof o["proxyUrl"] === "string" ? o["proxyUrl"] : "",
       accessCode: typeof o["accessCode"] === "string" ? o["accessCode"] : "",
       debugOffline: o["debugOffline"] === true,
+      rememberSecrets: o["rememberSecrets"] === true,
     };
+    // Scrub secrets stored by older versions (before the opt-in existed); keep them for this tab only.
+    if (!settings.rememberSecrets && (settings.apiKey !== "" || settings.accessCode !== "")) saveSettings(settings);
+    return settings;
   } catch {
     return DEFAULT_SETTINGS;
   }
 }
 
+/** What actually goes to localStorage – secrets only with explicit opt-in. */
+export function persistable(s: LlmSettings): LlmSettings {
+  return s.rememberSecrets ? s : { ...s, apiKey: "", accessCode: "" };
+}
+
 export function saveSettings(s: LlmSettings): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable(s)));
   } catch {
     /* storage unavailable – settings stay in memory */
   }

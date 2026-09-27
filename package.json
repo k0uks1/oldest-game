@@ -16,8 +16,9 @@
     "lint": "eslint .",
     "test": "tsx --test tests/*.test.ts",
     "simulate": "tsx scripts/simulate.ts",
-    "check": "npm run typecheck && npm run lint && npm run test && npm run build",
-    "preview": "tsx scripts/build.ts --artifact"
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run secret-scan",
+    "preview": "tsx scripts/build.ts --artifact",
+    "secret-scan": "tsx scripts/secret-scan.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.0",

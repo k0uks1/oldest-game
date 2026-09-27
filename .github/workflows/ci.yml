@@ -63,6 +63,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Secret-Scan (kein API-Key in Repo oder Build)
+        run: npm run secret-scan
+
       - name: Balancing report
         run: npm run simulate -- --games 1000 > balance-report.txt
 
