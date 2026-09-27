@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { coreOntology } from "../src/content/index.ts";
 import { ARCHETYPES } from "../src/engine/types.ts";
+import { ATTIRE, FIGURES } from "../src/render/figures.ts";
 import { MASKS } from "../src/render/masks.ts";
 import { paletteFor } from "../src/render/palette.ts";
-import { epx, renderSprite, upscalePasses } from "../src/render/sprite.ts";
+import { buildGrid, epx, renderSprite, upscalePasses } from "../src/render/sprite.ts";
 
 const onto = coreOntology();
 
@@ -18,6 +19,28 @@ describe("sprites", () => {
         assert.match(row, /^[.#+o*]+$/, a);
       }
     }
+  });
+
+  it("detailed figures and attire overlays are 32 wide with known symbols", () => {
+    for (const [a, rows] of Object.entries(FIGURES)) {
+      assert.equal(rows.length, 32, a);
+      for (const row of rows) assert.match(row, /^[.#+o*,]{32}$/, `${a}: ${row}`);
+    }
+    for (const at of ATTIRE) {
+      assert.ok(at.overlay.rows.length <= 32, at.name);
+      for (const row of at.overlay.rows) assert.match(row, /^[.#+o*,_]{32}$/, `${at.name}: ${row}`);
+    }
+  });
+
+  it("people are dressed by their tags (knight ≠ farmer ≠ mage)", () => {
+    const grid = (id: string): string => {
+      const f = onto.formById(id);
+      assert.ok(f, id);
+      return buildGrid(onto, f).map((r) => r.join("")).join("\n");
+    };
+    const ids = ["bauer", "ritter", "magier", "erzengel", "koenig"];
+    const grids = new Set(ids.map((id) => grid(id).replace(/[#+]/g, "x")));
+    assert.equal(grids.size, ids.length);
   });
 
   it("EPX doubles resolution, keeps interiors solid and rounds outer corners", () => {
