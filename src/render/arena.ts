@@ -6,6 +6,13 @@ import { renderSprite, type PixelImage } from "./sprite.ts";
 
 export const WIDTH = 480;
 export const HEIGHT = 270;
+/**
+ * The scene is drawn at 480×270 into an offscreen buffer, then blown up by an
+ * integer factor with nearest-neighbour. The browser only ever *downscales*
+ * that large image to fit, which keeps every logical pixel the same size
+ * (no uneven 2-px/3-px columns from fractional nearest-neighbour scaling).
+ */
+const UPSCALE = 4;
 const FLOOR_Y = 172;
 const GROUND_Y = 222;
 const SIDE_X = [132, 348] as const;
@@ -56,6 +63,8 @@ interface Projectile {
 /** Pixel-art dungeon arena. Owns the render loop; all game logic lives elsewhere. */
 export class Arena {
   private readonly ctx: CanvasRenderingContext2D;
+  private readonly display: CanvasRenderingContext2D;
+  private readonly buffer: HTMLCanvasElement;
   private readonly background: HTMLCanvasElement;
   private readonly fighters: [Fighter | null, Fighter | null] = [null, null];
   private readonly particles: Particle[] = [];
@@ -71,12 +80,18 @@ export class Arena {
     canvas: HTMLCanvasElement,
     private readonly onto: Ontology,
   ) {
-    canvas.width = WIDTH;
-    canvas.height = HEIGHT;
-    const ctx = canvas.getContext("2d");
-    if (ctx === null) throw new Error("Canvas 2D nicht verfügbar");
+    canvas.width = WIDTH * UPSCALE;
+    canvas.height = HEIGHT * UPSCALE;
+    const display = canvas.getContext("2d");
+    this.buffer = document.createElement("canvas");
+    this.buffer.width = WIDTH;
+    this.buffer.height = HEIGHT;
+    const ctx = this.buffer.getContext("2d");
+    if (ctx === null || display === null) throw new Error("Canvas 2D nicht verfügbar");
     ctx.imageSmoothingEnabled = false;
+    display.imageSmoothingEnabled = false;
     this.ctx = ctx;
+    this.display = display;
     this.background = paintBackground();
   }
 
@@ -326,6 +341,7 @@ export class Arena {
     }
     ctx.globalAlpha = 1;
     ctx.restore();
+    this.display.drawImage(this.buffer, 0, 0, WIDTH * UPSCALE, HEIGHT * UPSCALE);
   }
 
   private drawFighter(side: Side, f: Fighter): void {
@@ -444,10 +460,10 @@ function paintBackground(): HTMLCanvasElement {
   }
   // darken wall toward top (dithered)
   for (let y = 0; y < FLOOR_Y; y++) {
-    const shade = 1 - y / FLOOR_Y;
+    const shade = Math.max(0, 1 - y / (FLOOR_Y * 0.55));
     for (let x = 0; x < WIDTH; x++) {
       const b = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5][(y % 4) * 4 + (x % 4)] ?? 0;
-      if (b / 16 < shade * 0.75) px(x, y, 1, 1, "rgba(8,6,14,0.55)");
+      if (b / 16 < shade * 0.8) px(x, y, 1, 1, "rgba(8,6,14,0.5)");
     }
   }
   // pillars
