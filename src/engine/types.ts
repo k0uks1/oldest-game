@@ -54,6 +54,8 @@ export interface Move {
   readonly eleganz: number;
   readonly refund: number;
   readonly check: CounterCheck | null;
+  /** First time this form ever appeared (live learning) – earns discovery eleganz on success. */
+  readonly discovery: boolean;
 }
 
 export interface PlayerState {
@@ -91,6 +93,11 @@ export interface GameConfig {
   readonly failurePenalty: number;
   /** Number of full rounds before the game is decided on eleganz. */
   readonly roundLimit: number;
+  /**
+   * "Einfallsreichtum": eleganz for a successful move with a form the game has never seen before.
+   * Whether a form is new is decided outside the engine (validated live learning) and passed in.
+   */
+  readonly discoveryEleganz: number;
   /** A mechanism used within the last N moves may not be repeated. */
   readonly echoWindow: number;
 }

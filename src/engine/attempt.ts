@@ -29,21 +29,22 @@ export interface Failure {
   readonly closest: MoveOption | null;
 }
 
-export function attempt(onto: Ontology, state: GameState, form: Form, intendedVerb: string | null): AttemptOutcome {
+/** `discovery`: the form was just learned (never seen before) – see GameConfig.discoveryEleganz. */
+export function attempt(onto: Ontology, state: GameState, form: Form, intendedVerb: string | null, discovery = false): AttemptOutcome {
   if (state.phase === "finished") return { kind: "rejected", state, reason: "Das Spiel ist vorbei." };
   if (state.usedFormIds.includes(form.id)) {
     return { kind: "rejected", state, reason: `${form.name} wurde in diesem Spiel schon beschworen.` };
   }
   const target = currentTarget(state);
   if (target === null) {
-    const r = play(onto, state, form, null);
+    const r = play(onto, state, form, null, discovery);
     return r.ok ? { kind: "success", state: r.value, move: lastMove(r.value) } : { kind: "rejected", state, reason: r.error };
   }
 
   const options = evaluateForm(onto, state, form);
   const chosen = options.find((o) => o.playable && o.verb === intendedVerb) ?? options.find((o) => o.playable);
   if (chosen !== undefined) {
-    const r = play(onto, state, form, chosen.verb);
+    const r = play(onto, state, form, chosen.verb, discovery);
     if (r.ok) return { kind: "success", state: r.value, move: lastMove(r.value) };
     return { kind: "rejected", state, reason: r.error };
   }

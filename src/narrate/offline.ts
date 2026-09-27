@@ -62,6 +62,7 @@ export function narrateEnd(state: GameState): string {
   const w = state.players[state.winner].name;
   const l = state.players[state.winner === 0 ? 1 : 0].name;
   if (state.endReason === "pass") return `${l} findet keine Antwort mehr. ${w} gewinnt das älteste Spiel.`;
+  if (state.endReason === "erschoepft") return `${l} hat keinen Willen mehr, sich zu verwandeln. ${w} gewinnt das älteste Spiel.`;
   return `Die letzte Runde ist gespielt. Mit mehr Eleganz gewinnt ${w}.`;
 }
 

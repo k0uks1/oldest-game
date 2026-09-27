@@ -63,6 +63,9 @@ export interface FormSpec {
   readonly weak?: readonly string[];
   readonly aliases?: readonly string[];
   readonly flavor?: string;
+  /** Live learning: who first summoned this form and when (ISO date). Purely informational. */
+  readonly discoveredBy?: string;
+  readonly discoveredAt?: string;
 }
 
 export interface ContentPack {
@@ -212,6 +215,8 @@ export function parsePack(input: unknown): PackResult {
         ...opt("weak", c.list(o, "weak", w)),
         ...opt("aliases", c.list(o, "aliases", w)),
         ...opt("flavor", c.optStr(o, "flavor", w)),
+        ...opt("discoveredBy", c.optStr(o, "discoveredBy", w)),
+        ...opt("discoveredAt", c.optStr(o, "discoveredAt", w)),
       };
     }),
   };

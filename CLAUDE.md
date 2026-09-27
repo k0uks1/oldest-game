@@ -30,8 +30,8 @@ src/
   content/core/*.json  the core content pack (tags, verbs, modifiers, forms)
   llm/               Claude client, parser (text → Form), narrator, live learning + stores
   narrate/offline.ts template narration (debug / fallback)
-  render/            sprite generation (pure) + canvas arena (DOM)
-  ui/                hot-seat UI, no framework
+  render/            sprite generation (pure) + canvas arena (DOM, bloom, cosmos dissolve, ambience)
+  ui/                hot-seat UI, no framework; sound.ts = WebAudio synth (no audio files)
 server/              Claude proxy core (Web Request/Response) + local Node server + Cloudflare Worker
 scripts/             build (esbuild → single HTML), simulate, gen-pack (stress data)
 tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k forms)
@@ -68,8 +68,15 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
 
 surface (targets ∩ closure) → blockers / immunity → scale rules (max +2 up; more than 3 down only with
 mythic leverage ≥ 4) → power = scale + leverage (+2 weakness) ≥ target scale. Game layer adds: echo
-(no mechanism from the last 2 moves), escalation (min scale rises every 2 rounds, mythic exempt),
-one use per form, Wille budget.
+(no mechanism from the last 2 moves), escalation (min scale rises every 3 moves, mythic exempt),
+one use per form, Wille budget, and discovery eleganz ("Einfallsreichtum": `play(…, discovery)` –
+the flag comes from validated live learning, never from Claude directly).
+
+## UI principles
+
+- As little as possible on screen: the arena, one glowing input line, a sigil (menu, also `Esc`).
+- No preview of whether a form is enough – the arena reveals it. Rules detail only on demand ("Warum?").
+- Ideas Claude added on its own are documented in `docs/eigene-ideen.md`.
 
 ## Conventions
 
