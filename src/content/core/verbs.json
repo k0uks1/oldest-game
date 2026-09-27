@@ -75,5 +75,8 @@
   {"id": "langweilt", "label": "langweilt", "family": "geist", "leverage": 2, "targets": ["neugierig", "hofft", "traeumt"], "blockedBy": ["konstrukt", "wahnsinnig", "leer"], "hint": "Nichts tötet das Staunen so gründlich wie Langeweile.", "outcome": "vertrieben"},
   {"id": "verwaltet", "label": "verwaltet", "family": "geist", "leverage": 2, "targets": ["chaotisch", "neugierig", "rachsuechtig"], "blockedBy": ["geordnet", "tier", "koerperlos"], "hint": "Formulare, Fristen, Stempel – jede Leidenschaft verdorrt auf dem Dienstweg.", "outcome": "vertrieben"},
   {"id": "verklagt", "label": "verklagt", "family": "geist", "leverage": 2, "targets": ["gierig", "geordnet"], "blockedBy": ["chaotisch", "tier", "wahnsinnig"], "hint": "Wer nach Regeln spielt, verliert gegen Regeln.", "outcome": "vertrieben"},
-  {"id": "kurzschluss", "label": "schließt kurz", "family": "element", "leverage": 2, "targets": ["elektrisch"], "blockedBy": [], "hint": "Ein Funke am falschen Ort, und alles steht still."}
+  {"id": "kurzschluss", "label": "schließt kurz", "family": "element", "leverage": 2, "targets": ["elektrisch"], "blockedBy": [], "hint": "Ein Funke am falschen Ort, und alles steht still."},
+  {"id": "saugt_auf", "label": "saugt auf", "family": "element", "leverage": 2, "targets": ["fluessig"], "blockedBy": ["masse", "feuer"], "hint": "Was nass ist, verschwindet im Trockenen.", "outcome": "vernichtet"},
+  {"id": "staut", "label": "staut", "family": "element", "leverage": 2, "targets": ["fluessig", "schwarm"], "blockedBy": ["gas", "koerperlos"], "hint": "Eine Wand, und der Strom steht still.", "outcome": "gebannt"},
+  {"id": "oeffnet", "label": "öffnet", "family": "magie", "leverage": 3, "targets": ["verschlossen"], "blockedBy": [], "hint": "Jedes Schloss hat seinen Schlüssel.", "outcome": "befriedet"}
 ]

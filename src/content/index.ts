@@ -18,12 +18,13 @@ import zukunft from "./core/forms/zukunft.json" with { type: "json" };
 import tierreich from "./core/forms/tierreich.json" with { type: "json" };
 import goetter from "./core/forms/goetter.json" with { type: "json" };
 import grundelemente from "./core/forms/grundelemente.json" with { type: "json" };
+import selbstspiel1 from "./core/forms/selbstspiel1.json" with { type: "json" };
 import modifiers from "./core/modifiers.json" with { type: "json" };
 import tags from "./core/tags.json" with { type: "json" };
 import verbs from "./core/verbs.json" with { type: "json" };
 
 /** Forms are split by theme to keep files reviewable; order = lookup priority for aliases. */
-const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte, alltag, maerchen, film, werbung, alltag2, zukunft, tierreich, goetter, grundelemente];
+const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte, alltag, maerchen, film, werbung, alltag2, zukunft, tierreich, goetter, grundelemente, selbstspiel1];
 
 /** The built-in content pack ("Grundspiel"). */
 export const CORE_PACK_RAW: unknown = {

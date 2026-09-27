@@ -108,5 +108,6 @@
   {"id": "falsch", "label": "Trugbild", "group": "existenz"},
   {"id": "loeslich", "label": "löslich", "group": "material"},
   {"id": "elektrisch", "label": "elektrisch", "group": "zustand", "implies": ["braucht_energie"]},
-  {"id": "tarnt", "label": "getarnt", "group": "faehigkeit"}
+  {"id": "tarnt", "label": "getarnt", "group": "faehigkeit"},
+  {"id": "verschlossen", "label": "verschlossen", "group": "zustand"}
 ]
