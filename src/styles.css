@@ -120,6 +120,19 @@ canvas.arena {
     filter: drop-shadow(0 0 10px rgba(200, 160, 255, 1));
   }
 }
+.fields {
+  display: flex;
+  gap: 10px;
+  font-size: 16px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  opacity: 0.75;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 1);
+  min-height: 1em;
+}
+.fields span {
+  cursor: help;
+}
 .round {
   font-family: var(--title);
   font-size: 22px;

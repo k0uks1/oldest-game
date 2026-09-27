@@ -1,3 +1,4 @@
+import type { PowerModifier } from "./fields.ts";
 import type { Ontology } from "./ontology/ontology.ts";
 import { has, intersection } from "./ontology/tagset.ts";
 import type { CheckStep, CounterCheck, Form, GameConfig, Scale } from "./types.ts";
@@ -57,6 +58,8 @@ export function checkCounter(
    * opponent no legal answer at all.
    */
   floorScale = 1,
+  /** Arena fields ("Nässe: Blitz +2") – see engine/fields.ts. */
+  modifiers: readonly PowerModifier[] = [],
 ): CounterCheck {
   const steps: CheckStep[] = [];
   const fail = (text: string, extra: Partial<CounterCheck> = {}): CounterCheck => ({
@@ -126,11 +129,14 @@ export function checkCounter(
 
   // 4. power
   const weaknessHit = weakHit !== undefined || scare !== undefined;
-  const power = attacker.scale + verb.spec.leverage + (weaknessHit ? WEAKNESS_BONUS : 0);
+  const fieldDelta = modifiers.reduce((sum, m) => sum + m.delta, 0);
+  for (const m of modifiers) steps.push({ ok: m.delta >= 0, text: m.text });
+  const power = attacker.scale + verb.spec.leverage + (weaknessHit ? WEAKNESS_BONUS : 0) + fieldDelta;
   const needed = target.scale;
   const powerText =
     `Kraft ${attacker.scale} (Stufe) + ${verb.spec.leverage} (Hebel)` +
     (weaknessHit ? ` + ${WEAKNESS_BONUS} (${weakHit === undefined ? "Schreck" : "Schwäche"}!)` : "") +
+    (fieldDelta === 0 ? "" : ` ${fieldDelta > 0 ? "+" : "−"} ${String(Math.abs(fieldDelta))} (Arena)`) +
     ` = ${power} gegen Stufe ${needed}`;
   if (power < needed) return fail(`${powerText} – zu schwach.`, { hitTag, weaknessHit, power, needed });
   steps.push({ ok: true, text: `${powerText} ✓` });

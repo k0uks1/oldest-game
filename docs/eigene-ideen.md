@@ -95,3 +95,20 @@ Welche Tags welche Gewandung auslösen:
 | Idee | Was sie tut | Wo |
 |---|---|---|
 | **Musik, die mit der Arena wächst** | Ein Chiptune-Sequencer ohne Audiodateien spielt a-Moll mit harmonischer Wendung (Am – F – Dm – E) und einem NES-typischen 12,5-%-Puls. Mit jeder Eskalationsstufe kommt eine Schicht dazu: erst Bordun und Bass, dann Arpeggio, Hi-Hats, eine Melodie, die pro Duell neu gewürfelt wird, und schließlich die Kick. Auch das Tempo steigt. Die Musik startet mit der ersten Eingabe und lässt sich im Menü abschalten. | `src/ui/music.ts` |
+
+## Arena-Zustände (eigener „Genie-Streich“ für komplexere Abfolgen)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Züge hinterlassen Spuren** | Ein Zug verändert die Arena für die nächsten ein bis zwei Züge. Die Engine liest das deterministisch aus der Historie. Jede Wirkung erscheint als eigener Schritt in „Warum?“ und fließt in die Kraft ein. Daraus entstehen Kombos: Wer die Arena flutet, bereitet den Blitz vor. | `src/engine/fields.ts`, `content/core/fields.json` (neuer Pack-Teil `fields`, wird validiert) |
+| **Sichtbar, aber leise** | Unter der Rundenzahl steht nur ein blasses Wort („Nässe“); der Tooltip erklärt es. Die Arena zeigt jeden Zustand, siehe Tabelle unten. | `Arena.setFields`, `.fields` |
+
+| Zustand | Wirkung | Anzeige in der Arena |
+|---|---|---|
+| Nässe | Blitz und Kurzschluss +2, Feuer −1 | Pfützenschimmer, Ringe |
+| Glut | Feuer +1, Frost −1 | aufsteigende Funken |
+| Frost | Zerschlagen und Gefrieren +1, Feuer −1 | Raureif vom Rand her |
+| Finsternis | Licht +2, Täuschen und Ängstigen +1 | Dunkelheit |
+| Stille | Übertönen und Wecken +2 | fahles Blau |
+| Sturm | Feuer +1, Durchbohren −1 | Windschlieren |
+| Staub | Blenden −1, Täuschen +1 | Dunst |

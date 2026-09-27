@@ -1,7 +1,7 @@
 import { normalize } from "../text.ts";
 import { ARCHETYPES, PLANES, type Archetype, type Form, type Plane, type Scale } from "../types.ts";
 import { Trie, TrigramIndex } from "./indexes.ts";
-import type { ContentPack, FormSpec, ModifierSpec, TagSpec, VerbSpec } from "./pack.ts";
+import type { ContentPack, FieldSpec, FormSpec, ModifierSpec, TagSpec, VerbSpec } from "./pack.ts";
 import { difference, fromIterable, has, intersection, type TagSet } from "./tagset.ts";
 
 export interface CompiledVerb {
@@ -51,6 +51,7 @@ export class Ontology {
   readonly tags: readonly TagSpec[];
   readonly verbs: ReadonlyMap<string, CompiledVerb>;
   readonly modifiers: readonly ModifierSpec[];
+  readonly fields: readonly FieldSpec[];
   readonly lexicon: readonly Form[];
   readonly warnings: readonly string[];
 
@@ -179,6 +180,22 @@ export class Ontology {
       }
     }
     this.modifiers = modifiers;
+
+    // ── Arena fields ────────────────────────────────────────────────────
+    const families = new Set([...verbs.values()].map((v) => v.spec.family));
+    const fields: FieldSpec[] = [];
+    for (const p of packs) {
+      for (const f of p.fields ?? []) {
+        if (fields.some((x) => x.id === f.id)) {
+          errors.push(`Arena-Zustand „${f.id}“ doppelt definiert (${p.id}).`);
+          continue;
+        }
+        for (const x of f.from) if (!verbs.has(x) && !this.tagIndex.has(x)) errors.push(`Arena-Zustand ${f.id}.from: „${x}“ ist weder Mechanismus noch Tag.`);
+        for (const e of f.effects) for (const x of e.on) if (!verbs.has(x) && !families.has(x)) errors.push(`Arena-Zustand ${f.id}.effects: „${x}“ ist weder Mechanismus noch Familie.`);
+        fields.push(f);
+      }
+    }
+    this.fields = fields;
 
     // ── Forms ───────────────────────────────────────────────────────────
     const lexicon: Form[] = [];

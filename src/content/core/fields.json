@@ -1,0 +1,9 @@
+[
+  {"id": "nass", "label": "Nässe", "hint": "Die Arena steht unter Wasser – Blitze fahren durch alles, Feuer zischt.", "duration": 2, "from": ["ertraenkt", "loescht", "erodiert", "loest_auf", "wasser"], "effects": [{"on": ["trifft_blitz", "kurzschluss"], "delta": 2}, {"on": ["verbrennt", "schmilzt"], "delta": -1}]},
+  {"id": "glut", "label": "Glut", "hint": "Überall glimmt es – Feuer frisst leichter, Eis hat es schwer.", "duration": 2, "from": ["verbrennt", "schmilzt", "feuer"], "effects": [{"on": ["verbrennt", "verdampft"], "delta": 1}, {"on": ["gefriert"], "delta": -1}]},
+  {"id": "frost", "label": "Frost", "hint": "Raureif auf allem – Gefrorenes bricht, Feuer kämpft gegen die Kälte.", "duration": 2, "from": ["gefriert", "eis"], "effects": [{"on": ["zerschlaegt", "gefriert"], "delta": 1}, {"on": ["verbrennt"], "delta": -1}]},
+  {"id": "finsternis", "label": "Finsternis", "hint": "Die Fackeln sind erloschen – Licht blendet doppelt, Lügen gedeihen.", "duration": 2, "from": ["verdunkelt", "schatten"], "effects": [{"on": ["blendet", "durchleuchtet", "ueberstrahlt"], "delta": 2}, {"on": ["taeuscht", "aengstigt"], "delta": 1}]},
+  {"id": "stille", "label": "Stille", "hint": "Totenstille – jeder Laut trifft wie ein Schlag.", "duration": 2, "from": ["einschlaefern", "leer"], "effects": [{"on": ["uebertoent", "weckt"], "delta": 2}]},
+  {"id": "sturm", "label": "Sturm", "hint": "Der Wind reißt an allem – er facht Feuer an und lenkt Pfeile ab.", "duration": 1, "from": ["verweht", "luft"], "effects": [{"on": ["verbrennt"], "delta": 1}, {"on": ["durchbohrt"], "delta": -1}]},
+  {"id": "staub", "label": "Staub", "hint": "Staub und Trümmer hängen in der Luft – wer sich zeigt, sieht wenig.", "duration": 1, "from": ["zermalmt", "sprengt", "begraebt"], "effects": [{"on": ["blendet"], "delta": -1}, {"on": ["taeuscht"], "delta": 1}]}
+]

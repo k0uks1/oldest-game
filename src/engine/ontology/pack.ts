@@ -90,6 +90,22 @@ export interface FormSpec {
   readonly discoveredAt?: string;
 }
 
+/**
+ * "Arena-Zustand": a move leaves a trace in the arena for a few moves – water makes it wet,
+ * fire leaves embers. While active, some mechanisms grow stronger or weaker.
+ */
+export interface FieldSpec {
+  readonly id: string;
+  readonly label: string;
+  readonly hint: string;
+  /** How many following moves it lasts. */
+  readonly duration: number;
+  /** Triggered by a successful move using one of these mechanisms, or by an attacker carrying one of these tags. */
+  readonly from: readonly string[];
+  /** Power changes: `on` lists mechanism ids or families (gewalt, element, …). */
+  readonly effects: readonly { readonly on: readonly string[]; readonly delta: number }[];
+}
+
 export interface ContentPack {
   readonly id: string;
   readonly name: string;
@@ -98,6 +114,7 @@ export interface ContentPack {
   readonly verbs: readonly VerbSpec[];
   readonly modifiers: readonly ModifierSpec[];
   readonly forms: readonly FormSpec[];
+  readonly fields?: readonly FieldSpec[];
 }
 
 // ── Runtime shape validation (packs may come from untrusted JSON) ─────────
@@ -243,6 +260,21 @@ export function parsePack(input: unknown): PackResult {
         ...opt("discoveredAt", c.optStr(o, "discoveredAt", w)),
       };
     }),
+    ...(input["fields"] === undefined
+      ? {}
+      : {
+          fields: c.array(input, "fields", id).map((o, i) => {
+            const w = `${id}.fields[${i}]`;
+            return {
+              id: c.str(o, "id", w),
+              label: c.str(o, "label", w),
+              hint: c.str(o, "hint", w),
+              duration: c.num(o, "duration", w),
+              from: c.list(o, "from", w, true) ?? [],
+              effects: c.array(o, "effects", w).map((e, j) => ({ on: c.list(e, "on", `${w}.effects[${j}]`, true) ?? [], delta: c.num(e, "delta", `${w}.effects[${j}]`) })),
+            };
+          }),
+        }),
   };
   return c.errors.length > 0 ? { ok: false, errors: c.errors } : { ok: true, pack };
 }

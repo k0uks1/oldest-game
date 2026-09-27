@@ -1,5 +1,6 @@
 import { attempt, type AttemptOutcome } from "../engine/attempt.ts";
 import { arenaMinScale, createGame, currentTarget, pass, roundNumber } from "../engine/game.ts";
+import { activeFields } from "../engine/fields.ts";
 import { parseForm } from "../engine/parse.ts";
 import { ESCAPE } from "../engine/rules.ts";
 import type { Form, GameState, PlayerId } from "../engine/types.ts";
@@ -131,6 +132,7 @@ export class App {
     plates: [HTMLElement, HTMLElement];
     caption: HTMLElement;
     round: HTMLElement;
+    fields: HTMLElement;
     banner: HTMLElement;
     menu: HTMLElement;
     modal: HTMLElement;
@@ -192,6 +194,7 @@ export class App {
       plates: [h("div", { class: "plate left" }), h("div", { class: "plate right" })] as [HTMLElement, HTMLElement],
       caption: h("div", { class: "caption", role: "status" }),
       round: h("div", { class: "round" }),
+      fields: h("div", { class: "fields" }),
       banner: h("div", { class: "banner", role: "alert" }),
       menu: h("div", { class: "menu-layer" }),
       modal: h("div", { class: "modal-layer" }),
@@ -206,7 +209,7 @@ export class App {
         canvas,
         els.hud[0],
         els.hud[1],
-        h("div", { class: "crown" }, sigilBtn, els.round),
+        h("div", { class: "crown" }, sigilBtn, els.round, els.fields),
         els.plates[0],
         els.plates[1],
         els.revealName,
@@ -609,6 +612,10 @@ export class App {
     const last = s.history.at(-1);
     for (const p of [0, 1] as const) this.els.plates[p].textContent = last?.player === p ? last.form.name : "";
     this.arena.setTier(s.phase === "finished" ? arenaMinScale(s) - 1 : arenaMinScale(s));
+    const fields = s.phase === "finished" ? [] : activeFields(this.onto, s);
+    this.arena.setFields(fields.map((f) => f.spec.id));
+    clear(this.els.fields);
+    for (const f of fields) this.els.fields.append(h("span", { title: f.spec.hint }, f.spec.label));
     this.music.setTier(s.phase === "finished" ? 1 : arenaMinScale(s));
     this.arena.setWitnesses(Math.floor(s.history.length / 2) + this.discoveries.length);
     const line = this.els.input.parentElement;
@@ -786,6 +793,7 @@ export class App {
         li(`Eskalation: Alle ${String(c.escalateEveryMoves)} Züge steigt die Mindeststufe – die Mauern der Arena fallen. Nur mythische Hebel (≥ ${String(c.mythicLeverage)}) – Hoffnung, wahre Namen, Erwachen – ignorieren das.`),
         li(`Entkommen: Statt zu besiegen, darf man auch fliehen – fliegend, tauchend, grabend – oder sich verstecken (getarnt, im Schatten; Licht und Feuer finden jeden),, wenn das Ziel nicht folgen kann und nur körperlich angreift. Der Kolibri fliegt der Lavawelle davon, nicht aber dem Drachen oder dem Lied der Sirene. Vor Welten und Kosmischem gibt es kein Entkommen. Bringt ${String(c.escapeEleganz)} Eleganz; danach muss der Gegner den Entkommenen besiegen.`),
         li(`Siegarten: Nicht jeder Sieg vernichtet. Man kann in die Flucht schlagen (ein Knall und das Pferd rennt – „Schreck“ zählt wie eine Schwäche), verführen, einschläfern, bannen, versteinern – oder befrieden: Wer ohne Leid gewinnt, bekommt ${String(c.mercyEleganz)} Eleganz als Gnade.`),
+        li("Arena-Zustände: Züge hinterlassen Spuren. Nach Wasser ist die Arena nass (Blitz +2, Feuer −1), nach Feuer glüht sie, nach Frost ist alles spröde, nach Dunkelheit blendet Licht doppelt, in der Stille trifft jeder Laut. Das Wort unter der Runde zeigt, was gerade gilt."),
         li(`Echo: Ein Mechanismus der letzten ${String(c.echoWindow)} Züge darf nicht wiederholt werden. Jede Gestalt nur einmal pro Spiel.`),
         li(`Du weißt vorher nicht, ob deine Gestalt reicht. Reicht sie nicht, zerschellt sie: Du zahlst ihren Preis an Wille plus ${String(c.failurePenalty)}, sie ist verbraucht, und du versuchst es erneut. Wem der Wille ausgeht, der verliert.`),
         li(`Wer aufgibt oder keine Antwort findet, verliert. Nach ${String(c.roundLimit)} Runden gewinnt die höhere Eleganz.`),
