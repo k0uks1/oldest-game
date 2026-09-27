@@ -175,3 +175,39 @@ export function addRuling(base: readonly ContentPack[], learned: ContentPack, ru
   const onto = compile(base, pack);
   return onto === undefined ? undefined : { onto, pack };
 }
+
+/**
+ * Keep a stored learned pack loadable after the core has grown: entries the core now defines
+ * itself (same id – e.g. a learned "Löschdecke" that became a hand-drawn core form) are dropped
+ * in favour of the core, and any form that no longer compiles is left out instead of
+ * discarding the whole pack. Returns undefined if nothing usable remains.
+ */
+export function reconcileLearned(base: readonly ContentPack[], pack: ContentPack): ContentPack | undefined {
+  const ids = (pick: (p: ContentPack) => readonly { readonly id: string }[]): Set<string> =>
+    new Set(base.flatMap((p) => pick(p).map((x) => x.id)));
+  const tags = ids((p) => p.tags);
+  const verbs = ids((p) => p.verbs);
+  const modifiers = ids((p) => p.modifiers);
+  const forms = ids((p) => p.forms);
+  const trimmed: ContentPack = {
+    ...pack,
+    tags: pack.tags.filter((t) => !tags.has(t.id)),
+    verbs: pack.verbs.filter((v) => !verbs.has(v.id)),
+    modifiers: pack.modifiers.filter((m) => !modifiers.has(m.id)),
+    forms: pack.forms.filter((f) => !forms.has(f.id)),
+  };
+  if (compile(base, trimmed) !== undefined) return trimmed;
+  // Something still clashes: rebuild form by form, keeping whatever compiles.
+  let kept: ContentPack = { ...trimmed, forms: [], rulings: [] };
+  if (compile(base, kept) === undefined) kept = { ...kept, tags: [], verbs: [], modifiers: [] };
+  if (compile(base, kept) === undefined) return undefined;
+  for (const f of trimmed.forms) {
+    const next: ContentPack = { ...kept, forms: [...kept.forms, f] };
+    if (compile(base, next) !== undefined) kept = next;
+  }
+  for (const r of trimmed.rulings ?? []) {
+    const next: ContentPack = { ...kept, rulings: [...(kept.rulings ?? []), r] };
+    if (compile(base, next) !== undefined) kept = next;
+  }
+  return kept;
+}

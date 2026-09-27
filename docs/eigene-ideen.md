@@ -134,3 +134,27 @@ Welche Tags welche Gewandung auslösen:
 |---|---|---|
 | **Eine Halle aus Klang** | Alles klingt durch einen erzeugten Steinhallen-Nachhall (2,8 s). Die Musik hat vier Abschnitte (A A B C) mit eigenen Akkordfolgen. Dazu kommen ein langsam atmendes Flächen-Pad, ein Bass-Oktavsprung, eine Melodie als Motiv mit Antwort und eine ferne Glocke zu Beginn jedes Abschnitts. Zwischendurch tropft Wasser, und Wind zieht durch die Gänge. Der Chiptune-Charakter bleibt. | `src/ui/music.ts` |
 | **Easter Eggs** | Die Atombombe explodiert wirklich: Die Arena wird weiß, Druckwellen breiten sich aus, ein Atompilz steigt auf, Ziegel fliegen aus der Wand, und ein tiefer Knall ertönt. Meteoriten schlagen vom Himmel ein, der Regenbogen spannt sich über die Arena, bei Konfetti und Party regnet es Konfetti, und das Schwarze Loch saugt alle Partikel in einen Strudel. | `easterEggFor`, `Arena.easterEgg`, Klang „boom“ |
+
+## Erzählung mit Bezug, Warum-Zeile, erklärende HUD (Nutzer- und Testerfeedback)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Das Schicksal folgt dem Mechanismus** | Claude bekommt beide Gestalten mit ihren wichtigsten Eigenschaften. Die Anweisung lautet: beide beim Namen nennen, das Ende des Verlierers aus dem Mechanismus ableiten (die Welle reißt den Ritter fort, statt dass er „zu Staub zerfällt“), und nur Bewegungen beschreiben, die die Gestalt wirklich kann. Gestalten ohne Eigenbewegung werden markiert, etwa ein Damm („bewegt sich nicht von selbst“). | `src/llm/narrator.ts` |
+| **Das Ziel antwortet** | Scheitert ein Zug, erzählen Claude und die Offline-Texte, *womit* das Ziel antwortet (sein Mechanismus, der den Angreifer erreicht). Auch die Animation zeigt diese Antwort. | `narrateFailure(…, answer)`, `Arena.fizzle(…, answer)` |
+| **Sieg-Animation passt zum Stil** | Wasser spült fort, Feuer brennt nieder, Erde begräbt, Eis gefriert und zerspringt, Wind verweht, Gift und Dunkelheit zersetzen, Licht und Kosmos blenden aus. | `Arena.defeat()` |
+| **Warum-Zeile** | Unter der Erzählung steht farbig, warum es gewirkt hat: Mechanismus in Gold, Angriffsfläche in Glut, Abzeichen wie Schreck!, Schwachstelle!, Arena-Zustand, ⚖ Schiedsspruch und Gnade. Bei Fehlschlag steht der Grund in Rot. | `showWhy()`, `.why-line` |
+| **Alles im HUD ist antippbar** | Wille/Eleganz, Runde/Arena-Wachstum und Arena-Zustände öffnen jeweils eine kurze Erklärung. | `showInfo()` |
+| **Die Arena-Untergrenze ist sichtbar** | Unter der Rundenzahl steht, sobald es zählt, „ab klein“ oder „ab groß“. Beim Anstieg pulsiert die Anzeige. Die Ablehnung nennt die Grenze in Worten („groß wie ein Bär (Stufe 4)“) und sagt dazu, dass der Versuch nichts kostet. | `render()`, `floorWords()` |
+
+## Tester-Feedback (Kiki)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Schiedssprüche kippen keine Größenverhältnisse** | „Schere gewinnt gegen Felsen“ war ein zu großzügiger Schiedsspruch. Ein Urteil entscheidet jetzt nur noch, *ob* etwas wirkt. Die Kraft muss trotzdem reichen: Größe + Hebel + 1 ≥ Ziel, und mehr als 3 Stufen nach unten gehen nur mit mythischem Hebel. Auch schon gespeicherte zu großzügige Urteile werden so gedeckelt. | `checkRuling` |
+| **350 eigene Sprites** | Kühlschrank als Schachturm, Smartphone als Schlüssel, Atombombe als Hammer: Die Archetypen waren für Dinge zu grob. Jetzt haben 350 Gegenstände, Orte, Naturgewalten und Begriffe ein eigenes 16×16-Pixelbild. Gezeichnet haben sie Subagenten mit einem Kontaktblatt-Werkzeug, das die Bilder im Spiel-Look rendert, damit die Agenten ihre Bilder prüfen und nachbessern konnten. Danach folgte eine Durchsicht. | `sprite` in den Formen-Packs |
+| **Werkzeug** | Neu sind Spitzhacke, Amboss, Löschdecke, Feuerlöscher, Meißel, Brecheisen, Kettensäge, Säge und Bohrmaschine. | `forms/werkzeug.json` |
+| **Gelerntes überlebt Kern-Updates** | Hat Claude früher eine Löschdecke gelernt und kennt der Kern sie jetzt selbst, wurde bisher das *ganze* gelernte Pack verworfen (doppelte ID). Jetzt weichen solche Einträge dem Kern, und alles andere bleibt erhalten. | `reconcileLearned()` |
+
+## Spielfiguren (Nutzerwunsch: StarCraft, Warcraft, Overwatch, Halo, Klassiker)
+
+48 Gestalten mit passenden Mechanismen und Schwächen: der Zergling-Schwarm, der von Flächenwirkung lebt, der stolze Lichkönig, Mercy, die heilt und erlöst, Master Chief, der gehorcht, Pac-Man, der verschlingt, GLaDOS und „Der Kuchen“, der lockt und täuscht (Schwäche: falsch). Sie nutzen die allgemeinen Grundformen. Markenfiguren werden bewusst nicht nachgezeichnet. Einige Figuren laufen unter beschreibenden Namen, etwa „Klempner mit Mütze“ oder „Blauer Igel“; die bekannten Namen funktionieren als Aliase. Simulation mit 600 Partien: 296 zu 304, also ausgeglichen.

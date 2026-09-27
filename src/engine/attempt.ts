@@ -65,7 +65,7 @@ export function attempt(onto: Ontology, state: GameState, form: Form, intendedVe
       state,
       reason: blockedByRule.echoed
         ? `${form.name} ${verb} ${target.name} – aber dieser Weg wurde gerade erst beschritten (Echo). Finde einen anderen.`
-        : `${form.name} ${verb} ${target.name} – doch die Arena ist gewachsen: In dieser Runde braucht es mindestens Stufe ${String(arenaMinScale(state))} (oder einen mythischen Hebel).`,
+        : `${form.name} ${verb} ${target.name} – doch die Arena ist gewachsen: jetzt mindestens ${floorWords(arenaMinScale(state))}. Kostet nichts.`,
     };
   }
 
@@ -133,7 +133,14 @@ function failureReason(state: GameState, form: Form, target: Form, o: MoveOption
   if (o === null) return `${form.name} hat nichts, womit es ${target.name} etwas anhaben könnte.`;
   if (o.check.valid && o.echoed) return "Dieser Weg wurde gerade erst beschritten – ein Echo hat keine Kraft.";
   if (o.check.valid && o.belowArena) {
-    return `Die Arena ist gewachsen: Gestalten unter Stufe ${String(arenaMinScale(state))} verblassen, bevor sie wirken.`;
+    return `Die Arena ist gewachsen: Ab jetzt braucht es mindestens ${floorWords(arenaMinScale(state))}.`;
   }
   return o.check.steps.at(-1)?.text ?? `${form.name} kann ${target.name} nicht besiegen.`;
+}
+
+const FLOOR_WORDS = ["", "winzig", "klein wie eine Katze", "so groß wie ein Mensch", "groß wie ein Bär", "gewaltig wie ein Drache", "groß wie ein Gebirge", "so groß wie eine Welt", "kosmisch"];
+
+/** "Stufe 4" in words people understand, with a familiar example. */
+export function floorWords(scale: number): string {
+  return `${FLOOR_WORDS[scale] ?? "unermesslich"} (Stufe ${String(scale)})`;
 }

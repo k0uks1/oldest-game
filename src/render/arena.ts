@@ -601,10 +601,8 @@ export class Arena {
     this.burst(SIDE_X[other], GROUND_Y - target.sprite.pixels.height / 2, attacker.sprite.palette.glow, weaknessHit ? 90 : 50);
     this.rings.push({ x: SIDE_X[other], y: GROUND_Y - target.sprite.pixels.height / 2, r: 6, life: 0, max: 0.5, color: attacker.sprite.palette.glow });
     await wait(260);
-    if (outcome === "destroy") {
-      this.disintegrate(other);
-      await wait(700);
-    } else await this.depart(other, outcome);
+    if (outcome === "destroy") await this.defeat(other, style);
+    else await this.depart(other, outcome);
     this.fighters[other] = null;
   }
 
@@ -656,7 +654,8 @@ export class Arena {
   }
 
   /** A failed attempt: the attacker's strike breaks on the target, then the attacker shatters. */
-  async fizzle(side: Side, style: AttackStyle): Promise<void> {
+  /** `answer`: how the target strikes back – the failed attacker perishes by *that* (the wave washes the knight away). */
+  async fizzle(side: Side, style: AttackStyle, answer: AttackStyle | null = null): Promise<void> {
     const other: Side = side === 0 ? 1 : 0;
     const target = this.fighters[other];
     await this.strike(side, style, true);
@@ -670,9 +669,97 @@ export class Arena {
     const me = this.fighters[side];
     if (me !== null) me.flash = 1;
     await wait(200);
-    this.disintegrate(side);
-    await wait(750);
+    if (answer === null) {
+      this.disintegrate(side);
+      await wait(750);
+    } else await this.defeat(side, answer);
     this.fighters[side] = null;
+  }
+
+  /**
+   * The loser perishes in the manner of what hit it: washed away, burnt up, buried, frozen and
+   * shattered, blown away, dissolved – crumbling to dust only when nothing more specific fits.
+   */
+  private async defeat(side: Side, style: AttackStyle): Promise<void> {
+    const f = this.fighters[side];
+    if (f === null) return;
+    const rm = this.reducedMotion;
+    const away = side === 0 ? -1 : 1;
+    const cx = SIDE_X[side];
+    const h = f.sprite.pixels.height;
+    const r = this.rand;
+    switch (style) {
+      case "water": {
+        for (let k = 0; k < 60; k++) this.particles.push({ x: cx - away * 30 + r() * 20, y: GROUND_Y - r() * 14, vx: away * (80 + r() * 60), vy: -20 - r() * 30, life: -r() * 0.3, max: 0.8, color: r() < 0.6 ? "#3f8fc9" : "#bff0ff", size: 2, gravity: 90, glow: r() < 0.4 });
+        await this.tween(rm ? 50 : 800, (t) => {
+          f.offsetX = away * 90 * t;
+          f.offsetY = -Math.sin(t * Math.PI) * 6;
+          f.alpha = 1 - t;
+        });
+        return;
+      }
+      case "fire": {
+        await this.tween(rm ? 50 : 900, (t) => {
+          f.flash = 0.6 * (1 - t);
+          f.squash = 1 - 0.6 * t;
+          f.alpha = 1 - t * t;
+          if (r() < 0.8) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.pixels.width, y: GROUND_Y - r() * h * (1 - 0.6 * t), vx: (r() - 0.5) * 10, vy: -30 - r() * 30, life: 0, max: 0.7, color: r() < 0.5 ? "#ff6a20" : "#ffc64a", size: 2, gravity: -10, glow: true });
+        });
+        for (let k = 0; k < 20; k++) this.particles.push({ x: cx + (r() - 0.5) * 20, y: GROUND_Y - 2, vx: (r() - 0.5) * 8, vy: -8 - r() * 10, life: 0, max: 1.6, color: "#3a3440", size: 2, gravity: -3, glow: false });
+        return;
+      }
+      case "earth": {
+        await this.tween(rm ? 50 : 800, (t) => {
+          f.offsetY = h * t;
+          f.alpha = 1 - t * 0.7;
+          if (r() < 0.6) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.pixels.width, y: GROUND_Y - 2, vx: (r() - 0.5) * 30, vy: -30 - r() * 40, life: 0, max: 0.6, color: "#6a5040", size: 2, gravity: 160, glow: false });
+        });
+        return;
+      }
+      case "ice": {
+        await this.tween(rm ? 50 : 500, (t) => (f.stone = t * 0.8));
+        f.flash = 0.8;
+        await wait(250);
+        this.disintegrate(side);
+        this.burst(cx, GROUND_Y - h / 2, "#e6fbff", 40);
+        await wait(500);
+        return;
+      }
+      case "wind": {
+        await this.tween(rm ? 50 : 900, (t) => {
+          f.offsetX = away * 200 * t * t;
+          f.offsetY = -40 * t;
+          f.alpha = 1 - t;
+        });
+        return;
+      }
+      case "poison":
+      case "drain":
+      case "dark": {
+        const c = style === "poison" ? "#62b030" : style === "drain" ? "#b8263a" : "#2c1840";
+        await this.tween(rm ? 50 : 1000, (t) => {
+          f.squash = 1 - t;
+          f.alpha = 1 - t * t;
+          if (r() < 0.7) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.pixels.width, y: GROUND_Y - r() * h * (1 - t), vx: 0, vy: -6 - r() * 8, life: 0, max: 0.9, color: c, size: 2, gravity: 0, glow: style !== "dark" });
+        });
+        return;
+      }
+      case "bolt":
+      case "light":
+      case "cosmic": {
+        f.flash = 1;
+        await this.tween(rm ? 50 : 600, (t) => (f.alpha = 1 - t));
+        this.burst(cx, GROUND_Y - h / 2, "#ffffff", 50);
+        return;
+      }
+      case "slash":
+      case "sound":
+      case "mind":
+      case "rune":
+        this.disintegrate(side);
+        await wait(700);
+        return;
+    }
   }
 
   /**

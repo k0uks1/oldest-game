@@ -93,14 +93,24 @@ export function narrateEnd(state: GameState): string {
 }
 
 const SHATTER = [
-  "{A} stürzt sich auf {B} – und zerschellt wie Glas an einer Mauer.",
-  "{A} erhebt sich, doch {B} rührt sich nicht. {A} zerfällt zu Staub.",
-  "Für einen Herzschlag scheint {A} zu genügen. Dann verweht es.",
+  "{A} gegen {B} – und prallt ab wie Glas an einer Mauer.",
+  "{B} rührt sich nicht. Gegen {B} ist {A} machtlos.",
+  "Für einen Herzschlag scheint {A} zu genügen. Dann zerrinnt es vor {B}.",
   "{B} sieht {A} nur an. Das reicht, und {A} ist nicht mehr.",
 ];
 
-export function narrateFailure(formName: string, targetName: string, seed: string): string {
+const ANSWERS = ["Doch {B} {Y}.", "{B} hält stand – und {Y}.", "{A} reicht nicht: {B} {Y}."];
+
+/**
+ * A failed attempt. `answer` (optional) is how the target strikes back, as a phrase with the
+ * attacker already filled in ("ertränkt Ritter") – then the fate follows from that, not from a template.
+ */
+export function narrateFailure(formName: string, targetName: string, seed: string, answer?: string): string {
   const rand = rng(hash32(seed));
+  if (answer !== undefined) {
+    const tpl = ANSWERS[Math.floor(rand() * ANSWERS.length)] ?? ANSWERS[0] ?? "";
+    return fill(tpl, { A: formName, B: targetName, Y: answer });
+  }
   const tpl = SHATTER[Math.floor(rand() * SHATTER.length)] ?? SHATTER[0] ?? "";
   return fill(tpl, { A: formName, B: targetName });
 }
