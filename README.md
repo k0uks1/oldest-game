@@ -15,13 +15,21 @@ Gestalt des Gegners besiegt – bis einer keine Antwort mehr findet.
 
 ## Spielen
 
-1. Den neuesten Build aus einem PR-Kommentar oder dem CI-Lauf herunterladen (`index.html`) – oder selbst bauen:
-   ```bash
-   npm install
-   npm run build        # → dist/index.html, direkt im Browser öffnen
-   npm run dev          # Entwicklung mit Watch: http://localhost:5173
-   ```
-2. Claude-API-Key eintragen (bleibt lokal im Browser). Ohne Key: `index.html?debug` (mechanischer Debug-Modus).
+**Empfohlen – lokaler Server, Key bleibt auf deinem Rechner:**
+```bash
+npm install
+cp .env.example .env     # ANTHROPIC_API_KEY=… eintragen
+npm start                # → http://localhost:5173
+```
+Der Server liefert das Spiel aus und leitet Claude-Aufrufe über `/api/claude` weiter. Der Browser sieht den
+API-Key nie; Modell und `max_tokens` legt der Server fest.
+
+**Ohne Server:** die einzelne `index.html` (aus dem PR-Kommentar/CI-Artefakt oder `npm run build`) direkt öffnen
+und einen eigenen API-Key eintragen („bring your own key“, bleibt in deinem Browser). `index.html?debug` spielt
+ganz ohne Claude (mechanischer Debug-Modus).
+
+**Gehostet (optional):** Spiel statisch hosten (z. B. GitHub Pages) + `server/worker.ts` als Cloudflare Worker
+mit dem Key als Secret und einem Zugangscode; die Worker-URL in den Claude-Einstellungen eintragen.
 
 ## Regeln in Kürze
 

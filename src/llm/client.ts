@@ -1,17 +1,26 @@
 /**
- * Minimal Anthropic Messages API client for the browser.
+ * Anthropic Messages API client for the browser.
  *
- * The game is meant to run locally for its owner, so the API key lives in
- * localStorage and requests go straight from the browser (Anthropic requires
- * the explicit `anthropic-dangerous-direct-browser-access` opt-in for that).
- * Never deploy this build publicly with a key configured.
+ * Preferred path: a proxy (`npm start` locally, or the Cloudflare Worker in
+ * `server/worker.ts`) holds the API key, so it never reaches the browser.
+ * Fallback for the standalone file: "bring your own key" – the player's own key
+ * in localStorage, sent with Anthropic's explicit
+ * `anthropic-dangerous-direct-browser-access` opt-in. Never ship a build with a key in it.
  */
 
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
 export interface LlmSettings {
+  /** Only needed without a proxy ("bring your own key", e.g. index.html opened from disk). */
   readonly apiKey: string;
   readonly model: string;
+  /**
+   * Claude proxy endpoint that holds the key server-side, e.g. "/api/claude" (local `npm start`)
+   * or a Cloudflare Worker URL. Empty = call the Anthropic API directly with `apiKey`.
+   */
+  readonly proxyUrl: string;
+  /** Sent as `x-access-code` to hosted proxies. */
+  readonly accessCode: string;
   /**
    * Debug only: parse and narrate mechanically without any LLM call.
    * The real game always runs with Claude.
@@ -19,7 +28,7 @@ export interface LlmSettings {
   readonly debugOffline: boolean;
 }
 
-export const DEFAULT_SETTINGS: LlmSettings = { apiKey: "", model: DEFAULT_MODEL, debugOffline: false };
+export const DEFAULT_SETTINGS: LlmSettings = { apiKey: "", model: DEFAULT_MODEL, proxyUrl: "", accessCode: "", debugOffline: false };
 
 const STORAGE_KEY = "oldest-game:llm";
 
@@ -33,6 +42,8 @@ export function loadSettings(): LlmSettings {
     return {
       apiKey: typeof o["apiKey"] === "string" ? o["apiKey"] : "",
       model: typeof o["model"] === "string" && o["model"] !== "" ? o["model"] : DEFAULT_MODEL,
+      proxyUrl: typeof o["proxyUrl"] === "string" ? o["proxyUrl"] : "",
+      accessCode: typeof o["accessCode"] === "string" ? o["accessCode"] : "",
       debugOffline: o["debugOffline"] === true,
     };
   } catch {
@@ -89,8 +100,30 @@ export class LlmError extends Error {
 /** Running token totals for the session (shown in the settings dialog). */
 export const sessionUsage = { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
+/** Can this configuration reach Claude at all? */
+export function isClaudeReady(s: LlmSettings): boolean {
+  return s.proxyUrl !== "" || s.apiKey !== "";
+}
+
+/**
+ * Detect the local game server's proxy (`npm start`). Returns the endpoint or "" when
+ * the page was opened from disk or the server has no key configured.
+ */
+export async function detectLocalProxy(fetchImpl: typeof fetch = fetch): Promise<{ url: string; model: string } | null> {
+  if (typeof location === "undefined" || !location.protocol.startsWith("http")) return null;
+  try {
+    const res = await fetchImpl("/api/health", { cache: "no-store" });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { proxy?: boolean; configured?: boolean; model?: string };
+    return j.proxy === true && j.configured === true ? { url: "/api/claude", model: j.model ?? DEFAULT_MODEL } : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function callClaude(settings: LlmSettings, opts: CallOptions, fetchImpl: typeof fetch = fetch): Promise<CallResult> {
-  if (settings.apiKey === "") throw new LlmError("Kein API-Key hinterlegt.");
+  const viaProxy = settings.proxyUrl !== "";
+  if (!viaProxy && settings.apiKey === "") throw new LlmError("Kein API-Key hinterlegt und kein Proxy verbunden.");
   const body: Record<string, unknown> = {
     model: settings.model,
     max_tokens: opts.maxTokens,
@@ -103,16 +136,26 @@ export async function callClaude(settings: LlmSettings, opts: CallOptions, fetch
     body["tools"] = [opts.tool];
     body["tool_choice"] = { type: "tool", name: opts.tool.name };
   }
-  const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": settings.apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify(body),
-  });
+  // Preferred: the proxy holds the key and pins model/limits. Fallback: bring-your-own-key.
+  const res = viaProxy
+    ? await fetchImpl(settings.proxyUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(settings.accessCode === "" ? {} : { "x-access-code": settings.accessCode }),
+        },
+        body: JSON.stringify(body),
+      })
+    : await fetchImpl("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": settings.apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify(body),
+      });
   if (!res.ok) {
     let detail = "";
     try {
