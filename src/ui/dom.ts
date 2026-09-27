@@ -27,7 +27,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs = 
   for (const [k, v] of Object.entries(attrs) as [string, string | number | boolean | ((e: Event) => void) | undefined][]) {
     if (v === undefined || v === false) continue;
     if (k.startsWith("on") && typeof v === "function") {
-      el.addEventListener(k.slice(2), v as EventListener);
+      el.addEventListener(k.slice(2), v);
     } else if (k === "class") el.className = String(v);
     else if (k === "value" && "value" in el) (el as HTMLInputElement).value = String(v);
     else if (v === true) el.setAttribute(k, "");
