@@ -29,6 +29,8 @@ export interface VerbSpec {
   readonly blockedBy?: readonly string[];
   readonly minRelativeScale?: number;
   readonly hint: string;
+  /** Sentence template, `{B}` = target. Defaults to "<label> {B}". */
+  readonly phrase?: string;
   readonly aliases?: readonly string[];
 }
 
@@ -176,6 +178,7 @@ export function parsePack(input: unknown): PackResult {
         hint: c.str(o, "hint", w),
         ...opt("blockedBy", c.list(o, "blockedBy", w)),
         ...opt("minRelativeScale", c.optNum(o, "minRelativeScale", w)),
+        ...opt("phrase", c.optStr(o, "phrase", w)),
         ...opt("aliases", c.list(o, "aliases", w)),
       };
     }),
