@@ -1,7 +1,6 @@
 import { attempt, type AttemptOutcome } from "../engine/attempt.ts";
 import { formCost } from "../engine/cost.ts";
 import { arenaMinScale, createGame, currentTarget, evaluateForm, moveCost, pass, roundNumber, type MoveOption } from "../engine/game.ts";
-import type { Ontology } from "../engine/ontology/ontology.ts";
 import { parseForm } from "../engine/parse.ts";
 import type { Form, GameState, PlayerId } from "../engine/types.ts";
 import {
@@ -14,11 +13,20 @@ import {
   sessionUsage,
   type LlmSettings,
 } from "../llm/client.ts";
+import { browserStore, serverStore, type LearnedStore } from "../llm/learned-store.ts";
+import { emptyLearnedPack, findLearned, learn } from "../llm/learning.ts";
 import { narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
+import { Ontology } from "../engine/ontology/ontology.ts";
+import type { ContentPack } from "../engine/ontology/pack.ts";
 import { parseWithClaude } from "../llm/parser.ts";
 import { narrateEnd, narrateFailure, narrateMove } from "../narrate/offline.ts";
 import { Arena } from "../render/arena.ts";
 import { clear, h } from "./dom.ts";
+
+function sameShape(a: Form, b: Form): boolean {
+  const eq = (x: readonly string[], y: readonly string[]): boolean => x.length === y.length && x.every((v) => y.includes(v));
+  return a.scale === b.scale && eq(a.tags, b.tags) && eq(a.not, b.not) && eq(a.verbs, b.verbs);
+}
 
 const SCALE_NAMES = ["", "winzig", "klein", "menschengroß", "groß", "gewaltig", "Landschaft", "Welt", "kosmisch"];
 
@@ -66,9 +74,15 @@ export class App {
     modal: HTMLElement;
   };
 
+  /** The "Gelernt" pack – grows while playing. */
+  private learned: ContentPack = emptyLearnedPack();
+  private store: LearnedStore = browserStore();
+
   constructor(
     root: HTMLElement,
-    private readonly onto: Ontology,
+    private onto: Ontology,
+    /** Packs that never change at runtime (the core); the learned pack is compiled on top. */
+    private readonly basePacks: readonly ContentPack[],
     forceDebug = false,
   ) {
     if (forceDebug) this.settings = { ...this.settings, debugOffline: true };
@@ -164,13 +178,11 @@ export class App {
         this.showRules();
       }),
     );
-    if (this.debug) {
-      items.push(
-        btn("Kompendium", () => {
-          this.showCompendium();
-        }),
-      );
-    }
+    items.push(
+      btn("Kompendium", () => {
+        this.showCompendium();
+      }),
+    );
     items.push(
       btn("Claude", () => {
         this.showSettings();
@@ -199,9 +211,27 @@ export class App {
       if (proxy !== null) {
         this.localProxy = proxy.url;
         this.settings = { ...this.settings, model: proxy.model };
+        this.store = serverStore();
       }
     }
+    await this.loadLearned();
     this.showStart();
+  }
+
+  private async loadLearned(): Promise<void> {
+    const pack = await this.store.load();
+    if (pack.forms.length === 0 && pack.tags.length === 0) return;
+    try {
+      this.setOntology(Ontology.compile([...this.basePacks, pack]));
+      this.learned = pack;
+    } catch (e) {
+      console.warn("Gelerntes Pack ignoriert:", e);
+    }
+  }
+
+  private setOntology(onto: Ontology): void {
+    this.onto = onto;
+    this.arena.setOntology(onto);
   }
 
   private newGame(names: [string, string]): void {
@@ -249,12 +279,39 @@ export class App {
     }
     this.setBusy(true);
     try {
+      // Already learned this exact phrase? Then it is the same form as last time.
+      const known = findLearned(this.onto, text);
+      if (known !== undefined) {
+        await this.execute(known, null, true);
+        return;
+      }
       const r = await parseWithClaude(this.onto, this.llm, text);
       if (r === undefined) {
         this.flashBanner("Diese Gestalt lässt sich nicht fassen. Beschreibe sie anders.", "bad");
         return;
       }
-      await this.execute(r.form, r.intendedVerb, true);
+      // A plain lexicon entry (no changes, nothing new) is not worth remembering – play the original.
+      if (r.base !== null && r.delta.tags.length === 0 && r.delta.verbs.length === 0 && sameShape(r.form, r.base)) {
+        await this.execute(r.base, r.intendedVerb, true);
+        return;
+      }
+      const l = learn(this.basePacks, this.learned, text, r.form, r.delta);
+      if (!l.ok) {
+        this.flashBanner(l.reason, "bad");
+        return;
+      }
+      if (l.value.isNew) {
+        this.setOntology(l.value.onto);
+        this.learned = l.value.pack;
+        void this.store.save(l.value.pack).catch(() => {
+          this.flashBanner("Gelerntes konnte nicht gespeichert werden.", "bad");
+        });
+        const extra = [...l.value.newTags, ...l.value.newVerbs];
+        if (extra.length > 0 || r.base === null) {
+          this.flashBanner(`✦ Neu im Kompendium: ${l.value.form.name}${extra.length > 0 ? ` (${extra.join(", ")})` : ""}`, "info");
+        }
+      }
+      await this.execute(l.value.form, r.intendedVerb, true);
     } catch (e) {
       this.flashBanner(e instanceof Error ? e.message : "Claude antwortet nicht.", "bad");
     } finally {
@@ -624,23 +681,26 @@ export class App {
     const list = h("div", { class: "compendium" });
     const search = h("input", {
       class: "form-input",
+      id: "compendium-search",
       placeholder: "Suchen …",
       oninput: () => {
         fill(search.value);
       },
     });
+    const learnedIds = new Set(this.learned.forms.map((f) => f.id));
     const fill = (q: string): void => {
       clear(list);
       const needle = q.trim().toLowerCase();
       const forms = this.onto.lexicon
-        .filter((f) => needle === "" || f.name.toLowerCase().includes(needle) || this.onto.formTags(f).some((t) => t.includes(needle)))
-        .slice(0, 120);
+        .filter((f) => needle === "" || f.name.toLowerCase().includes(needle) || (this.debug && this.onto.formTags(f).some((t) => t.includes(needle))))
+        .sort((a, b) => Number(learnedIds.has(b.id)) - Number(learnedIds.has(a.id)))
+        .slice(0, 150);
       for (const f of forms) {
         list.append(
           h(
             "div",
             {
-              class: "entry",
+              class: `entry${learnedIds.has(f.id) ? " learned" : ""}`,
               onclick: () => {
                 this.els.input.value = f.name;
                 this.closeModal();
@@ -648,18 +708,63 @@ export class App {
                 this.els.input.focus();
               },
             },
-            h("span", { class: "ename" }, f.name),
-            h("span", { class: "escale" }, `Stufe ${String(f.scale)}`),
-            h("span", { class: "everbs" }, this.onto.compileForm(f).verbs.map((v) => this.onto.verbs.get(v)?.spec.label ?? v).join(", ")),
+            h("span", { class: "ename" }, `${learnedIds.has(f.id) ? "✦ " : ""}${f.name}`),
+            h("span", { class: "escale" }, SCALE_NAMES[f.scale] ?? ""),
+            this.debug
+              ? h("span", { class: "everbs" }, this.onto.compileForm(f).verbs.map((v) => this.onto.verbs.get(v)?.spec.label ?? v).join(", "))
+              : null,
           ),
         );
       }
     };
     fill("");
+    const exportBtn = h(
+      "button",
+      {
+        class: "btn",
+        onclick: () => {
+          const blob = new Blob([JSON.stringify(this.learned, null, 1)], { type: "application/json" });
+          const a = h("a", {});
+          a.href = URL.createObjectURL(blob);
+          a.download = "gelernt.json";
+          a.click();
+          URL.revokeObjectURL(a.href);
+        },
+      },
+      "Gelerntes exportieren",
+    );
+    const resetBtn = h(
+      "button",
+      {
+        class: "btn ghost",
+        onclick: () => {
+          if (resetBtn.dataset["armed"] !== "1") {
+            resetBtn.dataset["armed"] = "1";
+            resetBtn.textContent = `Wirklich alle ${String(this.learned.forms.length)} vergessen?`;
+            return;
+          }
+          this.learned = emptyLearnedPack();
+          this.setOntology(Ontology.compile([...this.basePacks]));
+          void this.store.save(this.learned);
+          this.closeModal();
+          this.flashBanner("Gelerntes vergessen.", "info");
+        },
+      },
+      "Gelerntes vergessen",
+    );
+    const n = this.learned.forms.length;
     this.modal(
-      `Kompendium · ${String(this.onto.lexicon.length)} Gestalten · ${String(this.onto.tagCount)} Eigenschaften · ${String(this.onto.verbs.size)} Mechanismen`,
+      `Kompendium · ${String(this.onto.lexicon.length)} Gestalten`,
+      h(
+        "p",
+        { class: "hint" },
+        n === 0
+          ? "Das Spiel lernt dazu: Wird jemand zu etwas, das es noch nicht kennt, ordnet Claude es ein und es erscheint hier mit ✦."
+          : `${String(n)} Gestalten hat das Spiel beim Spielen gelernt (✦) – gespeichert in: ${this.store.label}.`,
+      ),
       search,
       list,
+      n === 0 ? null : h("div", { class: "actions" }, exportBtn, resetBtn),
     );
     search.focus();
   }

@@ -9,6 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createServer, type IncomingMessage } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { handleLearned } from "./learned.ts";
 import { DEFAULT_PROXY_MODEL, handleProxy, type ProxyEnv } from "./proxy.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -48,10 +49,18 @@ async function toRequest(req: IncomingMessage, port: number): Promise<Request> {
   });
 }
 
-export function startServer(opts: { port: number; html: () => string; env: ProxyEnv }): void {
+export const LEARNED_FILE = join(root, "learned/pack.json");
+
+export function startServer(opts: { port: number; html: () => string; env: ProxyEnv; learnedFile?: string }): void {
   createServer((req, res) => {
     void (async () => {
       try {
+        if ((req.url ?? "/").startsWith("/api/learned")) {
+          const r = await handleLearned(await toRequest(req, opts.port), opts.learnedFile ?? LEARNED_FILE);
+          res.writeHead(r.status, { "content-type": "application/json" });
+          res.end(await r.text());
+          return;
+        }
         if ((req.url ?? "/").startsWith("/api/")) {
           const r = await handleProxy(await toRequest(req, opts.port), opts.env);
           res.writeHead(r.status, { "content-type": r.headers.get("content-type") ?? "application/json" });

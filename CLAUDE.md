@@ -28,7 +28,7 @@ src/
     cost.ts          Wille cost, overkill surcharge, underdog refund, eleganz
     parse.ts         mechanical parser (DEBUG ONLY in the game; used for anchors & tests)
   content/core/*.json  the core content pack (tags, verbs, modifiers, forms)
-  llm/               Claude client, parser (text → Form), narrator
+  llm/               Claude client, parser (text → Form), narrator, live learning + stores
   narrate/offline.ts template narration (debug / fallback)
   render/            sprite generation (pure) + canvas arena (DOM)
   ui/                hot-seat UI, no framework
@@ -47,7 +47,11 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
    New behaviour = new tag / parent / implication / verb in a content pack.
 4. **Engine is pure.** No DOM, no `Date.now()`, no `Math.random()` in `src/engine`; use
    `hash32`/`rng` from `engine/text.ts` for seeded randomness.
-5. **Scale:** content must work with tens of thousands of tags/forms. Avoid O(tags) or
+5. **Live learning goes through `learn()`** (`src/llm/learning.ts`). Claude's proposals become a normal
+   content pack ("gelernt") and must compile with the core, have a mechanism, a weakness and a counter.
+   New tags must have existing parents; learned mechanisms have leverage ≤ 2. Never write learned content
+   anywhere without this validation (the local server re-validates on `PUT /api/learned`).
+6. **Scale:** content must work with tens of thousands of tags/forms. Avoid O(tags) or
    O(forms) work per check/lookup; use the ontology's indexes (`usersOf`, tries, trigram index).
    `tests/scale.test.ts` guards budgets.
 

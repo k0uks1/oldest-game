@@ -685,6 +685,9 @@ canvas.sprite {
 .compendium .entry:hover {
   background: var(--panel-2);
 }
+.compendium .entry.learned .ename {
+  color: var(--rune);
+}
 .compendium .escale {
   color: var(--muted);
 }

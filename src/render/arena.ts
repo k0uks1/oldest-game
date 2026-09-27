@@ -134,7 +134,7 @@ export class Arena {
 
   constructor(
     target: HTMLCanvasElement,
-    private readonly onto: Ontology,
+    private onto: Ontology,
   ) {
     target.width = WIDTH * UPSCALE;
     target.height = HEIGHT * UPSCALE;
@@ -171,6 +171,11 @@ export class Arena {
     this.particles.length = 0;
     this.projectiles.length = 0;
     this.rings.length = 0;
+  }
+
+  /** Swap in a grown ontology (live learning). Cached sprites stay valid – they depend on form ids. */
+  setOntology(onto: Ontology): void {
+    this.onto = onto;
   }
 
   /** The rune circle charges while Claude is thinking. */
