@@ -40,7 +40,7 @@ describe("pack validation", () => {
   it("rejects malformed packs with readable errors", () => {
     const r = parsePack({ id: "x", name: "x", version: "1", tags: [{ id: 3 }] });
     assert.equal(r.ok, false);
-    if (!r.ok) assert.ok(r.errors.some((e) => e.includes("label")));
+    assert.ok(r.errors.some((e) => e.includes("label")));
   });
 
   it("reports unknown references", () => {
@@ -51,7 +51,7 @@ describe("pack validation", () => {
     };
     const r = parsePack(bad);
     assert.ok(r.ok);
-    if (r.ok) assert.throws(() => Ontology.compile([r.pack]), OntologyError);
+    assert.throws(() => Ontology.compile([r.pack]), OntologyError);
   });
 
   it("detects inheritance cycles", () => {
@@ -64,19 +64,17 @@ describe("pack validation", () => {
     };
     const r = parsePack(cyc);
     assert.ok(r.ok);
-    if (r.ok) assert.throws(() => Ontology.compile([r.pack]), /Zyklus/);
+    assert.throws(() => Ontology.compile([r.pack]), /Zyklus/);
   });
 
   it("allows packs to extend the core with new tags that inherit rules", () => {
     assert.ok(base.ok);
-    if (!base.ok) return;
     const ext = parsePack({
       id: "ext", name: "Erweiterung", version: "1", verbs: [], modifiers: [],
       tags: [{ id: "mithril", label: "Mithril", group: "material", parents: ["metall"] }],
       forms: [{ id: "mithrilhemd", name: "Mithrilhemd", archetype: "weapon", scale: 2, plane: "materie", tags: ["mithril"], verbs: ["zerschlaegt"] }],
     });
     assert.ok(ext.ok);
-    if (!ext.ok) return;
     const o = Ontology.compile([base.pack, ext.pack]);
     const hemd = o.formById("mithrilhemd");
     assert.ok(hemd);

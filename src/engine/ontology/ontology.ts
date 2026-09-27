@@ -451,7 +451,7 @@ function isNum(x: number | undefined): x is number {
 }
 
 function reverse(s: string): string {
-  return [...s].reverse().join("");
+  return Array.from(s).reverse().join("");
 }
 
 /** Detect cycles in the is-a graph (implications may be cyclic, inheritance may not). */

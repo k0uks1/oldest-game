@@ -197,8 +197,9 @@ function roundNumberFor(moves: number): number {
   return Math.floor(Math.max(0, moves - 1) / 2) + 1;
 }
 
+/** Round of the move that is about to be made. */
 export function roundNumber(state: GameState): number {
-  return roundNumberFor(state.history.length);
+  return roundNumberFor(state.history.length + 1);
 }
 
 /** Regeneration grows as the duel escalates. */
