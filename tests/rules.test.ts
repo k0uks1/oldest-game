@@ -5,6 +5,7 @@ import { formCost } from "../src/engine/cost.ts";
 import { attempt } from "../src/engine/attempt.ts";
 import { createGame, evaluateForm, play } from "../src/engine/game.ts";
 import { checkCounter as check, checkEscape, ESCAPE } from "../src/engine/rules.ts";
+import { parsePack } from "../src/engine/ontology/pack.ts";
 import type { Form } from "../src/engine/types.ts";
 
 const onto = coreOntology();
@@ -171,5 +172,55 @@ describe("escape (Entkommen)", () => {
     assert.ok(g0.ok);
     const opts = evaluateForm(onto, g0.value, f("adler")).filter((o) => o.playable);
     if (opts.length > 1) assert.notEqual(opts[0]?.verb, ESCAPE);
+  });
+});
+
+describe("Schreck (startle)", () => {
+  it("a loud bang startles a horse – counts like a weakness, and it flees", () => {
+    const c = checkCounter(lx("knall"), lx("pferd"), "uebertoent");
+    assert.ok(c.valid, c.steps.map((s) => s.text).join("\n"));
+    assert.equal(c.startled, true);
+    assert.equal(c.weaknessHit, true);
+    assert.ok(c.steps.some((s) => s.text.startsWith("Schreck")));
+  });
+
+  it("fearful creatures are startled by fire (attacker tag), bold ones are not", () => {
+    assert.equal(checkCounter(lx("fackel"), lx("hase"), "verbrennt").startled, true);
+    const wolf = checkCounter(lx("fackel"), lx("wolf"), "verbrennt");
+    assert.equal(wolf.startled, undefined);
+  });
+});
+
+describe("Siegarten (ways to win)", () => {
+  it("each mechanism declares how the loser is beaten", () => {
+    assert.equal(checkCounter(lx("drache"), lx("ritter"), "verbrennt").outcome, "vernichtet");
+    const scared = checkCounter(lx("knall"), lx("pferd"), "uebertoent");
+    assert.equal(scared.outcome, "vertrieben");
+  });
+
+  it("winning without harm earns mercy eleganz (Gnade)", () => {
+    const heal = onto.lexicon.find((f) => onto.compileForm(f).verbs.includes("heilt"));
+    const sick = onto.lexicon.find((f) => onto.formHas(f, "krankheit") && f.scale <= 3);
+    assert.ok(heal && sick);
+    const g = play(onto, createGame(["A", "B"]), sick, null);
+    assert.ok(g.ok);
+    const r = attempt(onto, g.value, heal, "heilt");
+    if (r.kind === "success") {
+      assert.equal(r.move.check?.outcome, "befriedet");
+      const plain = r.move.eleganz - g.value.config.mercyEleganz;
+      assert.ok(plain >= 0);
+    }
+  });
+
+  it("hiding: a ninja hides from a knight, not from a dragon's fire", () => {
+    const r = checkEscape(onto, lx("ninja"), lx("ritter"));
+    assert.ok(r.valid);
+    assert.equal(r.outcome, "versteckt");
+    assert.equal(checkEscape(onto, lx("ninja"), lx("drache")).valid, false);
+  });
+
+  it("packs with an unknown victory kind are rejected", () => {
+    const r = parsePack({ id: "x", name: "x", version: "1", tags: [], modifiers: [], forms: [], verbs: [{ id: "v", label: "v", family: "gewalt", leverage: 0, targets: ["fest"], hint: "h", outcome: "zerbröselt" }] });
+    assert.equal(r.ok, false);
   });
 });

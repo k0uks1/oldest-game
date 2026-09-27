@@ -20,10 +20,15 @@ export const DEFAULT_CONFIG: GameConfig = {
     fliegt: ["fliegt", "blitz", "licht", "gas", "krankheit", "schwarm"],
     schwimmt: ["schwimmt", "fluessig", "blitz", "krankheit"],
     graebt: ["graebt", "erde", "fluessig", "krankheit"],
+    tarnt: ["licht", "feuer", "blitz"],
+    schatten: ["licht", "feuer", "blitz"],
   },
   physicalFamilies: ["gewalt", "element", "leben"],
   maxEscapeScale: 6,
   escapeEleganz: 1,
+  hidingRoutes: ["tarnt", "schatten"],
+  mercyEleganz: 1,
+  mercyOutcomes: ["befriedet"],
   echoWindow: 2,
 };
 
@@ -62,6 +67,7 @@ export function checkCounter(
     weaknessHit: false,
     power: 0,
     needed: target.scale,
+    outcome: "vernichtet",
     ...extra,
   });
 
@@ -112,18 +118,25 @@ export function checkCounter(
     return fail(`${attacker.name} ist zu klein, um ${target.name} zu verschlingen.`, { hitTag });
   }
 
+  // 3b. "Schreck": a startled target is as good as hit in its weakness
+  const scare = t.startle.find((st) => st.verbs.has(verbId) || intersection(st.tags, a.closure).length > 0);
+  if (scare !== undefined) {
+    steps.push({ ok: true, text: `Schreck: ${target.name} ist ${onto.tagLabel(scare.tag)} – ${attacker.name} jagt ${target.name} in die Flucht.` });
+  }
+
   // 4. power
-  const weaknessHit = weakHit !== undefined;
+  const weaknessHit = weakHit !== undefined || scare !== undefined;
   const power = attacker.scale + verb.spec.leverage + (weaknessHit ? WEAKNESS_BONUS : 0);
   const needed = target.scale;
   const powerText =
     `Kraft ${attacker.scale} (Stufe) + ${verb.spec.leverage} (Hebel)` +
-    (weaknessHit ? ` + ${WEAKNESS_BONUS} (Schwäche!)` : "") +
+    (weaknessHit ? ` + ${WEAKNESS_BONUS} (${weakHit === undefined ? "Schreck" : "Schwäche"}!)` : "") +
     ` = ${power} gegen Stufe ${needed}`;
   if (power < needed) return fail(`${powerText} – zu schwach.`, { hitTag, weaknessHit, power, needed });
   steps.push({ ok: true, text: `${powerText} ✓` });
 
-  return { verb: verbId, valid: true, steps, hitTag, weaknessHit, power, needed };
+  const outcome = scare !== undefined ? "vertrieben" : (verb.spec.outcome ?? "vernichtet");
+  return { verb: verbId, valid: true, steps, hitTag, weaknessHit, power, needed, outcome, ...(scare === undefined ? {} : { startled: true as const }) };
 }
 
 /** Pseudo-mechanism recorded in the history for an escape (subject to echo like any mechanism). */
@@ -165,17 +178,24 @@ export function checkEscape(
     weaknessHit: false,
     power: 0,
     needed: target.scale,
+    outcome: "entkommen",
   });
   const routes = Object.keys(config.escapeRoutes).filter((r) => onto.formHas(evader, r));
-  if (routes.length === 0) return fail(`${evader.name} hat keinen Fluchtweg (fliegen, schwimmen, graben).`);
+  if (routes.length === 0) return fail(`${evader.name} hat keinen Fluchtweg (fliegen, schwimmen, graben, sich verstecken).`);
   if (target.scale >= config.maxEscapeScale + 1) return fail(`Vor ${target.name} gibt es kein Entkommen – es ist überall.`);
   const open = routes.filter((r) => !(config.escapeRoutes[r] ?? []).some((c) => onto.formHas(target, c)));
   if (open.length === 0) {
     const r = routes[0] ?? "";
-    return fail(`${target.name} folgt überallhin – auch wer ${onto.tagLabel(r)}, entkommt ihm nicht.`);
+    return fail(`${target.name} spürt ${evader.name} überall auf – ${onto.tagLabel(r)} zu sein hilft hier nicht.`);
   }
   const route = open[0] ?? "";
-  steps.push({ ok: true, text: `Fluchtweg: ${evader.name} ${onto.tagLabel(route)} – ${target.name} kann nicht folgen.` });
+  const hides = config.hidingRoutes.includes(route);
+  steps.push({
+    ok: true,
+    text: hides
+      ? `Versteck: ${evader.name} ist ${onto.tagLabel(route)} – ${target.name} findet es nicht.`
+      : `Fluchtweg: ${evader.name} ${onto.tagLabel(route)} – ${target.name} kann nicht folgen.`,
+  });
   const threats = onto.compileForm(target).verbs.filter((v) => reaches(onto, v, evader));
   const family = (v: string): string => onto.verbs.get(v)?.spec.family ?? "";
   const physical = threats.filter((v) => config.physicalFamilies.includes(family(v)));
@@ -191,7 +211,7 @@ export function checkEscape(
   }
   const labels = physical.map((v) => onto.verbs.get(v)?.spec.label ?? v).join(", ");
   steps.push({ ok: true, text: `${target.name} (${labels}) greift ins Leere ✓` });
-  return { verb: ESCAPE, valid: true, steps, hitTag: null, weaknessHit: false, power: evader.scale, needed: target.scale };
+  return { verb: ESCAPE, valid: true, steps, hitTag: null, weaknessHit: false, power: evader.scale, needed: target.scale, outcome: hides ? "versteckt" : "entkommen" };
 }
 
 /**

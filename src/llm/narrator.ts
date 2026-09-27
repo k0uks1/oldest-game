@@ -4,6 +4,15 @@ import type { Failure } from "../engine/attempt.ts";
 import type { GameState, Move } from "../engine/types.ts";
 import { callClaude, type LlmSettings } from "./client.ts";
 
+const OUTCOME_WORDS: Readonly<Record<string, string>> = {
+  vertrieben: "in die Flucht geschlagen",
+  verfuehrt: "verführt / umgarnt",
+  befriedet: "befriedet (Gnade, ohne Leid)",
+  eingeschlaefert: "eingeschläfert",
+  gebannt: "gebannt / versiegelt",
+  versteinert: "versteinert",
+};
+
 const SYSTEM = `Du bist der Erzähler von „The Oldest Game“, einem Duell der Vorstellungskraft in einer
 Dungeon-Arena, im Stil düsterer Fantasy-Comics. Du beschreibst in 1–2 kurzen, bildhaften deutschen Sätzen
 (höchstens 45 Wörter) einen Zug, dessen Ausgang BEREITS FESTSTEHT. Erfinde keinen anderen Ausgang, keine
@@ -37,6 +46,8 @@ export async function narrateWithClaude(
           move.check?.hitTag === null || move.check === null ? "" : `Angriffsfläche: ${onto.tagLabel(move.check.hitTag)}`,
           move.check?.weaknessHit === true ? "Traf eine offensichtliche Schwäche." : "",
           move.form.scale < target.scale ? "Der Kleinere besiegt den Größeren – ein eleganter Zug." : "",
+          move.check === null || move.check.outcome === "vernichtet" ? "" : `Siegart: ${target.name} wird ${OUTCOME_WORDS[move.check.outcome] ?? move.check.outcome} – NICHT vernichtet.`,
+          move.check?.startled === true ? `${target.name} erschrickt und flieht.` : "",
         ]
           .filter((l) => l !== "")
           .join("\n");

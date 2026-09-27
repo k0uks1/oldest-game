@@ -156,7 +156,8 @@ export function play(onto: Ontology, state: GameState, form: Form, verb: string 
       ? state.config.openingEleganz
       : chosenVerb === ESCAPE
         ? state.config.escapeEleganz
-        : eleganzFor(form.scale, target.scale, check.weaknessHit)) + (discovery ? state.config.discoveryEleganz : 0);
+        : eleganzFor(form.scale, target.scale, check.weaknessHit) + (state.config.mercyOutcomes.includes(check.outcome) ? state.config.mercyEleganz : 0)) +
+    (discovery ? state.config.discoveryEleganz : 0);
   const move: Move = { player: state.active, form, verb: chosenVerb, cost, eleganz, refund, check, discovery };
 
   const cap = state.config.maxWille;

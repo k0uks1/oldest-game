@@ -80,3 +80,12 @@ Welche Tags welche Gewandung auslösen:
 |---|---|---|
 | **15 Angriffsstile** | Jeder Mechanismus bekommt ein eigenes Bild, statt dass überall dasselbe Geschoss fliegt: Hieb (echter Sprung über die Arena mit Schnittbogen), Feuerball mit Glut, Bodenwelle aus Wasser, aufbrechende Erde, Eissplitter, Blitz aus dem Himmel, Wind in Wellenlinien, Lichtstrahl, Schattenschwaden, Giftblasen am Boden, Lebensentzug (Partikel fließen zurück zum Angreifer), Schallringe, Gedankenschleier, Runenkreis und kosmischer Sog aus allen Richtungen. Gelernte Mechanismen erben den Stil ihrer Familie. | `attackStyle`, `STYLE_BY_VERB` in `src/render/arena.ts` |
 | **Nicht jeder Sieg vernichtet** | Wer verängstigt, übertönt oder weggeweht wird, dreht sich um und rennt davon (der Knall und das Pferd). Wer eingeschläfert wird oder vergisst, sinkt schlafend weg. Wer verführt, gezähmt oder befreundet wird, geht in rosa Funken über. Alles andere zerfällt wie bisher. | `attackOutcome`, `Arena.depart` |
+
+## Siegarten, Schreck und Verstecken (Wünsche des Nutzers: „Knall erschreckt Pferd“, „unterschiedliche Wege zu besiegen: in die Flucht schlagen, verführen, verstecken“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Siegarten** | Jeder Mechanismus legt im Content fest, *wie* er besiegt: vernichtet, vertrieben, verführt, befriedet, eingeschläfert, gebannt oder versteinert. Die Engine gibt die Siegart im Check zurück. Banner, Erzählung und Arena zeigen sie: Die Gestalt rennt davon, sinkt in Schlaf, geht in rosa oder goldenen Funken auf, wird in einen Runenkreis gezogen oder erstarrt zu Stein und zerbröselt. | `VerbSpec.outcome`, `CounterCheck.outcome`, `Arena.depart` |
+| **Gnade** | Wer befriedet (heilt, erlöst, befreundet, löst ein Rätsel), bekommt +1 Eleganz. Gewaltlos zu gewinnen lohnt sich. | `GameConfig.mercyEleganz/mercyOutcomes` |
+| **Schreck** | Tags können festlegen, was ihre Träger erschreckt: `furchtsam` erschrickt vor Übertönen, Blenden, Blitz und Feuer, `sonnenscheu` vor Licht. Ein Schreck zählt wie ein Treffer in die Schwäche (+2), und das Ziel flieht. Der Knall schlägt das Pferd in die Flucht; der Wolf zuckt vor der Fackel nicht. | `TagSpec.startledBy`, Schritt „Schreck“ in `checkCounter` |
+| **Verstecken** | Das ist ein zweiter Weg neben dem Entkommen: Wer getarnt ist (Chamäleon, Ninja, Spion, Dieb, Fuchs …) oder im Schatten lebt, versteckt sich vor körperlichen Angriffen. Licht, Feuer und Blitz finden jedes Versteck. In der Arena verblasst die Gestalt kurz. | `escapeRoutes.tarnt/schatten`, `hidingRoutes`, Tag `tarnt` |

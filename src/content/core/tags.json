@@ -73,7 +73,7 @@
   {"id": "fuehlt", "label": "fühlt", "group": "geist"},
   {"id": "stolz", "label": "stolz", "group": "geist", "parents": ["fuehlt"]},
   {"id": "gierig", "label": "gierig", "group": "geist", "parents": ["fuehlt"]},
-  {"id": "furchtsam", "label": "furchtsam", "group": "geist", "parents": ["fuehlt"]},
+  {"id": "furchtsam", "label": "furchtsam", "group": "geist", "parents": ["fuehlt"], "startledBy": ["uebertoent", "blendet", "trifft_blitz", "feuer"]},
   {"id": "einsam", "label": "einsam", "group": "geist", "parents": ["fuehlt"]},
   {"id": "neugierig", "label": "neugierig", "group": "geist", "parents": ["denkt"]},
   {"id": "glaubt", "label": "glaubt", "group": "geist"},
@@ -102,10 +102,11 @@
   {"id": "braucht_energie", "label": "braucht Energie", "group": "existenz"},
   {"id": "traum", "label": "aus Traumstoff", "group": "existenz", "parents": ["falsch"]},
   {"id": "feenhaft", "label": "feenhaft", "group": "existenz", "implies": ["magisch"]},
-  {"id": "sonnenscheu", "label": "sonnenscheu", "group": "existenz"},
+  {"id": "sonnenscheu", "label": "sonnenscheu", "group": "existenz", "startledBy": ["blendet", "ueberstrahlt", "durchleuchtet", "licht"]},
   {"id": "toedlicher_blick", "label": "tödlicher Blick", "group": "existenz", "grants": ["versteinert"]},
   {"id": "krankheit", "label": "Krankheit", "group": "existenz"},
   {"id": "falsch", "label": "Trugbild", "group": "existenz"},
   {"id": "loeslich", "label": "löslich", "group": "material"},
-  {"id": "elektrisch", "label": "elektrisch", "group": "zustand", "implies": ["braucht_energie"]}
+  {"id": "elektrisch", "label": "elektrisch", "group": "zustand", "implies": ["braucht_energie"]},
+  {"id": "tarnt", "label": "getarnt", "group": "faehigkeit"}
 ]

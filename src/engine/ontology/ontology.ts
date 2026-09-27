@@ -19,6 +19,8 @@ export interface CompiledForm {
   /** Indices of declared weakness tags. */
   readonly weak: TagSet;
   readonly immune: ReadonlySet<string>;
+  /** "Schreck" triggers from tags in the closure: which tag is startled, by which mechanisms / attacker tags. */
+  readonly startle: readonly { readonly tag: number; readonly verbs: ReadonlySet<string>; readonly tags: TagSet }[];
 }
 
 export class OntologyError extends Error {
@@ -61,6 +63,8 @@ export class Ontology {
   private readonly descendantMemo: (TagSet | undefined)[] = [];
   private readonly grantsByTag = new Map<number, string[]>();
   private readonly grantTags: TagSet;
+  private readonly startleByTag = new Map<number, { verbs: ReadonlySet<string>; tags: TagSet }>();
+  private readonly startleTags: TagSet;
   private readonly formsById = new Map<string, Form>();
   private readonly compiled = new WeakMap<Form, CompiledForm>();
   private verbUsersMemo: Map<string, Form[]> | undefined;
@@ -139,6 +143,18 @@ export class Ontology {
       if (grants.length > 0) this.grantsByTag.set(i, grants);
     });
     this.grantTags = fromIterable(this.grantsByTag.keys());
+    tags.forEach((t, i) => {
+      const raw = t.startledBy ?? [];
+      if (raw.length === 0) return;
+      const vs = new Set<string>();
+      const ts: number[] = [];
+      for (const r of raw) {
+        if (verbs.has(r)) vs.add(r);
+        else ts.push(ref(r, `Tag ${t.id}.startledBy`) ?? -1);
+      }
+      this.startleByTag.set(i, { verbs: vs, tags: fromIterable(ts.filter((x) => x >= 0)) });
+    });
+    this.startleTags = fromIterable(this.startleByTag.keys());
 
     // ── Modifiers ───────────────────────────────────────────────────────
     const modIds = new Set<string>();
@@ -370,6 +386,7 @@ export class Ontology {
       verbs: [...verbs],
       weak: fromIterable(form.weak.map((w) => this.tagIndex.get(w)).filter(isNum)),
       immune: new Set(form.immune),
+      startle: intersection(closure, this.startleTags).map((tag) => ({ tag, ...(this.startleByTag.get(tag) ?? { verbs: new Set<string>(), tags: fromIterable([]) }) })),
     };
     this.compiled.set(form, compiled);
     return compiled;
