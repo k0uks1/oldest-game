@@ -667,7 +667,14 @@ export class Arena {
         back();
         return;
       }
-      default:
+      case "fire":
+      case "water":
+      case "ice":
+      case "wind":
+      case "dark":
+      case "poison":
+      case "sound":
+      case "mind":
         break;
     }
     // travelling effects: fire, water, ice, wind, dark, poison, sound, mind
@@ -863,7 +870,13 @@ export class Arena {
         for (let k = 0; k < 2; k++) push(x, air - 10 + wob, (r() - 0.5) * 8, (r() - 0.5) * 8, 0.6, 1, 0, r() < 0.5 ? pr.color : pr.glow);
         break;
       }
-      default:
+      case "slash":
+      case "earth":
+      case "bolt":
+      case "light":
+      case "drain":
+      case "rune":
+      case "cosmic":
         for (let k = 0; k < 4; k++) push(x, air + (r() - 0.5) * 6, (r() - 0.5) * 30, (r() - 0.5) * 30, 0.25 + r() * 0.3, 1 + Math.floor(r() * 2), 0, r() < 0.5 ? pr.color : pr.glow);
     }
   }
