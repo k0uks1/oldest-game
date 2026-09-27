@@ -12,7 +12,7 @@
   {"id": "schildkroete", "name": "Schildkröte", "archetype": "blob", "scale": 2, "plane": "leben", "tags": ["reptil", "gepanzert", "schwimmt", "erinnert"], "verbs": ["ueberdauert"], "aliases": ["panzerkröte"], "flavor": "Langsam. Alt. Geduldig."},
   {"id": "chamaeleon", "name": "Chamäleon", "archetype": "beast", "scale": 1, "plane": "leben", "tags": ["reptil", "schatten", "tarnt"], "verbs": ["taeuscht"], "aliases": ["chamäleon"]},
   {"id": "feuersalamander", "name": "Feuersalamander", "archetype": "serpent", "scale": 1, "plane": "leben", "tags": ["amphibie", "gift"], "verbs": ["vergiftet"], "aliases": ["molch"]},
-  {"id": "frosch", "name": "Frosch", "archetype": "blob", "scale": 1, "plane": "leben", "tags": ["amphibie"], "verbs": ["uebertoent"], "aliases": ["laubfrosch", "froschkönig"]},
+  {"id": "frosch", "name": "Frosch", "archetype": "blob", "scale": 1, "plane": "leben", "tags": ["amphibie"], "verbs": ["uebertoent"], "aliases": ["laubfrosch"]},
   {"id": "zitteraal", "name": "Zitteraal", "archetype": "fish", "scale": 2, "plane": "leben", "tags": ["fisch", "blitz"], "verbs": ["trifft_blitz"], "aliases": ["aal", "stromaal"]},
   {"id": "piranha", "name": "Piranhaschwarm", "archetype": "swarm", "scale": 3, "plane": "leben", "tags": ["fisch", "schwarm", "gierig"], "verbs": ["zerreisst", "verschlingt"], "weak": ["gierig"], "aliases": ["piranhas", "piranha"]},
   {"id": "qualle", "name": "Qualle", "archetype": "blob", "scale": 2, "plane": "leben", "tags": ["weichtier", "schwimmt", "gift", "wasser"], "verbs": ["vergiftet"], "aliases": ["feuerqualle", "nesselqualle"]},
