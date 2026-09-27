@@ -524,6 +524,7 @@ export class App {
       h("p", { class: "lore" }, "Zwei Willen. Eine Arena. Jeder wird zu etwas, das den anderen besiegt – bis einer keine Antwort mehr findet."),
       h("div", { class: "names" }, h("label", {}, "Spieler 1", n0), h("label", {}, "Spieler 2", n1)),
       needsKey ? h("label", {}, "Claude API-Key (bleibt lokal in deinem Browser)", key) : null,
+      this.debug ? h("p", { class: "hint" }, "Debug-Modus: ohne Claude – Eingaben werden mechanisch geparst, die Chronik nutzt Textbausteine.") : null,
       h(
         "div",
         { class: "actions" },

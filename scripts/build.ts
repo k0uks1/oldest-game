@@ -14,6 +14,8 @@ import * as esbuild from "esbuild";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = join(root, "dist");
 const serve = process.argv.includes("--serve");
+/** Preview build for sandboxed hosts (claude.ai artifacts): no API access there, so debug mode is forced. */
+const artifact = process.argv.includes("--artifact");
 
 const options: esbuild.BuildOptions = {
   entryPoints: [join(root, "src/main.ts")],
@@ -24,7 +26,10 @@ const options: esbuild.BuildOptions = {
   sourcemap: serve ? "inline" : false,
   write: false,
   legalComments: "none",
-  define: { "process.env.NODE_ENV": serve ? '"development"' : '"production"' },
+  define: {
+    "process.env.NODE_ENV": serve ? '"development"' : '"production"',
+    __PREVIEW_SANDBOX__: artifact ? "true" : "false",
+  },
   logLevel: "warning",
 };
 
@@ -36,12 +41,22 @@ function assemble(js: string): string {
   return template.replace("/*__CSS__*/", () => css).replace("/*__JS__*/", () => safeJs);
 }
 
+/** Artifact hosts wrap the page in their own document skeleton – strip ours. */
+function fragment(html: string): string {
+  return html
+    .replace(/<!doctype html>\s*/i, "")
+    .replace(/<html[^>]*>|<\/html>|<head>|<\/head>|<body>|<\/body>/gi, "")
+    .replace(/<meta charset="utf-8" \/>\s*/i, "")
+    .replace(/<meta name="viewport"[^>]*>\s*/i, "");
+}
+
 function emit(result: esbuild.BuildResult): void {
   const js = result.outputFiles?.[0]?.text ?? "";
   mkdirSync(dist, { recursive: true });
   const html = assemble(js);
-  writeFileSync(join(dist, "index.html"), html);
-  console.log(`dist/index.html · ${(html.length / 1024).toFixed(0)} KiB`);
+  const file = artifact ? "preview.html" : "index.html";
+  writeFileSync(join(dist, file), artifact ? fragment(html) : html);
+  console.log(`dist/${file} · ${(html.length / 1024).toFixed(0)} KiB`);
 }
 
 if (serve) {
