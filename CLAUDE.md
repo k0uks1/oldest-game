@@ -75,7 +75,8 @@ one use per form, Wille budget.
   be counterable – `tests/content.test.ts` enforces this.
 - Balancing changes: run `npm run simulate -- --games 2000` before and after, mention the diff in the PR.
 - Workflow: feature branch → PR (CI must be green: typecheck, lint, tests, build) → squash merge.
-  CI posts a PR comment with the playable `index.html` artifact.
+  CI posts a PR comment with the playable build; `pages.yml` deploys `main` to GitHub Pages and every PR
+  to `pr-preview/pr-<n>/` (gh-pages branch).
 
 ## Claude integration
 
