@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { coreOntology } from "../src/content/index.ts";
 import { ARCHETYPES } from "../src/engine/types.ts";
-import { ATTIRE, FIGURES } from "../src/render/figures.ts";
+import { ATTIRE, FIGURES, VARIANTS } from "../src/render/figures.ts";
 import { MASKS } from "../src/render/masks.ts";
 import { paletteFor } from "../src/render/palette.ts";
 import { buildGrid, epx, renderSprite, upscalePasses } from "../src/render/sprite.ts";
@@ -30,6 +30,22 @@ describe("sprites", () => {
       assert.ok(at.overlay.rows.length <= 32, at.name);
       for (const row of at.overlay.rows) assert.match(row, /^[.#+o*,_]{32}$/, `${at.name}: ${row}`);
     }
+  });
+
+  it("weapon variants are valid 32×32 figures, and hammer ≠ sword ≠ spear", () => {
+    for (const list of Object.values(VARIANTS)) {
+      for (const v of list) {
+        assert.equal(v.rows.length, 32, v.name);
+        for (const row of v.rows) assert.match(row, /^[.#+o*,]{32}$/, `${v.name}: ${row}`);
+      }
+    }
+    const shape = (id: string): string => {
+      const f = onto.formById(id);
+      assert.ok(f, id);
+      return buildGrid(onto, { ...f, scale: 4 }).map((r) => r.join("")).join("\n");
+    };
+    const ids = ["kriegshammer", "schwert", "speer", "axt", "bogen", "zauberstab"];
+    assert.equal(new Set(ids.map(shape)).size, ids.length);
   });
 
   it("people are dressed by their tags (knight ≠ farmer ≠ mage)", () => {

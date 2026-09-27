@@ -68,3 +68,9 @@ Welche Tags welche Gewandung auslösen:
 | Idee | Was sie tut | Wo |
 |---|---|---|
 | **Entkommen** (Wunsch des Nutzers: „Kolibri fliegt der Lavawelle davon“) | Statt zu besiegen, darf man ausweichen – fliegend, tauchend oder grabend. Wer folgen kann, macht diesen Weg zu: Flieger, Blitz, Licht, Gas, Schwärme und Seuchen erreichen Flieger; Flüssiges und Blitz erreichen Taucher; Erde und Flüssiges erreichen Grabende. Nur körperliche Angriffe (Gewalt, Element, Leben) lassen sich so umgehen, denn Gesang, Flüche und Schrecken reichen überallhin. Vor Welten und Kosmischem gibt es kein Entkommen. Ein Entkommen bringt 1 Eleganz, gibt keine Rückerstattung und zählt als Echo. Danach muss der Gegner den Entkommenen besiegen. Das Ziel schlägt ins Leere und zieht sich zurück. | `checkEscape` in `src/engine/rules.ts`, `Arena.evade`, Parser erkennt „fliegt davon“ als `entkommt` |
+
+## Waffen (Wunsch des Nutzers: „Hammer, Schwert und Lanze sehen alle gleich aus“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Form folgt Funktion** | Waffen bekommen ihre Silhouette aus dem, was sie *tun*, und dem, woraus sie bestehen. Es gibt 15 Varianten: Zerschlagen ohne Schneiden wird zum Hammer, Zerschlagen und Schneiden zur Axt, Holz und Metall mit Durchbohren zum Speer mit Wimpel, Holz mit Durchbohren zum Bogen und Läutern zum Pflock. Schneidendes Metall ergibt ab Stufe 3 ein Schwert, darunter einen Dolch. Außerdem gibt es Sense, Schaufel, Schirm, Besen, Zauberstab, Flöte, Horn und Streichholz. Gelernte Waffen passen damit automatisch. | `VARIANTS` in `src/render/figures.ts`, `variantFor()` |
