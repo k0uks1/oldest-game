@@ -601,7 +601,7 @@ export class App {
     el.append(
       h("div", { class: "name" }, pl.name),
       h("div", { class: "bar" }, h("div", { class: "fill", style: `width:${String(pct)}%` })),
-      h("div", { class: "stats" }, `${String(pl.wille)}`, pl.eleganz > 0 ? h("span", { class: "eleganz" }, ` ✦ ${String(pl.eleganz)}`) : null),
+      h("div", { class: "stats" }, String(pl.wille), pl.eleganz > 0 ? h("span", { class: "eleganz" }, ` ✦ ${String(pl.eleganz)}`) : null),
     );
     const delta = pl.wille - this.lastWille[p];
     if (delta !== 0 && s.history.length + s.usedFormIds.length > 0) {
