@@ -34,6 +34,18 @@ ganz ohne Claude (mechanischer Debug-Modus).
 **Gehostet (optional):** Spiel statisch hosten (z. B. GitHub Pages) + `server/worker.ts` als Cloudflare Worker
 mit dem Key als Secret und einem Zugangscode; die Worker-URL in den Claude-Einstellungen eintragen.
 
+## Das Spiel lernt dazu
+
+Wird jemand zu etwas, das das Spiel noch nicht kennt („ein stinkender Käse“), ordnet Claude es ein – und darf
+dabei sparsam **neues Vokabular** vorschlagen: eine neue Eigenschaft (immer unter bestehende Kategorien
+eingeordnet, z. B. `Käse ⊂ fest, impliziert brennbar`) oder einen neuen Mechanismus (kleiner Hebel).
+Durch die Taxonomie erbt Neues sofort die Regeln seiner Eltern – Feuer verbrennt den Käse, ohne dass jemand eine
+Regel schreiben musste. Alles Gelernte wird wie handgeschriebener Content validiert (muss angreifen können,
+braucht eine Schwäche, muss konterbar sein) und landet im Kompendium (✦).
+
+Gespeichert wird lokal mit `npm start` in `learned/pack.json` – reviewbar und per PR in den Grundstock
+übernehmbar – bzw. auf GitHub Pages im Browser (Export im Kompendium).
+
 ## Regeln in Kürze
 
 | Regel | |

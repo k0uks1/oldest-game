@@ -3,7 +3,9 @@ import { parseForm, suggest } from "../engine/parse.ts";
 import { clampScale } from "../engine/rules.ts";
 import { hash32, normalize } from "../engine/text.ts";
 import { ARCHETYPES, PLANES, type Archetype, type Form, type Plane } from "../engine/types.ts";
+import type { TagSpec, VerbSpec } from "../engine/ontology/pack.ts";
 import { callClaude, type LlmSettings, type ToolDef } from "./client.ts";
+import { EMPTY_DELTA, MAX_NEW_TAGS, slug, type LearningDelta } from "./learning.ts";
 
 /**
  * Claude parser: free text → Form. This is the primary input path of the game.
@@ -25,7 +27,11 @@ export interface LlmParseResult {
   readonly base: Form | null;
   readonly unresolved: readonly string[];
   readonly fromCache: boolean;
+  /** New vocabulary Claude proposed (validated later by `learn`). */
+  readonly delta: LearningDelta;
 }
+
+const FAMILIES = ["gewalt", "element", "leben", "sinne", "geist", "magie", "kosmos"] as const;
 
 const TOOL: ToolDef = {
   name: "gestalt",
@@ -63,6 +69,33 @@ const TOOL: ToolDef = {
       intended_mechanism: {
         type: ["string", "null"],
         description: "Mechanismus-ID, falls der Spieler beschreibt WIE die Gestalt angreift, sonst null.",
+      },
+      new_properties: {
+        type: "array",
+        maxItems: MAX_NEW_TAGS,
+        description:
+          "NUR wenn eine für diese Gestalt wesentliche Eigenschaft im Vokabular wirklich fehlt. Jede neue Eigenschaft MUSS unter bestehende Kategorien eingeordnet werden (parents) – so erbt sie deren Regeln.",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Kurzer deutscher Name, z. B. „Käse“" },
+            parents: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 3, description: "Bestehende Eigenschaften, deren Unterart sie ist (z. B. fest, Pflanze, Tier)." },
+            implies: { type: "array", items: { type: "string" }, maxItems: 4, description: "Bestehende Eigenschaften, die sie mit sich bringt (z. B. brennbar)." },
+          },
+          required: ["name", "parents"],
+        },
+      },
+      new_mechanism: {
+        type: ["object", "null"],
+        description: "NUR wenn keiner der Mechanismen auch nur annähernd passt. Wird vorsichtig mit kleinem Hebel übernommen.",
+        properties: {
+          label: { type: "string", description: "Verb im Präsens, z. B. „verschleimt“" },
+          family: { type: "string", enum: [...FAMILIES] },
+          targets: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 4, description: "Bestehende Eigenschaften, auf die er wirkt." },
+          blocked_by: { type: "array", items: { type: "string" }, maxItems: 4 },
+          hint: { type: "string", description: "Ein Satz, wie er wirkt." },
+        },
+        required: ["label", "family", "targets", "hint"],
       },
     },
     required: ["name", "base", "scale", "plane", "archetype", "properties", "mechanisms", "intended_mechanism"],
@@ -111,6 +144,10 @@ Nenne daher die spezifischste passende Eigenschaft.
 MECHANISMEN (antworte mit den IDs):
 ${verbs}
 
+DAZULERNEN: Das Spiel lernt aus deinen Einordnungen. Wenn eine wesentliche Eigenschaft fehlt, schlage sie mit new_properties vor
+(immer unter bestehende Eigenschaften eingeordnet). Einen neuen Mechanismus schlägst du nur vor, wenn wirklich keiner passt.
+Erfinde nichts, was es schon gibt – nutze vorhandene Begriffe, wo immer sie passen.
+
 REGELN FÜR DICH:
 - Jede Gestalt braucht Angriffsfläche und mindestens eine plausible Schwäche.
 - 1–3 Mechanismen, die zur Gestalt passen. Elemente bringen ihre Mechanismen selbst mit (Feuer verbrennt …).
@@ -143,7 +180,9 @@ const CACHE_PREFIX = "oldest-game:parse:";
 function cacheGet(key: string): LlmParseResult | undefined {
   try {
     const raw = localStorage.getItem(CACHE_PREFIX + key);
-    return raw === null ? undefined : ({ ...(JSON.parse(raw) as LlmParseResult), fromCache: true });
+    if (raw === null) return undefined;
+    const parsed = JSON.parse(raw) as Partial<LlmParseResult> & Omit<LlmParseResult, "delta">;
+    return { ...parsed, delta: parsed.delta ?? EMPTY_DELTA, fromCache: true };
   } catch {
     return undefined;
   }
@@ -177,8 +216,11 @@ export function formFromLlm(onto: Ontology, input: unknown, text: string): LlmPa
 
   const base = typeof o["base"] === "string" ? (onto.formById(o["base"]) ?? null) : null;
   const added = resolveTags(strings(o["properties"]));
+  const delta = proposeDelta(onto, o, unresolved);
+  for (const t of delta.tags) if (!added.includes(t.id)) added.push(t.id);
   const removed = base === null ? [] : resolveTags(strings(o["remove_properties"]));
   const verbs = new Set<string>(base?.verbs ?? []);
+  for (const v of delta.verbs) verbs.add(v.id);
   for (const k of strings(o["mechanisms"])) {
     const id = resolveVerb(k);
     if (id === undefined) unresolved.push(k);
@@ -208,11 +250,72 @@ export function formFromLlm(onto: Ontology, input: unknown, text: string): LlmPa
     origin: "llm",
     ...(base?.flavor === undefined ? {} : { flavor: base.flavor }),
   };
-  const weak = [...new Set([...(base?.weak ?? []), ...resolveTags(strings(o["weaknesses"]))])].filter((w) => onto.formHas(draft, w));
+  // Weaknesses may name a tag Claude just proposed – keep those, they are validated after learning.
+  const newTagFor = (k: string): string | undefined => delta.tags.find((t) => normalize(t.label) === normalize(k))?.id;
+  const weakKeys = strings(o["weaknesses"]);
+  const proposedWeak = weakKeys.map(newTagFor).filter((x): x is string => x !== undefined);
+  const knownWeak = resolveTags(weakKeys.filter((k) => newTagFor(k) === undefined));
+  const weak = [
+    ...[...new Set([...(base?.weak ?? []), ...knownWeak])].filter((w) => onto.formHas(draft, w)),
+    ...proposedWeak.filter((w) => tags.has(w)),
+  ];
   const form: Form = { ...draft, weak };
-  if (onto.compileForm(form).verbs.length === 0) return undefined;
+  if (onto.compileForm(form).verbs.length === 0 && delta.verbs.length === 0) return undefined;
   const iv = typeof o["intended_mechanism"] === "string" ? (resolveVerb(o["intended_mechanism"]) ?? null) : null;
-  return { form, intendedVerb: iv, base, unresolved, fromCache: false };
+  return { form, intendedVerb: iv, base, unresolved, fromCache: false, delta };
+}
+
+/** Turn Claude's vocabulary proposals into specs – only what resolves against existing tags survives. */
+function proposeDelta(onto: Ontology, o: Record<string, unknown>, unresolved: string[]): LearningDelta {
+  const tags: TagSpec[] = [];
+  const rawTags = Array.isArray(o["new_properties"]) ? (o["new_properties"] as unknown[]) : [];
+  for (const raw of rawTags.slice(0, MAX_NEW_TAGS)) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const p = raw as Record<string, unknown>;
+    const name = typeof p["name"] === "string" ? p["name"].trim() : "";
+    if (name.length < 2 || name.length > 40) continue;
+    if (onto.resolveTag(name) !== undefined) continue; // already known – not new
+    const parents = strings(p["parents"]).map((k) => (onto.hasTag(k) ? k : onto.resolveTag(k))).filter((x): x is string => x !== undefined);
+    if (parents.length === 0) continue; // must hang under the existing taxonomy
+    const implies = strings(p["implies"]).map((k) => (onto.hasTag(k) ? k : onto.resolveTag(k))).filter((x): x is string => x !== undefined);
+    const first = onto.tagAt(onto.tagIndexOf(parents[0] ?? "") ?? -1);
+    const id = `g_${slug(name)}`;
+    if (onto.hasTag(id) || tags.some((t) => t.id === id)) continue;
+    tags.push({
+      id,
+      label: name,
+      group: first?.group ?? "existenz",
+      parents: [...new Set(parents)].slice(0, 3),
+      ...(implies.length > 0 ? { implies: [...new Set(implies)].slice(0, 4) } : {}),
+      aliases: [name],
+    });
+    const i = unresolved.findIndex((u) => normalize(u) === normalize(name));
+    if (i >= 0) unresolved.splice(i, 1);
+  }
+  const verbs: VerbSpec[] = [];
+  const m = o["new_mechanism"];
+  if (typeof m === "object" && m !== null) {
+    const v = m as Record<string, unknown>;
+    const label = typeof v["label"] === "string" ? v["label"].trim() : "";
+    const family = FAMILIES.find((f) => f === v["family"]) ?? "gewalt";
+    const resolve = (k: string): string | undefined => (onto.hasTag(k) ? k : (onto.resolveTag(k) ?? tags.find((t) => normalize(t.label) === normalize(k))?.id));
+    const targets = strings(v["targets"]).map(resolve).filter((x): x is string => x !== undefined);
+    const blockedBy = strings(v["blocked_by"]).map(resolve).filter((x): x is string => x !== undefined && !targets.includes(x));
+    const id = `g_${slug(label)}`;
+    if (label.length >= 3 && label.length <= 40 && targets.length > 0 && onto.resolveVerb(label) === undefined && !onto.verbs.has(id)) {
+      verbs.push({
+        id,
+        label,
+        family,
+        // Learned mechanisms stay weak: brute force needs size, everything else a small lever.
+        leverage: family === "gewalt" ? 1 : 2,
+        targets: [...new Set(targets)],
+        ...(blockedBy.length > 0 ? { blockedBy: [...new Set(blockedBy)] } : {}),
+        hint: `(gelernt) ${typeof v["hint"] === "string" ? v["hint"].slice(0, 160) : label}`,
+      });
+    }
+  }
+  return tags.length === 0 && verbs.length === 0 ? EMPTY_DELTA : { tags, verbs };
 }
 
 export async function parseWithClaude(onto: Ontology, settings: LlmSettings, text: string): Promise<LlmParseResult | undefined> {
