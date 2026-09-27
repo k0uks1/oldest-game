@@ -1,7 +1,7 @@
 [
   {"id": "fels", "name": "Fels", "archetype": "rock", "scale": 4, "plane": "materie", "tags": ["stein", "masse"], "verbs": ["zermalmt", "begraebt"], "aliases": ["felsen", "felsbrocken", "findling"]},
   {"id": "kiesel", "name": "Kieselstein", "archetype": "rock", "scale": 1, "plane": "materie", "tags": ["stein"], "verbs": ["zerschlaegt", "blendet"], "aliases": ["kiesel", "steinchen", "schleuderstein"], "flavor": "David hatte nur einen."},
-  {"id": "regen", "name": "Regen", "archetype": "cloud", "scale": 3, "plane": "materie", "tags": ["wasser", "zeitgebunden"], "verbs": ["loescht", "erodiert"], "aliases": ["regenschauer", "platzregen", "nieselregen"]},
+  {"id": "regen", "name": "Regen", "archetype": "cloud", "scale": 3, "plane": "materie", "tags": ["wasser", "zeitgebunden"], "verbs": ["loescht", "erodiert"], "aliases": ["platzregen", "nieselregen"]},
   {"id": "hagelsturm", "name": "Hagelsturm", "archetype": "cloud", "scale": 4, "plane": "materie", "tags": ["eis", "luft", "chaotisch"], "verbs": ["zerschlaegt", "gefriert"], "aliases": ["hagel", "graupel"]},
   {"id": "schneesturm", "name": "Schneesturm", "archetype": "cloud", "scale": 5, "plane": "materie", "tags": ["eis", "luft", "chaotisch", "zeitgebunden"], "verbs": ["gefriert", "verweht", "begraebt"], "aliases": ["blizzard"]},
   {"id": "blitzschlag", "name": "Blitzschlag", "archetype": "star", "scale": 3, "plane": "materie", "tags": ["blitz", "licht", "zeitgebunden"], "verbs": ["trifft_blitz", "blendet"], "weak": ["zeitgebunden"], "aliases": ["blitz", "donnerkeil"]},
