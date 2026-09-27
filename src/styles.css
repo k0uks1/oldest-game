@@ -557,6 +557,16 @@ canvas.arena {
     opacity: 0;
   }
 }
+.version {
+  margin: 10px 0 0;
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  color: var(--faint);
+  text-align: center;
+  user-select: text;
+}
+
 .menu {
   display: flex;
   flex-direction: column;

@@ -95,6 +95,8 @@ non-physical one may, and the target must be ≤ `maxEscapeScale`. Echo applies;
 - Content JSON: one entry per line (keeps diffs reviewable). Every form needs ≥ 1 mechanism and must
   be counterable – `tests/content.test.ts` enforces this.
 - Balancing changes: run `npm run simulate -- --games 2000` before and after, mention the diff in the PR.
+- **Versions:** every PR bumps `package.json` `version` (minor for features/content, patch for pure fixes). The build
+  injects it (`src/version.ts`); it is shown subtly on the start screen and in the menu (“v0.32.0”, previews add “· PR n”).
 - Workflow: feature branch → PR (CI must be green: typecheck, lint, tests, build) → squash merge.
   CI posts a PR comment with the playable build; `pages.yml` deploys `main` to GitHub Pages and every PR
   to `pr-preview/pr-<n>/` (gh-pages branch).

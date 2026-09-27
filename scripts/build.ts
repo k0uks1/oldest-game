@@ -16,6 +16,14 @@ const serve = process.argv.includes("--serve");
 /** Preview build for sandboxed hosts (claude.ai artifacts): no API access there, so debug mode is forced. */
 const artifact = process.argv.includes("--artifact");
 
+/** "0.32.0", or "0.32.0 · PR 41" for a pull-request preview (CI sets GITHUB_REF=refs/pull/41/merge). */
+function appVersion(): string {
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version?: unknown };
+  const version = typeof pkg.version === "string" ? pkg.version : "0.0.0";
+  const pr = /^refs\/pull\/(\d+)\//.exec(process.env["GITHUB_REF"] ?? "")?.[1];
+  return pr === undefined ? version : `${version} · PR ${pr}`;
+}
+
 const options: esbuild.BuildOptions = {
   entryPoints: [join(root, "src/main.ts")],
   bundle: true,
@@ -28,6 +36,7 @@ const options: esbuild.BuildOptions = {
   define: {
     "process.env.NODE_ENV": serve ? '"development"' : '"production"',
     __PREVIEW_SANDBOX__: artifact ? "true" : "false",
+    __APP_VERSION__: JSON.stringify(appVersion()),
   },
   logLevel: "warning",
 };
