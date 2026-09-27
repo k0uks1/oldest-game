@@ -87,6 +87,8 @@ export interface GameConfig {
   readonly escalateEveryMoves: number;
   /** Eleganz awarded for the opening move (small compensation for moving first). */
   readonly openingEleganz: number;
+  /** Extra Wille lost when an attempt fails – blind guessing must not be free. */
+  readonly failurePenalty: number;
   /** Number of full rounds before the game is decided on eleganz. */
   readonly roundLimit: number;
   /** A mechanism used within the last N moves may not be repeated. */

@@ -1,23 +1,22 @@
+import { attempt, type AttemptOutcome } from "../engine/attempt.ts";
 import { formCost } from "../engine/cost.ts";
-import {
-  arenaMinScale,
-  createGame,
-  currentTarget,
-  evaluateForm,
-  moveCost,
-  pass,
-  play,
-  roundNumber,
-  type MoveOption,
-} from "../engine/game.ts";
+import { arenaMinScale, createGame, currentTarget, evaluateForm, moveCost, pass, roundNumber, type MoveOption } from "../engine/game.ts";
 import type { Ontology } from "../engine/ontology/ontology.ts";
 import { parseForm } from "../engine/parse.ts";
-import { findCounters } from "../engine/rules.ts";
 import type { Form, GameState, PlayerId } from "../engine/types.ts";
-import { detectLocalProxy, estimateCostUsd, isClaudeReady, isHostedOrigin, loadSettings, saveSettings, sessionUsage, type LlmSettings } from "../llm/client.ts";
-import { narrateWithClaude } from "../llm/narrator.ts";
+import {
+  detectLocalProxy,
+  estimateCostUsd,
+  isClaudeReady,
+  isHostedOrigin,
+  loadSettings,
+  saveSettings,
+  sessionUsage,
+  type LlmSettings,
+} from "../llm/client.ts";
+import { narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
 import { parseWithClaude } from "../llm/parser.ts";
-import { narrateEnd, narrateMove } from "../narrate/offline.ts";
+import { narrateEnd, narrateFailure, narrateMove } from "../narrate/offline.ts";
 import { Arena } from "../render/arena.ts";
 import { clear, h } from "./dom.ts";
 
@@ -32,7 +31,13 @@ interface Candidate {
   readonly intendedVerb: string | null;
 }
 
-/** Hot-seat UI controller. All rules come from the pure engine. */
+/**
+ * Hot-seat UI controller. All rules come from the pure engine.
+ *
+ * The real game hides the rules check: you type what you become, press Enter,
+ * and the arena shows whether it was enough. Debug mode (`?debug`) adds the
+ * full breakdown and a two-step confirm.
+ */
 export class App {
   private state: GameState;
   private readonly arena: Arena;
@@ -40,16 +45,24 @@ export class App {
   private selectedVerb: string | null = null;
   private busy = false;
   private settings: LlmSettings = loadSettings();
+  /** Proxy auto-detected at runtime (local `npm start` server) – never persisted. */
+  private localProxy: string | null = null;
+  /** Did the active player's last attempt fail? (changes the prompt) */
+  private retry = false;
   private readonly els: {
     root: HTMLElement;
     input: HTMLInputElement;
-    preview: HTMLElement;
+    submit: HTMLButtonElement;
+    details: HTMLElement;
     prompt: HTMLElement;
     chronicle: HTMLElement;
+    chronicleWrap: HTMLDetailsElement;
     hud: [HTMLElement, HTMLElement];
+    plates: [HTMLElement, HTMLElement];
+    caption: HTMLElement;
     round: HTMLElement;
     banner: HTMLElement;
-    playBtn: HTMLButtonElement;
+    nav: HTMLElement;
     modal: HTMLElement;
   };
 
@@ -63,113 +76,117 @@ export class App {
     const canvas = h("canvas", { class: "arena", "aria-label": "Arena" });
     this.arena = new Arena(canvas, onto);
     const input = h("input", {
-      class: "form-input",
+      class: "summon-input",
+      id: "summon",
       type: "text",
-      placeholder: "z. B. „riesiger Eiswolf“, „Hoffnung“, „Rost“ …",
       autocomplete: "off",
       spellcheck: false,
+      "aria-label": "Was wirst du?",
       oninput: () => {
         this.onInput();
       },
       onkeydown: (e) => {
-        if (e.key === "Enter") void this.onEnter();
+        if (e.key === "Enter") void this.onSubmit();
       },
     });
-    const playBtn = h("button", { class: "btn primary", onclick: () => void this.onPlay() }, "Beschwören");
-    const checkBtn = h("button", { class: "btn", title: "Gestalt einordnen lassen (Enter)", onclick: () => void this.onEnter() }, "Prüfen");
+    const submit = h("button", { class: "btn primary", onclick: () => void this.onSubmit() }, "Werden");
+    const chronicle = h("ol", { class: "chronicle" });
+    const chronicleWrap = h("details", { class: "chronicle-wrap" }, h("summary", {}, "Chronik"), chronicle);
     const els = {
       root,
       input,
-      preview: h("div", { class: "preview" }),
+      submit,
+      details: h("section", { class: "details" }),
       prompt: h("div", { class: "prompt" }),
-      chronicle: h("ol", { class: "chronicle" }),
+      chronicle,
+      chronicleWrap,
       hud: [h("div", { class: "hud left" }), h("div", { class: "hud right" })] as [HTMLElement, HTMLElement],
-      round: h("div", { class: "round" }),
-      banner: h("div", { class: "banner" }),
-      playBtn,
+      plates: [h("div", { class: "plate left" }), h("div", { class: "plate right" })] as [HTMLElement, HTMLElement],
+      caption: h("div", { class: "caption", role: "status" }),
+      round: h("span", { class: "round" }),
+      banner: h("div", { class: "banner", role: "alert" }),
+      nav: h("nav", {}),
       modal: h("div", { class: "modal-layer" }),
     };
     this.els = els;
 
     clear(root);
     root.append(
-      h(
-        "header",
-        { class: "topbar" },
-        h("h1", {}, "The Oldest Game"),
-        els.round,
-        h(
-          "nav",
-          {},
-          h("button", { class: "btn ghost", onclick: () => {
-            this.showRules();
-          } }, "Regeln"),
-          h("button", { class: "btn ghost", onclick: () => {
-            this.showCompendium();
-          } }, "Kompendium"),
-          h("button", { class: "btn ghost", onclick: () => {
-            this.showSettings();
-          } }, "Claude"),
-          h("button", { class: "btn ghost", onclick: () => {
-            this.showStart();
-          } }, "Neues Spiel"),
-        ),
-      ),
-      h("section", { class: "stage" }, canvas, els.hud[0], els.hud[1], els.banner),
+      h("header", { class: "topbar" }, h("h1", {}, "The Oldest Game"), els.round, els.nav),
+      h("section", { class: "stage" }, canvas, els.hud[0], els.hud[1], els.plates[0], els.plates[1], els.caption, els.banner),
       h(
         "section",
-        { class: "console" },
+        { class: "command" },
         els.prompt,
+        h("div", { class: "command-row" }, input, submit),
         h(
           "div",
-          { class: "input-row" },
-          input,
-          checkBtn,
-          h("button", { class: "btn", title: "Zeigt eine mögliche Antwort – kostet 2 Wille", onclick: () => {
-            this.onOracle();
-          } }, "Orakel"),
-        ),
-        els.preview,
-        h(
-          "div",
-          { class: "actions" },
-          playBtn,
-          h("button", { class: "btn danger", onclick: () => {
-            this.onPass();
-          } }, "Aufgeben"),
+          { class: "subactions" },
+          h(
+            "button",
+            {
+              class: "btn link",
+              onclick: () => {
+                this.onPass();
+              },
+            },
+            "Aufgeben",
+          ),
         ),
       ),
-      h("section", { class: "log" }, h("h2", {}, "Chronik"), els.chronicle),
+      els.details,
+      chronicleWrap,
       els.modal,
     );
+    this.renderNav();
     this.arena.start();
     this.render();
     void this.init();
   }
 
+  private renderNav(): void {
+    const nav = this.els.nav;
+    clear(nav);
+    const btn = (label: string, fn: () => void): HTMLElement =>
+      h(
+        "button",
+        {
+          class: "btn ghost",
+          onclick: () => {
+            fn();
+          },
+        },
+        label,
+      );
+    const items: HTMLElement[] = [];
+    items.push(
+      btn("Regeln", () => {
+        this.showRules();
+      }),
+    );
+    if (this.debug) {
+      items.push(
+        btn("Kompendium", () => {
+          this.showCompendium();
+        }),
+      );
+    }
+    items.push(
+      btn("Claude", () => {
+        this.showSettings();
+      }),
+      btn("Neues Spiel", () => {
+        this.showStart();
+      }),
+    );
+    nav.append(...items);
+  }
+
   // ── Flow ────────────────────────────────────────────────────────────────
-
-  private newGame(names: [string, string]): void {
-    this.state = createGame(names);
-    this.arena.clear();
-    clear(this.els.chronicle);
-    this.resetInput();
-    this.render();
-    this.els.input.focus();
-  }
-
-  private resetInput(): void {
-    this.els.input.value = "";
-    this.candidate = null;
-    this.selectedVerb = null;
-  }
 
   private get debug(): boolean {
     return this.settings.debugOffline;
   }
-
-  /** Proxy auto-detected at runtime (local `npm start` server) – never persisted. */
-  private localProxy: string | null = null;
 
   /** Effective LLM settings: a configured proxy wins, then the local server, then BYOK. */
   private get llm(): LlmSettings {
@@ -187,27 +204,77 @@ export class App {
     this.showStart();
   }
 
-  private onInput(): void {
-    const text = this.els.input.value.trim();
-    if (this.candidate !== null && this.candidate.text === text) return;
+  private newGame(names: [string, string]): void {
+    this.state = createGame(names);
+    this.arena.clear();
+    this.retry = false;
+    clear(this.els.chronicle);
+    this.hideCaption();
+    this.resetInput();
+    this.renderNav();
+    this.render();
+    this.els.input.focus();
+  }
+
+  private resetInput(): void {
+    this.els.input.value = "";
     this.candidate = null;
     this.selectedVerb = null;
-    if (text === "") {
-      this.renderPreview();
+  }
+
+  private onInput(): void {
+    const text = this.els.input.value.trim();
+    if (this.candidate !== null && this.candidate.text !== text) {
+      this.candidate = null;
+      this.selectedVerb = null;
+      this.renderDetails();
+    }
+  }
+
+  /** Enter / "Werden". Real game: classify with Claude and play at once. Debug: preview first. */
+  private async onSubmit(): Promise<void> {
+    const text = this.els.input.value.trim();
+    if (text === "" || this.busy || this.state.phase === "finished") return;
+    if (this.debug) {
+      if (this.candidate?.text === text) {
+        await this.execute(this.candidate.form, this.selectedVerb ?? this.candidate.intendedVerb);
+      } else {
+        this.parseOffline(text);
+      }
       return;
     }
-    if (!this.debug) {
-      this.renderPreview("Enter oder „Prüfen“: Claude ordnet deine Gestalt ein.");
+    if (!isClaudeReady(this.llm)) {
+      this.showSettings("Claude ist nicht verbunden. Starte das Spiel mit `npm start` (Key in .env) oder trage einen API-Key ein.");
       return;
     }
-    this.parseOffline(text);
+    this.setBusy(true);
+    try {
+      const r = await parseWithClaude(this.onto, this.llm, text);
+      if (r === undefined) {
+        this.flashBanner("Diese Gestalt lässt sich nicht fassen. Beschreibe sie anders.", "bad");
+        return;
+      }
+      await this.execute(r.form, r.intendedVerb, true);
+    } catch (e) {
+      this.flashBanner(e instanceof Error ? e.message : "Claude antwortet nicht.", "bad");
+    } finally {
+      this.setBusy(false);
+    }
+  }
+
+  private setBusy(on: boolean): void {
+    this.busy = on;
+    this.els.input.disabled = on;
+    this.els.submit.disabled = on;
+    this.arena.setThinking(on);
+    if (!on) this.els.input.focus();
   }
 
   /** Debug path: mechanical parser, no LLM. */
   private parseOffline(text: string): void {
     const r = parseForm(this.onto, text);
     if (!r.ok) {
-      this.renderPreview(`[Debug] ${r.error}${r.suggestions.length > 0 ? ` Meintest du: ${r.suggestions.join(", ")}?` : ""}`);
+      this.renderDetails(`${r.error}${r.suggestions.length > 0 ? ` Meintest du: ${r.suggestions.join(", ")}?` : ""}`);
       return;
     }
     const mods = [...new Set(r.modifiers.map((m) => m.label))];
@@ -219,95 +286,67 @@ export class App {
       .filter((x) => x !== "")
       .join(" · ");
     this.candidate = { text, form: r.form, source: r.form.origin === "komponiert" ? "komponiert" : "lexikon", note, intendedVerb: null };
-    this.renderPreview();
+    this.selectedVerb = null;
+    this.renderDetails();
   }
 
-  private async onEnter(): Promise<void> {
-    const text = this.els.input.value.trim();
-    if (this.candidate !== null && this.candidate.text === text) {
-      await this.onPlay();
-      return;
-    }
-    if (text === "" || this.busy) return;
-    if (this.debug) {
-      this.parseOffline(text);
-      return;
-    }
-    if (!isClaudeReady(this.llm)) {
-      this.showSettings("Claude ist nicht verbunden. Starte das Spiel mit `npm start` (Key in .env) oder trage einen eigenen API-Key ein.");
-      return;
-    }
-    this.busy = true;
-    this.els.preview.classList.add("thinking");
-    this.renderPreview("Claude ordnet die Gestalt ein …");
-    try {
-      const r = await parseWithClaude(this.onto, this.llm, text);
-      if (this.els.input.value.trim() !== text) return; // input changed meanwhile
-      if (r === undefined) {
-        this.renderPreview("Claude konnte diese Gestalt nicht ins Vokabular des Spiels übersetzen. Beschreibe sie anders.");
-      } else {
-        const note = [
-          r.base === null ? "neu eingeordnet" : `basiert auf ${r.base.name}`,
-          r.fromCache ? "aus dem Cache" : "",
-          r.unresolved.length > 0 ? `unbekannt: ${r.unresolved.join(", ")}` : "",
-        ]
-          .filter((x) => x !== "")
-          .join(" · ");
-        this.candidate = { text, form: r.form, source: "llm", note, intendedVerb: r.intendedVerb };
-        this.selectedVerb = null;
-        this.renderPreview();
-      }
-    } catch (e) {
-      this.renderPreview(e instanceof Error ? e.message : "Fehler bei Claude.");
-    } finally {
-      this.busy = false;
-      this.els.preview.classList.remove("thinking");
-    }
-  }
-
-  private async onPlay(): Promise<void> {
-    if (this.busy || this.candidate === null || this.state.phase === "finished") return;
-    const form = this.candidate.form;
-    const result = play(this.onto, this.state, form, this.selectedVerb);
-    if (!result.ok) {
-      this.flashBanner(result.error, "bad");
-      return;
-    }
-    this.busy = true;
+  /** Run an attempt through the engine and play it out in the arena. */
+  private async execute(form: Form, intendedVerb: string | null, alreadyBusy = false): Promise<void> {
     const actor = this.state.active;
-    this.state = result.value;
-    const index = this.state.history.length - 1;
-    const move = this.state.history[index];
+    const outcome = attempt(this.onto, this.state, form, intendedVerb);
+    if (outcome.kind === "rejected") {
+      this.flashBanner(outcome.reason, "bad");
+      return;
+    }
+    if (!alreadyBusy) this.setBusy(true);
+    this.state = outcome.state;
     this.resetInput();
+    this.hideCaption();
     this.render();
     try {
-      await this.arena.summon(actor, form);
-      if (move !== undefined && move.verb !== null) {
-        const family = this.onto.verbs.get(move.verb)?.spec.family ?? "gewalt";
-        if (move.check?.weaknessHit === true) this.flashBanner("Schwäche getroffen!", "good");
-        await this.arena.attack(actor, family, move.check?.weaknessHit === true);
-        if (move.eleganz > 0) this.flashBanner(`+${String(move.eleganz)} Eleganz`, "good");
-      }
-      if (move !== undefined) {
-        const offline = narrateMove(this.onto, this.state, move, index);
-        if (this.debug || !isClaudeReady(this.llm)) {
-          this.addChronicle(actor, `[Debug] ${offline}`);
-        } else {
-          const li = this.addChronicle(actor, "…");
-          li.classList.add("pending");
-          const snapshot = this.state;
-          void narrateWithClaude(this.onto, this.llm, snapshot, move, index, offline).then((t) => {
-            li.lastElementChild?.replaceChildren(t);
-            li.classList.remove("pending");
-          });
-        }
-      }
-      if (this.state.phase === "finished") this.showEnd();
+      await this.animate(actor, form, outcome);
     } finally {
-      this.busy = false;
+      if (!alreadyBusy) this.setBusy(false);
       this.render();
-      this.els.input.focus();
+      if (this.state.phase === "finished") this.showEnd();
     }
+  }
+
+  private async animate(actor: PlayerId, form: Form, outcome: Exclude<AttemptOutcome, { kind: "rejected" }>): Promise<void> {
+    const index = this.state.history.length - 1;
+    const narration = this.narrate(outcome, index);
+    await this.arena.summon(actor, form);
+    if (outcome.kind === "success") {
+      const move = outcome.move;
+      this.retry = false;
+      if (move.verb !== null) {
+        const family = this.onto.verbs.get(move.verb)?.spec.family ?? "gewalt";
+        await this.arena.attack(actor, family, move.check?.weaknessHit === true);
+        if (move.eleganz > 1) this.flashBanner(`+${String(move.eleganz)} Eleganz`, "good");
+      }
+    } else {
+      this.retry = true;
+      const verb = outcome.failure.closest?.verb;
+      await this.arena.fizzle(actor, (verb === undefined ? undefined : this.onto.verbs.get(verb)?.spec.family) ?? "gewalt");
+      this.flashBanner(`−${String(outcome.failure.cost)} Wille`, "bad");
+    }
+    const li = this.addChronicle(actor, "…", outcome.kind === "failure");
+    this.showCaption("…", true);
+    const text = await narration;
+    li.lastElementChild?.replaceChildren(text);
+    this.showCaption(text, false);
+  }
+
+  /** Start narration immediately (runs in parallel with the animation). */
+  private narrate(outcome: Exclude<AttemptOutcome, { kind: "rejected" }>, index: number): Promise<string> {
+    const useClaude = !this.debug && isClaudeReady(this.llm);
+    if (outcome.kind === "success") {
+      const offline = narrateMove(this.onto, this.state, outcome.move, index);
+      return useClaude ? narrateWithClaude(this.onto, this.llm, this.state, outcome.move, index, offline) : Promise.resolve(offline);
+    }
+    const f = outcome.failure;
+    const offline = narrateFailure(f.form.name, f.target.name, `${f.form.id}#${String(index)}`);
+    return useClaude ? narrateFailureWithClaude(this.onto, this.llm, f, offline) : Promise.resolve(offline);
   }
 
   private onPass(): void {
@@ -317,37 +356,6 @@ export class App {
     this.showEnd();
   }
 
-  private onOracle(): void {
-    const target = currentTarget(this.state);
-    const me = this.state.players[this.state.active];
-    if (target === null) {
-      const small = this.onto.lexicon.filter((f) => f.scale <= this.state.config.maxOpeningScale && !this.state.usedFormIds.includes(f.id));
-      const pick = small[(this.state.history.length * 7 + me.wille) % Math.max(1, small.length)];
-      if (pick !== undefined) this.flashBanner(`Das Orakel flüstert: „${pick.name}“`, "info");
-      return;
-    }
-    if (me.wille < 2) {
-      this.flashBanner("Zu wenig Wille für das Orakel.", "bad");
-      return;
-    }
-    const options = findCounters(this.onto, target, this.state.config).filter(
-      (c) => !this.state.usedFormIds.includes(c.form.id) && evaluateForm(this.onto, this.state, c.form).some((o) => o.playable && o.verb === c.verb),
-    );
-    if (options.length === 0) {
-      this.flashBanner("Das Orakel schweigt. Vielleicht hilft nur noch Einfallsreichtum.", "bad");
-      return;
-    }
-    const pick = options[(this.state.history.length * 13 + me.eleganz) % options.length];
-    if (pick === undefined) return;
-    // pay 2 Wille
-    const players = [...this.state.players] as [typeof me, typeof me];
-    players[this.state.active] = { ...me, wille: me.wille - 2 };
-    this.state = { ...this.state, players };
-    this.render();
-    const verb = this.onto.verbs.get(pick.verb)?.spec.label ?? pick.verb;
-    this.flashBanner(`Das Orakel flüstert: „${pick.form.name}“ (${verb})`, "info");
-  }
-
   // ── Rendering ───────────────────────────────────────────────────────────
 
   private render(): void {
@@ -355,27 +363,28 @@ export class App {
     const target = currentTarget(s);
     const active = s.players[s.active];
     this.els.round.textContent =
-      s.phase === "opening"
-        ? "Eröffnung"
-        : `Runde ${String(Math.min(roundNumber(s), s.config.roundLimit))} / ${String(s.config.roundLimit)} · Mindeststufe ${String(arenaMinScale(s))}`;
+      s.phase === "opening" ? "Eröffnung" : `Runde ${String(Math.min(roundNumber(s), s.config.roundLimit))} / ${String(s.config.roundLimit)}`;
     for (const p of [0, 1] as const) this.renderHud(p);
+    const last = s.history.at(-1);
+    for (const p of [0, 1] as const) this.els.plates[p].textContent = last !== undefined && last.player === p ? last.form.name : "";
     clear(this.els.prompt);
+    const who = h("strong", { class: `p${String(s.active)}` }, active.name);
     if (s.phase === "finished") {
-      this.els.prompt.append(h("strong", {}, narrateEnd(s)));
+      this.els.prompt.append(narrateEnd(s));
+      this.els.input.placeholder = "";
     } else if (target === null) {
-      this.els.prompt.append(
-        h("strong", { class: `p${String(s.active)}` }, active.name),
-        `, eröffne das Spiel: Wer bist du? (höchstens Stufe ${String(s.config.maxOpeningScale)})`,
-      );
+      this.els.prompt.append(who, ", eröffne das Spiel. Wer bist du?");
+      this.els.input.placeholder = "Ich bin … (etwas Kleines)";
     } else {
       this.els.prompt.append(
-        h("strong", { class: `p${String(s.active)}` }, active.name),
-        ", was besiegt ",
+        who,
+        this.retry ? ", noch ein Versuch. " : ", ",
         h("strong", { class: "target" }, target.name),
-        ` (Stufe ${String(target.scale)}, ${SCALE_NAMES[target.scale] ?? ""})?`,
+        this.retry ? " steht noch." : " steht dir gegenüber.",
       );
+      this.els.input.placeholder = "Ich bin …";
     }
-    this.renderPreview();
+    this.renderDetails();
   }
 
   private renderHud(p: PlayerId): void {
@@ -392,68 +401,65 @@ export class App {
     );
   }
 
-  private renderPreview(message?: string): void {
-    const el = this.els.preview;
+  /** Debug-only breakdown of the candidate: tags, cost, every mechanism with its check. */
+  private renderDetails(message?: string): void {
+    const el = this.els.details;
     clear(el);
-    this.els.playBtn.disabled = true;
+    el.hidden = !this.debug;
+    if (!this.debug) return;
     if (message !== undefined) {
       el.append(h("p", { class: "hint" }, message));
       return;
     }
     const c = this.candidate;
     if (c === null) {
-      el.append(h("p", { class: "hint" }, "Beschreibe eine Gestalt. Adjektive und Komposita funktionieren: „gläserner Riesendrache“, „Schattenwolf“ …"));
+      el.append(h("p", { class: "hint" }, "Enter parst die Eingabe mechanisch und zeigt die Prüfung; ein zweites Enter spielt den Zug."));
       return;
     }
     const form = c.form;
     const cost = formCost(this.onto, form);
     const total = moveCost(this.onto, this.state, form);
     const sprite = this.arena.spriteCanvas(form);
-    const spriteBox = h("div", { class: "sprite-box" });
     const img = h("canvas", { class: "sprite" });
     img.width = sprite.width;
     img.height = sprite.height;
     img.getContext("2d")?.drawImage(sprite, 0, 0);
-    // integer upscale for the preview (2× for small/medium sprites, 1× for cosmic ones)
     img.style.width = `${String(sprite.width * (sprite.width <= 66 ? 2 : 1))}px`;
-    spriteBox.append(img);
-
     const declared = new Set(form.tags);
     const weak = new Set(form.weak);
     const tags = this.onto
       .formTags(form)
       .sort((a, b) => Number(declared.has(b)) - Number(declared.has(a)))
       .slice(0, 28);
-    const used = this.state.usedFormIds.includes(form.id);
-
     const info = h(
       "div",
       { class: "info" },
-      h("div", { class: "title" }, h("span", { class: "name" }, form.name), h("span", { class: `badge src-${c.source}` }, c.source)),
+      h("div", { class: "title" }, h("span", { class: "name" }, form.name), h("span", { class: "badge" }, c.source)),
       c.note === "" ? null : h("div", { class: "note" }, c.note),
-      h("div", { class: "meta" }, `Stufe ${String(form.scale)} (${SCALE_NAMES[form.scale] ?? ""}) · Ebene ${form.plane} · Kosten `, h("strong", {}, String(total)), ` Wille`,
-        total !== cost.total ? h("span", { class: "warn" }, ` (inkl. Overkill +${String(total - cost.total)})`) : null),
-      h("div", { class: "tags" }, ...tags.map((t) => h("span", { class: `tag${declared.has(t) ? " own" : ""}${weak.has(t) ? " weak" : ""}`, title: weak.has(t) ? "Schwäche" : "" }, this.onto.tagLabel(t)))),
+      h(
+        "div",
+        { class: "meta" },
+        `Stufe ${String(form.scale)} (${SCALE_NAMES[form.scale] ?? ""}) · ${form.plane} · Kosten `,
+        h("strong", {}, String(total)),
+        total !== cost.total ? ` (inkl. Overkill +${String(total - cost.total)})` : "",
+        ` · Mindeststufe ${String(arenaMinScale(this.state))}`,
+      ),
+      h(
+        "div",
+        { class: "tags" },
+        ...tags.map((t) => h("span", { class: `tag${declared.has(t) ? " own" : ""}${weak.has(t) ? " weak" : ""}` }, this.onto.tagLabel(t))),
+      ),
       form.flavor === undefined ? null : h("div", { class: "flavor" }, form.flavor),
-      used ? h("div", { class: "warn" }, "Diese Gestalt wurde schon beschworen.") : null,
     );
-
-    const target = currentTarget(this.state);
     const verbs = h("div", { class: "verbs" });
-    if (target === null) {
-      const ok = form.scale <= this.state.config.maxOpeningScale && !used;
-      verbs.append(h("p", { class: ok ? "hint" : "warn" }, ok ? "Eröffnungszug – kein Mechanismus nötig." : `Eröffnung höchstens Stufe ${String(this.state.config.maxOpeningScale)}.`));
-      this.els.playBtn.disabled = !ok || total > this.state.players[this.state.active].wille;
-    } else {
+    if (currentTarget(this.state) !== null) {
       const options = evaluateForm(this.onto, this.state, form);
       const intended = options.find((o) => o.playable && o.verb === c.intendedVerb);
-      const firstPlayable = intended ?? options.find((o) => o.playable);
-      if (this.selectedVerb === null && firstPlayable !== undefined) this.selectedVerb = firstPlayable.verb;
+      const first = intended ?? options.find((o) => o.playable);
+      if (this.selectedVerb === null && first !== undefined) this.selectedVerb = first.verb;
       for (const o of options) verbs.append(this.renderOption(o));
-      const sel = options.find((o) => o.verb === this.selectedVerb);
-      this.els.playBtn.disabled = used || !sel?.playable;
     }
-    el.append(spriteBox, info, verbs);
+    el.append(h("div", { class: "sprite-box" }, img), info, verbs);
   }
 
   private renderOption(o: MoveOption): HTMLElement {
@@ -467,7 +473,7 @@ export class App {
           : !o.affordable
             ? "Zu wenig Wille."
             : (o.check.steps.at(-1)?.text ?? "");
-    const btn = h(
+    return h(
       "button",
       {
         class: `verb${o.playable ? " ok" : " no"}${this.selectedVerb === o.verb ? " selected" : ""}`,
@@ -475,20 +481,37 @@ export class App {
         title: spec?.hint ?? "",
         onclick: () => {
           this.selectedVerb = o.verb;
-          this.renderPreview();
+          this.renderDetails();
         },
       },
       h("span", { class: "vlabel" }, spec?.label ?? o.verb),
       h("span", { class: "vlev" }, `Hebel ${String(spec?.leverage ?? 0)}`),
       h("span", { class: "vwhy" }, reason),
     );
-    return btn;
   }
 
-  private addChronicle(player: PlayerId, text: string): HTMLElement {
-    const li = h("li", { class: `p${String(player)}` }, h("span", { class: "who" }, this.state.players[player].name), h("span", { class: "text" }, text));
+  private addChronicle(player: PlayerId, text: string, failed: boolean): HTMLElement {
+    const li = h(
+      "li",
+      { class: `p${String(player)}${failed ? " failed" : ""}` },
+      h("span", { class: "who" }, `${this.state.players[player].name}${failed ? " · gescheitert" : ""}`),
+      h("span", { class: "text" }, text),
+    );
     this.els.chronicle.prepend(li);
     return li;
+  }
+
+  private captionTimer: ReturnType<typeof setTimeout> | undefined;
+  private showCaption(text: string, pending: boolean): void {
+    const c = this.els.caption;
+    c.textContent = text;
+    c.className = `caption show${pending ? " pending" : ""}`;
+    if (this.captionTimer !== undefined) clearTimeout(this.captionTimer);
+    if (!pending) this.captionTimer = setTimeout(() => (c.className = "caption"), 9000);
+  }
+
+  private hideCaption(): void {
+    this.els.caption.className = "caption";
   }
 
   private bannerTimer: ReturnType<typeof setTimeout> | undefined;
@@ -590,6 +613,7 @@ export class App {
         li("Wer kleiner als das Ziel gewinnt, bekommt Wille zurück und viel ", h("strong", {}, "Eleganz"), "."),
         li(`Eskalation: Alle ${String(c.escalateEveryMoves)} Züge steigt die Mindeststufe. Nur mythische Hebel (≥ ${String(c.mythicLeverage)}) – Hoffnung, wahre Namen, Erwachen – ignorieren das. Wie weit man über ein Ziel hinausgehen darf, misst sich an der Mindeststufe.`),
         li(`Echo: Ein Mechanismus der letzten ${String(c.echoWindow)} Züge darf nicht wiederholt werden. Jede Gestalt nur einmal pro Spiel.`),
+        li(`Du weißt vorher nicht, ob deine Gestalt reicht. Reicht sie nicht, zerschellt sie: Du zahlst ihren Preis an Wille plus ${String(c.failurePenalty)}, sie ist verbraucht, und du versuchst es erneut. Wem der Wille ausgeht, der verliert.`),
         li(`Wer aufgibt oder keine Antwort findet, verliert. Nach ${String(c.roundLimit)} Runden gewinnt die höhere Eleganz.`),
       ),
       h("p", { class: "hint" }, "Beschreibe frei, was du bist – gern auch, wie du angreifst. Claude (Haiku) übersetzt das in Eigenschaften und Mechanismen; entscheiden tut immer die Regel-Engine, sichtbar Schritt für Schritt."),
@@ -672,7 +696,8 @@ export class App {
       this.closeModal();
       this.flashBanner(this.debug ? "Debug-Modus: ohne Claude." : isClaudeReady(this.llm) ? "Gespeichert – Claude ist bereit." : "Gespeichert – Claude ist noch nicht verbunden.", "info");
       this.candidate = null;
-      this.onInput();
+      this.renderNav();
+      this.render();
     };
     this.modal(
       "Claude",

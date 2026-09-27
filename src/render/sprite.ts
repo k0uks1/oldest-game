@@ -62,6 +62,37 @@ export function renderSprite(onto: Ontology, form: Form): PixelImage {
   return renderGrid(buildGrid(form), paletteFor(onto, form), hash32(form.id));
 }
 
+/**
+ * Emissive mask for the bloom layer: glowing eyes/cores at full strength, accents
+ * bright, and – for light-emitting forms – the whole body faintly.
+ */
+export function renderGlow(onto: Ontology, form: Form): PixelImage {
+  const grid = buildGrid(form);
+  const pal = paletteFor(onto, form);
+  const gh = grid.length;
+  const gw = grid[0]?.length ?? 0;
+  const width = gw + 2;
+  const height = gh + 2;
+  const data = new Uint8ClampedArray(width * height * 4);
+  const glow = hexToRgb(pal.glow);
+  const accent = hexToRgb(pal.main[3]);
+  const body = hexToRgb(pal.main[2]);
+  for (let y = 0; y < gh; y++) {
+    for (let x = 0; x < gw; x++) {
+      const c = grid[y]?.[x] ?? ".";
+      const [rgb, a] =
+        c === "o" ? [glow, 255] : c === "*" ? [accent, 190] : c !== "." && pal.emissive ? [body, 90] : [null, 0];
+      if (rgb === null) continue;
+      const i = ((y + 1) * width + (x + 1)) * 4;
+      data[i] = rgb[0];
+      data[i + 1] = rgb[1];
+      data[i + 2] = rgb[2];
+      data[i + 3] = a;
+    }
+  }
+  return { width, height, data };
+}
+
 export function buildGrid(form: Form): Grid {
   let grid = toGrid(MASKS[form.archetype]);
   for (let i = 0; i < upscalePasses(form.scale); i++) grid = epx(grid);

@@ -9,6 +9,8 @@ export interface SpritePalette {
   readonly second: Ramp;
   readonly glow: string;
   readonly outline: string;
+  /** The whole body emits light (fire, light, holy, lightning, stars) – feeds the bloom layer. */
+  readonly emissive: boolean;
 }
 
 interface Swatch {
@@ -61,7 +63,11 @@ export function paletteFor(onto: Ontology, form: Form): SpritePalette {
   const fallback = PLANE_DEFAULT[form.plane];
   const main = matches[0] ?? fallback;
   const second = matches[1] ?? (main === fallback ? PLANE_DEFAULT.abstrakt : fallback);
-  return { main: main.ramp, second: second.ramp, glow: main.glow, outline: OUTLINE };
+  const emissive =
+    ["feuer", "licht", "heilig", "blitz"].some((t) => onto.formHas(form, t)) ||
+    form.archetype === "star" ||
+    form.archetype === "flame";
+  return { main: main.ramp, second: second.ramp, glow: main.glow, outline: OUTLINE, emissive };
 }
 
 export function hexToRgb(hex: string): [number, number, number] {

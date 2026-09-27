@@ -24,6 +24,7 @@ src/
     ontology/        content packs → compiled Ontology (closures, indexes, validation)
     rules.ts         checkCounter(): the constraint check; findCounters()
     game.ts          immutable game state reducer: createGame / play / pass
+    attempt.ts       player-facing move without foreknowledge: success / failure (costs Wille) / rejected
     cost.ts          Wille cost, overkill surcharge, underdog refund, eleganz
     parse.ts         mechanical parser (DEBUG ONLY in the game; used for anchors & tests)
   content/core/*.json  the core content pack (tags, verbs, modifiers, forms)
