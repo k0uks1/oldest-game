@@ -1,4 +1,5 @@
 import type { Ontology } from "../engine/ontology/ontology.ts";
+import type { Failure } from "../engine/attempt.ts";
 import type { GameState, Move } from "../engine/types.ts";
 import { callClaude, type LlmSettings } from "./client.ts";
 
@@ -31,6 +32,30 @@ export async function narrateWithClaude(
         ]
           .filter((l) => l !== "")
           .join("\n");
+  try {
+    const r = await callClaude(settings, { system: SYSTEM, user: facts, maxTokens: 160, temperature: 0.8 });
+    const text = r.text.trim();
+    return text === "" ? fallback : text;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Narrate a failed attempt – the form was not enough. */
+export async function narrateFailureWithClaude(
+  onto: Ontology,
+  settings: LlmSettings,
+  failure: Failure,
+  fallback: string,
+): Promise<string> {
+  const facts = [
+    `Versuch: ${failure.form.name} (Stufe ${String(failure.form.scale)}) soll ${failure.target.name} (Stufe ${String(failure.target.scale)}) besiegen.`,
+    "Ausgang: SCHEITERT – die Gestalt zerschellt und ist verbraucht, das Ziel bleibt unversehrt.",
+    `Grund laut Regel-Engine: ${failure.reason}`,
+    failure.closest === null ? "" : `Versuchter Weg: ${onto.verbs.get(failure.closest.verb)?.spec.label ?? failure.closest.verb}`,
+  ]
+    .filter((l) => l !== "")
+    .join("\n");
   try {
     const r = await callClaude(settings, { system: SYSTEM, user: facts, maxTokens: 160, temperature: 0.8 });
     const text = r.text.trim();

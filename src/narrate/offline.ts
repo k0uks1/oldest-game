@@ -64,3 +64,16 @@ export function narrateEnd(state: GameState): string {
   if (state.endReason === "pass") return `${l} findet keine Antwort mehr. ${w} gewinnt das älteste Spiel.`;
   return `Die letzte Runde ist gespielt. Mit mehr Eleganz gewinnt ${w}.`;
 }
+
+const SHATTER = [
+  "{A} stürzt sich auf {B} – und zerschellt wie Glas an einer Mauer.",
+  "{A} erhebt sich, doch {B} rührt sich nicht. {A} zerfällt zu Staub.",
+  "Für einen Herzschlag scheint {A} zu genügen. Dann verweht es.",
+  "{B} sieht {A} nur an. Das reicht, und {A} ist nicht mehr.",
+];
+
+export function narrateFailure(formName: string, targetName: string, seed: string): string {
+  const rand = rng(hash32(seed));
+  const tpl = SHATTER[Math.floor(rand() * SHATTER.length)] ?? SHATTER[0] ?? "";
+  return fill(tpl, { A: formName, B: targetName });
+}

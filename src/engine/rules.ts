@@ -13,6 +13,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   regenGrowthEvery: 1,
   escalateEveryMoves: 3,
   openingEleganz: 2,
+  failurePenalty: 3,
   roundLimit: 10,
   echoWindow: 2,
 };

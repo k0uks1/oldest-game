@@ -40,6 +40,7 @@ mit dem Key als Secret und einem Zugangscode; die Worker-URL in den Claude-Einst
 |---|---|
 | Eröffnung | Spieler 1 beginnt mit Stufe ≤ 3 |
 | Konter | Gestalt + Mechanismus; das Ziel braucht eine passende Angriffsfläche |
+| Ungewissheit | Du siehst vorher nicht, ob es reicht. Scheitern kostet den Preis der Gestalt + 3 Wille, du versuchst es erneut |
 | Kraft | Stufe + Hebel des Mechanismus (+2 bei Schwäche) ≥ Stufe des Ziels |
 | Maß | höchstens 2 Stufen über max(Ziel, Mindeststufe); mehr als 3 kleiner nur mit mythischem Hebel (Hoffnung, wahre Namen …) |
 | Wille | Start 20, max 40, Regeneration wächst jede Runde; Größe ist teuer, Overkill kostet extra |
