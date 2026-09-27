@@ -1,5 +1,5 @@
 import { eleganzFor, formCost, overkillSurcharge, underdogRefund } from "./cost.ts";
-import { getVerb } from "../content/verbs.ts";
+import type { Ontology } from "./ontology/ontology.ts";
 import { checkCounter, DEFAULT_CONFIG, effectiveVerbs } from "./rules.ts";
 import type {
   CounterCheck,
@@ -58,24 +58,24 @@ export function arenaMinScale(state: GameState): number {
   return 1 + Math.floor((round - 1) / Math.max(1, state.config.escalateEvery));
 }
 
-export function isMythic(state: GameState, verb: string): boolean {
-  return (getVerb(verb)?.leverage ?? 0) >= state.config.mythicLeverage;
+export function isMythic(onto: Ontology, state: GameState, verb: string): boolean {
+  return (onto.verbs.get(verb)?.spec.leverage ?? 0) >= state.config.mythicLeverage;
 }
 
 /** Evaluate every mechanism of `form` against the current target. */
-export function evaluateForm(state: GameState, form: Form): MoveOption[] {
+export function evaluateForm(onto: Ontology, state: GameState, form: Form): MoveOption[] {
   const target = currentTarget(state);
   if (target === null) return [];
   const echo = echoedVerbs(state);
   const wille = state.players[state.active].wille;
-  const cost = formCost(form).total + overkillSurcharge(form.scale, target.scale);
+  const cost = formCost(onto, form).total + overkillSurcharge(form.scale, target.scale);
   const minScale = arenaMinScale(state);
-  return effectiveVerbs(form)
+  return effectiveVerbs(onto, form)
     .map((verb) => {
-      const check = checkCounter(form, target, verb, state.config);
+      const check = checkCounter(onto, form, target, verb, state.config);
       const echoed = echo.has(verb);
       const affordable = cost <= wille;
-      const belowArena = form.scale < minScale && !isMythic(state, verb);
+      const belowArena = form.scale < minScale && !isMythic(onto, state, verb);
       return {
         verb,
         check,
@@ -89,16 +89,16 @@ export function evaluateForm(state: GameState, form: Form): MoveOption[] {
     .sort((a, b) => Number(b.playable) - Number(a.playable) || b.check.power - a.check.power);
 }
 
-export function moveCost(state: GameState, form: Form): number {
+export function moveCost(onto: Ontology, state: GameState, form: Form): number {
   const target = currentTarget(state);
-  return formCost(form).total + (target === null ? 0 : overkillSurcharge(form.scale, target.scale));
+  return formCost(onto, form).total + (target === null ? 0 : overkillSurcharge(form.scale, target.scale));
 }
 
 /**
  * Apply a move. Pure: returns a new state or an explanation why the move is illegal.
  * If `verb` is null for a counter, the best playable mechanism is chosen.
  */
-export function play(state: GameState, form: Form, verb: string | null): Result<GameState> {
+export function play(onto: Ontology, state: GameState, form: Form, verb: string | null): Result<GameState> {
   if (state.phase === "finished") return { ok: false, error: "Das Spiel ist vorbei." };
   if (state.usedFormIds.includes(form.id)) {
     return { ok: false, error: `${form.name} wurde in diesem Spiel schon beschworen.` };
@@ -116,7 +116,7 @@ export function play(state: GameState, form: Form, verb: string | null): Result<
       };
     }
   } else {
-    const options = evaluateForm(state, form);
+    const options = evaluateForm(onto, state, form);
     const option =
       verb === null ? options.find((o) => o.playable) : options.find((o) => o.verb === verb);
     if (option === undefined) {
@@ -140,7 +140,7 @@ export function play(state: GameState, form: Form, verb: string | null): Result<
     chosenVerb = option.verb;
   }
 
-  const cost = moveCost(state, form);
+  const cost = moveCost(onto, state, form);
   if (cost > me.wille) {
     return { ok: false, error: `Zu wenig Wille: ${form.name} kostet ${cost}, du hast ${me.wille}.` };
   }

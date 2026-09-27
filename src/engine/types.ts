@@ -8,83 +8,17 @@ export type Scale = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export const MIN_SCALE = 1;
 export const MAX_SCALE = 8;
 
+export const PLANES = ["materie", "leben", "geist", "abstrakt"] as const;
 /** Plane of existence a form mainly lives on. */
-export type Plane = "materie" | "leben" | "geist" | "abstrakt";
+export type Plane = (typeof PLANES)[number];
 
+export const ARCHETYPES = [
+  "humanoid", "beast", "serpent", "bird", "insect", "swarm", "blob", "plant", "tree", "flame",
+  "wave", "cloud", "rock", "crystal", "orb", "eye", "star", "planet", "void", "skull", "ghost",
+  "weapon", "tower", "book", "heart", "hourglass", "mask", "key", "fish", "spider", "dragon", "giant",
+] as const;
 /** Visual archetype – selects the sprite silhouette. */
-export type Archetype =
-  | "humanoid"
-  | "beast"
-  | "serpent"
-  | "bird"
-  | "insect"
-  | "swarm"
-  | "blob"
-  | "plant"
-  | "tree"
-  | "flame"
-  | "wave"
-  | "cloud"
-  | "rock"
-  | "crystal"
-  | "orb"
-  | "eye"
-  | "star"
-  | "planet"
-  | "void"
-  | "skull"
-  | "ghost"
-  | "weapon"
-  | "tower"
-  | "book"
-  | "heart"
-  | "hourglass"
-  | "mask"
-  | "key"
-  | "fish"
-  | "spider"
-  | "dragon"
-  | "giant";
-
-export interface TagDef<T extends string = string> {
-  readonly id: T;
-  readonly label: string;
-  readonly group: TagGroup;
-  /** Mechanisms granted to any form carrying this tag. */
-  readonly grants?: readonly string[];
-}
-
-export type TagGroup = "material" | "element" | "koerper" | "geist" | "existenz";
-
-export type VerbFamily =
-  | "gewalt" // raw force – size matters
-  | "element" // elemental interaction
-  | "leben" // biology: poison, plague, hunger
-  | "sinne" // senses: blind, deafen
-  | "geist" // mind: fear, pride, greed, deceit
-  | "magie" // holy, curse, true names, pacts
-  | "kosmos"; // time, entropy, gravity, hope
-
-export interface VerbDef<V extends string = string, T extends string = string> {
-  readonly id: V;
-  /** Present-tense phrase used in UI: "verbrennt". */
-  readonly label: string;
-  readonly family: VerbFamily;
-  /** The target must carry at least one of these tags. */
-  readonly targets: readonly T[];
-  /** If the target carries any of these tags the mechanism cannot work. */
-  readonly blockedBy: readonly T[];
-  /**
-   * Scale bonus. Brute force has 0 – the attacker must be at least as big.
-   * Subtle mechanisms have high leverage: a key does not need to be bigger
-   * than the door.
-   */
-  readonly leverage: number;
-  /** Attacker must be at least this big relative to target (e.g. swallow). */
-  readonly minRelativeScale?: number;
-  /** Short explanation for tooltips / compendium. */
-  readonly hint: string;
-}
+export type Archetype = (typeof ARCHETYPES)[number];
 
 /** A fully resolved form ("Gestalt") that can appear in the arena. */
 export interface Form {
@@ -94,7 +28,10 @@ export interface Form {
   readonly archetype: Archetype;
   readonly scale: Scale;
   readonly plane: Plane;
+  /** Declared tags – expanded by the ontology (parents + implications). */
   readonly tags: readonly string[];
+  /** Tags removed after expansion (together with their descendants). */
+  readonly not: readonly string[];
   /** Mechanisms explicitly known by this form (tag grants are added on top). */
   readonly verbs: readonly string[];
   /** Mechanisms this form is specifically immune to. */

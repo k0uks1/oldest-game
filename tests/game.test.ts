@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { LEXICON_BY_ID } from "../src/content/forms.ts";
-import { createGame, evaluateForm, pass, play } from "../src/engine/game.ts";
-import { toForm } from "../src/engine/parse.ts";
+import { coreOntology } from "../src/content/index.ts";
+import { createGame, evaluateForm as evaluate, pass, play as playMove } from "../src/engine/game.ts";
 import type { Form, GameState } from "../src/engine/types.ts";
 
+const onto = coreOntology();
+const play = (g: GameState, f: Form, v: string | null) => playMove(onto, g, f, v);
+const evaluateForm = (g: GameState, f: Form) => evaluate(onto, g, f);
+
 function lx(id: string): Form {
-  const e = LEXICON_BY_ID.get(id);
+  const e = onto.formById(id);
   assert.ok(e, id);
-  return toForm(e);
+  return e;
 }
 
 function must(r: ReturnType<typeof play>): GameState {

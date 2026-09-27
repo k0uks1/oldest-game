@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseForm } from "../src/engine/parse.ts";
+import { coreOntology } from "../src/content/index.ts";
+import { parseForm as parse } from "../src/engine/parse.ts";
+
+const onto = coreOntology();
+const parseForm = (s: string) => parse(onto, s);
 
 function ok(input: string) {
   const r = parseForm(input);
@@ -25,24 +29,24 @@ describe("parseForm", () => {
     const r = ok("riesiger gläserner Wolf");
     assert.equal(r.base.id, "wolf");
     assert.equal(r.form.scale, 4);
-    assert.ok(r.form.tags.includes("glas"));
-    assert.ok(!r.form.tags.includes("fleisch"));
+    assert.ok(onto.formHas(r.form, "glas"));
+    assert.ok(!onto.formHas(r.form, "fleisch"));
     assert.equal(r.form.origin, "komponiert");
   });
 
   it("splits German compounds", () => {
     const r = ok("Eiswolf");
     assert.equal(r.base.id, "wolf");
-    assert.ok(r.form.tags.includes("eis"));
+    assert.ok(onto.formHas(r.form, "eis"));
     const s = ok("Schattendrache");
     assert.equal(s.base.id, "drache");
-    assert.ok(s.form.tags.includes("schatten"));
+    assert.ok(onto.formHas(s.form, "schatten"));
   });
 
   it("uses the last noun as head, earlier nouns as modifiers", () => {
     const r = ok("Feuer Wolf");
     assert.equal(r.base.id, "wolf");
-    assert.ok(r.form.tags.includes("feuer"));
+    assert.ok(onto.formHas(r.form, "feuer"));
   });
 
   it("tolerates small typos", () => {
@@ -70,7 +74,9 @@ describe("parseForm", () => {
 
   it("untot removes life", () => {
     const r = ok("untoter Drache");
-    assert.ok(r.form.tags.includes("untot"));
-    assert.ok(!r.form.tags.includes("lebendig"));
+    assert.ok(onto.formHas(r.form, "untot"));
+    assert.ok(!onto.formHas(r.form, "lebendig"));
+    assert.ok(!onto.formHas(r.form, "atmet"), "removed tags stay removed despite implications");
+    assert.ok(onto.formHas(r.form, "denkt"), "other implications survive");
   });
 });

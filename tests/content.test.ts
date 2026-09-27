@@ -1,57 +1,88 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { LEXICON } from "../src/content/forms.ts";
-import { MODIFIERS } from "../src/content/modifiers.ts";
-import { isTagId, TAGS } from "../src/content/tags.ts";
-import { isVerbId, VERBS } from "../src/content/verbs.ts";
-import { toForm } from "../src/engine/parse.ts";
-import { checkCounter, effectiveVerbs } from "../src/engine/rules.ts";
+import { CORE_PACK_RAW, coreOntology } from "../src/content/index.ts";
+import { Ontology, OntologyError } from "../src/engine/ontology/ontology.ts";
+import { parsePack } from "../src/engine/ontology/pack.ts";
+import { findCounters } from "../src/engine/rules.ts";
 import { normalize } from "../src/engine/text.ts";
 
-describe("content integrity", () => {
-  it("lexicon ids are unique", () => {
-    const ids = LEXICON.map((e) => e.id);
-    assert.equal(new Set(ids).size, ids.length);
-  });
+const onto = coreOntology();
 
-  it("every tag, verb, immunity and weakness reference exists", () => {
-    for (const e of LEXICON) {
-      for (const t of e.tags) assert.ok(isTagId(t), `${e.id}: tag ${t}`);
-      for (const t of e.weak) assert.ok(e.tags.includes(t), `${e.id}: weakness ${t} is not one of its tags`);
-      for (const v of e.verbs) assert.ok(isVerbId(v), `${e.id}: verb ${v}`);
-      for (const v of e.immune) assert.ok(isVerbId(v), `${e.id}: immune ${v}`);
-    }
-    for (const t of TAGS.values()) for (const g of t.grants ?? []) assert.ok(isVerbId(g), `grant ${g}`);
-    for (const v of VERBS.values()) {
-      for (const t of [...v.targets, ...v.blockedBy]) assert.ok(isTagId(t), `${v.id}: ${t}`);
-    }
-    for (const m of MODIFIERS) {
-      for (const t of [...(m.addTags ?? []), ...(m.removeTags ?? []), ...(m.addWeak ?? [])]) {
-        assert.ok(isTagId(t), `${m.id}: ${t}`);
-      }
-    }
+describe("core pack integrity", () => {
+  it("compiles without errors or warnings", () => {
+    assert.deepEqual(onto.warnings, []);
   });
 
   it("every form can act (has at least one mechanism)", () => {
-    for (const e of LEXICON) assert.ok(effectiveVerbs(toForm(e)).length > 0, e.id);
+    for (const f of onto.lexicon) assert.ok(onto.compileForm(f).verbs.length > 0, f.id);
   });
 
   it("every form can be countered by something in the lexicon", () => {
-    const forms = LEXICON.map(toForm);
-    const uncounterable = forms.filter(
-      (t) => !forms.some((a) => a.id !== t.id && effectiveVerbs(a).some((v) => checkCounter(a, t, v).valid)),
-    );
-    assert.deepEqual(uncounterable.map((f) => f.id), []);
+    const uncounterable = onto.lexicon.filter((t) => findCounters(onto, t).length === 0).map((f) => f.id);
+    assert.deepEqual(uncounterable, []);
   });
 
-  it("every mechanism is usable by at least one lexicon form", () => {
-    const used = new Set(LEXICON.flatMap((e) => effectiveVerbs(toForm(e))));
-    const unused = [...VERBS.keys()].filter((v) => !used.has(v));
+  it("every mechanism is usable by at least one form", () => {
+    const unused = [...onto.verbs.keys()].filter((v) => onto.usersOf(v).length === 0);
     assert.deepEqual(unused, []);
   });
 
   it("names don't collide after normalisation", () => {
-    const names = LEXICON.map((e) => normalize(e.name));
+    const names = onto.lexicon.map((f) => normalize(f.name));
     assert.equal(new Set(names).size, names.length);
+  });
+});
+
+describe("pack validation", () => {
+  const base = parsePack(CORE_PACK_RAW);
+  assert.ok(base.ok);
+
+  it("rejects malformed packs with readable errors", () => {
+    const r = parsePack({ id: "x", name: "x", version: "1", tags: [{ id: 3 }] });
+    assert.equal(r.ok, false);
+    if (!r.ok) assert.ok(r.errors.some((e) => e.includes("label")));
+  });
+
+  it("reports unknown references", () => {
+    const bad = {
+      id: "bad", name: "bad", version: "1", verbs: [], modifiers: [],
+      tags: [{ id: "a", label: "A", group: "x", parents: ["nope"] }],
+      forms: [],
+    };
+    const r = parsePack(bad);
+    assert.ok(r.ok);
+    if (r.ok) assert.throws(() => Ontology.compile([r.pack]), OntologyError);
+  });
+
+  it("detects inheritance cycles", () => {
+    const cyc = {
+      id: "c", name: "c", version: "1", verbs: [], modifiers: [], forms: [],
+      tags: [
+        { id: "a", label: "A", group: "x", parents: ["b"] },
+        { id: "b", label: "B", group: "x", parents: ["a"] },
+      ],
+    };
+    const r = parsePack(cyc);
+    assert.ok(r.ok);
+    if (r.ok) assert.throws(() => Ontology.compile([r.pack]), /Zyklus/);
+  });
+
+  it("allows packs to extend the core with new tags that inherit rules", () => {
+    assert.ok(base.ok);
+    if (!base.ok) return;
+    const ext = parsePack({
+      id: "ext", name: "Erweiterung", version: "1", verbs: [], modifiers: [],
+      tags: [{ id: "mithril", label: "Mithril", group: "material", parents: ["metall"] }],
+      forms: [{ id: "mithrilhemd", name: "Mithrilhemd", archetype: "weapon", scale: 2, plane: "materie", tags: ["mithril"], verbs: ["zerschlaegt"] }],
+    });
+    assert.ok(ext.ok);
+    if (!ext.ok) return;
+    const o = Ontology.compile([base.pack, ext.pack]);
+    const hemd = o.formById("mithrilhemd");
+    assert.ok(hemd);
+    // lightning targets "metall" – mithril inherits it without any new rule
+    assert.ok(findCounters(o, hemd).some((c) => c.verb === "trifft_blitz"));
+    // … but rust targets "eisen" only
+    assert.ok(!findCounters(o, hemd).some((c) => c.verb === "rostet"));
   });
 });

@@ -6,15 +6,17 @@
  *
  * Deterministic: bots break ties by id and use a seeded PRNG.
  */
-import { LEXICON } from "../src/content/forms.ts";
+import { coreOntology } from "../src/content/index.ts";
 import { formCost } from "../src/engine/cost.ts";
-import { createGame, evaluateForm, pass, play } from "../src/engine/game.ts";
-import { toForm } from "../src/engine/parse.ts";
-import { checkCounter, effectiveVerbs } from "../src/engine/rules.ts";
+import { createGame, evaluateForm as evaluate, pass, play as playMove } from "../src/engine/game.ts";
+import { findCounters } from "../src/engine/rules.ts";
 import { rng } from "../src/engine/text.ts";
 import type { Form, GameState } from "../src/engine/types.ts";
 
-const forms: Form[] = LEXICON.map(toForm);
+const onto = coreOntology();
+const forms: readonly Form[] = onto.lexicon;
+const evaluateForm = (g: GameState, f: Form) => evaluate(onto, g, f);
+const play = (g: GameState, f: Form, v: string | null) => playMove(onto, g, f, v);
 
 interface Stat {
   form: Form;
@@ -24,19 +26,21 @@ interface Stat {
   cost: number;
 }
 
+const beats = new Map<string, number>();
+const counteredBy = new Map<string, Form[]>();
+for (const t of forms) {
+  const attackers = [...new Map(findCounters(onto, t).map((c) => [c.form.id, c.form])).values()];
+  counteredBy.set(t.id, attackers);
+  for (const a of attackers) beats.set(a.id, (beats.get(a.id) ?? 0) + 1);
+}
 const stats: Stat[] = forms.map((t) => {
-  const by = forms.filter(
-    (a) => a.id !== t.id && effectiveVerbs(a).some((v) => checkCounter(a, t, v).valid),
-  );
-  const counters = forms.filter(
-    (x) => x.id !== t.id && effectiveVerbs(t).some((v) => checkCounter(t, x, v).valid),
-  ).length;
+  const by = counteredBy.get(t.id) ?? [];
   return {
     form: t,
     counteredBy: by.length,
     fromBelow: by.filter((a) => a.scale < t.scale).length,
-    counters,
-    cost: formCost(t).total,
+    counters: beats.get(t.id) ?? 0,
+    cost: formCost(onto, t).total,
   };
 });
 

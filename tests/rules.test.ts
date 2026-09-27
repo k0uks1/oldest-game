@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { LEXICON_BY_ID } from "../src/content/forms.ts";
+import { coreOntology } from "../src/content/index.ts";
 import { formCost } from "../src/engine/cost.ts";
-import { checkCounter } from "../src/engine/rules.ts";
-import { toForm } from "../src/engine/parse.ts";
+import { checkCounter as check } from "../src/engine/rules.ts";
 import type { Form } from "../src/engine/types.ts";
 
+const onto = coreOntology();
+const checkCounter = (a: Form, t: Form, v: string) => check(onto, a, t, v);
+
 function lx(id: string): Form {
-  const e = LEXICON_BY_ID.get(id);
+  const e = onto.formById(id);
   assert.ok(e, `lexicon entry ${id} missing`);
-  return toForm(e);
+  return e;
 }
 
 describe("checkCounter – classic interactions", () => {
@@ -32,7 +34,7 @@ describe("checkCounter – classic interactions", () => {
   it("Rost besiegt einen Ritter über seine Rüstung", () => {
     const c = checkCounter(lx("rost"), lx("ritter"), "rostet");
     assert.equal(c.valid, true);
-    assert.equal(c.hitTag, "metall");
+    assert.equal(c.hitTag, "eisen");
   });
 
   it("Ein Floh kann keinen Drachen zerreißen", () => {
@@ -84,12 +86,30 @@ describe("checkCounter – classic interactions", () => {
   });
 });
 
+describe("taxonomy", () => {
+  it("rust works on steel (stahl ⊂ eisen) but not on gold", () => {
+    assert.equal(checkCounter(lx("rost"), lx("schwert"), "rostet").valid, true);
+    assert.equal(checkCounter(lx("rost"), lx("goldschatz"), "rostet").valid, false);
+  });
+
+  it("implications: a Mensch breathes, so it can be drowned", () => {
+    assert.ok(onto.formHas(lx("ritter"), "atmet"));
+    assert.ok(onto.formHas(lx("ritter"), "fest"), "stahl ⊂ eisen ⊂ metall ⊂ fest");
+  });
+
+  it("silver purifies the werewolf through its curse weakness", () => {
+    const c = checkCounter(lx("silberkugel"), lx("werwolf"), "laeutert");
+    assert.equal(c.valid, true, c.steps.map((s) => s.text).join("\n"));
+    assert.equal(c.weaknessHit, true);
+  });
+});
+
 describe("formCost", () => {
   it("cosmic forms are far more expensive than clever small ones", () => {
-    assert.ok(formCost(lx("supernova")).total > 3 * formCost(lx("hoffnung")).total);
+    assert.ok(formCost(onto, lx("supernova")).total > 3 * formCost(onto, lx("hoffnung")).total);
   });
 
   it("is never below 1", () => {
-    for (const e of LEXICON_BY_ID.values()) assert.ok(formCost(toForm(e)).total >= 1, e.id);
+    for (const e of onto.lexicon) assert.ok(formCost(onto, e).total >= 1, e.id);
   });
 });
