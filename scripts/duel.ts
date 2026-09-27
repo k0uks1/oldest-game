@@ -63,7 +63,7 @@ function status(s: GameState): string {
   return lines.join("\n");
 }
 
-switch (cmd) {
+switch (cmd ?? "") {
   case "new": {
     const s = createGame([rest[0] ?? "Spieler 1", rest[1] ?? "Spieler 2"]);
     save(s);
