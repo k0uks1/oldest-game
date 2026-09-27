@@ -20,7 +20,7 @@ import { Ontology } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
 import { parseWithClaude } from "../llm/parser.ts";
 import { narrateEnd, narrateFailure, narrateMove } from "../narrate/offline.ts";
-import { Arena } from "../render/arena.ts";
+import { Arena, attackOutcome, attackStyle, type AttackStyle } from "../render/arena.ts";
 import { clear, h } from "./dom.ts";
 import { Sound } from "./sound.ts";
 
@@ -498,12 +498,11 @@ export class App {
       if (move.discovery) why = [...why, `Einfallsreichtum: +${String(this.state.config.discoveryEleganz)} Eleganz für eine nie gesehene Gestalt.`];
       if (move.verb === ESCAPE) {
         const target = this.state.history.at(-2)?.form;
-        const threat = target === undefined ? undefined : this.onto.compileForm(target).verbs.map((v) => this.onto.verbs.get(v)?.spec.family).find((f) => f === "gewalt" || f === "element");
-        await this.arena.evade(actor, threat ?? "gewalt", this.onto.formHas(form, "fliegt") ? "up" : "down");
+        const threat = target === undefined ? undefined : this.onto.compileForm(target).verbs.find((v) => ["gewalt", "element", "leben"].includes(this.onto.verbs.get(v)?.spec.family ?? ""));
+        await this.arena.evade(actor, threat === undefined ? "slash" : this.styleOf(threat), this.onto.formHas(form, "fliegt") ? "up" : "down");
         this.flashBanner("Entkommen.", "good");
       } else if (move.verb !== null) {
-        const family = this.onto.verbs.get(move.verb)?.spec.family ?? "gewalt";
-        await this.arena.attack(actor, family, move.check?.weaknessHit === true);
+        await this.arena.attack(actor, this.styleOf(move.verb), move.check?.weaknessHit === true, attackOutcome(move.verb));
         this.flashBanner(move.eleganz > 1 ? `Es genügt. ✦ ${String(move.eleganz)}` : "Es genügt.", "good");
       }
     } else {
@@ -511,7 +510,7 @@ export class App {
       const f = outcome.failure;
       why = [...(f.closest?.check.steps.map((st) => st.text) ?? []), f.reason].filter((t, i, a) => a.indexOf(t) === i);
       const verb = f.closest?.verb;
-      await this.arena.fizzle(actor, (verb === undefined ? undefined : this.onto.verbs.get(verb)?.spec.family) ?? "gewalt");
+      await this.arena.fizzle(actor, verb === undefined ? "slash" : this.styleOf(verb));
       this.flashBanner("Es genügt nicht.", "bad");
     }
     this.render();
@@ -520,6 +519,10 @@ export class App {
     const text = await narration;
     li.querySelector(".text")?.replaceChildren(text);
     this.showCaption(text, false);
+  }
+
+  private styleOf(verb: string): AttackStyle {
+    return attackStyle(verb, this.onto.verbs.get(verb)?.spec.family ?? "gewalt");
   }
 
   /** Spell the name letter by letter over the arena. */
