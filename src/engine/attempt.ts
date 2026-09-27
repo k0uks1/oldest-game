@@ -1,3 +1,4 @@
+import { ESCAPE } from "./rules.ts";
 import { arenaMinScale, currentTarget, evaluateForm, moveCost, other, play, type MoveOption } from "./game.ts";
 import type { Ontology } from "./ontology/ontology.ts";
 import type { Form, GameState, Move, PlayerId } from "./types.ts";
@@ -27,6 +28,11 @@ export interface Failure {
   readonly reason: string;
   /** The mechanism that came closest, if any. */
   readonly closest: MoveOption | null;
+  /**
+   * Set when the engine is *not sure* about this verdict – a referee (Claude) may be asked.
+   * Never set when a precedent exists for the pair, or for game-rule failures (scale caps).
+   */
+  readonly uncertain?: string;
 }
 
 /** `discovery`: the form was just learned (never seen before) – see GameConfig.discoveryEleganz. */
@@ -70,7 +76,16 @@ export function attempt(onto: Ontology, state: GameState, form: Form, intendedVe
   }
   const closest = closestOption(options);
   const paid = Math.min(me.wille, cost + state.config.failurePenalty);
-  const failure: Failure = { player: state.active, form, target, cost: paid, reason: failureReason(state, form, target, closest), closest };
+  const doubt = onto.rulingFor(form.id, target.id) === undefined ? uncertainty(options) : undefined;
+  const failure: Failure = {
+    player: state.active,
+    form,
+    target,
+    cost: paid,
+    reason: failureReason(state, form, target, closest),
+    closest,
+    ...(doubt === undefined ? {} : { uncertain: doubt }),
+  };
   const wille = me.wille - paid;
   const players = [...state.players] as [typeof me, typeof me];
   players[state.active] = { ...me, wille };
@@ -83,6 +98,21 @@ export function attempt(onto: Ontology, state: GameState, form: Form, intendedVe
     };
   }
   return { kind: "failure", state: next, failure };
+}
+
+/**
+ * How sure is the engine that nothing works? Unsure when a mechanism fell short by a single point,
+ * or was stopped by a blocker/immunity (the model may be too coarse), or when a form of at least the
+ * target's size found no surface at all (an interaction the tags don't capture).
+ */
+export function uncertainty(options: readonly MoveOption[]): string | undefined {
+  const real = options.filter((o) => o.verb !== ESCAPE);
+  const near = real.find((o) => o.check.failedAt === "power" && o.check.needed - o.check.power <= 1);
+  if (near !== undefined) return `knapp: ${String(near.check.power)} gegen ${String(near.check.needed)}`;
+  const blocked = real.find((o) => o.check.failedAt === "blocked" || o.check.failedAt === "immune");
+  if (blocked !== undefined) return "blockiert";
+  if (real.length > 0 && real.every((o) => o.check.failedAt === "surface")) return "keine Angriffsfläche";
+  return undefined;
 }
 
 function lastMove(state: GameState): Move {

@@ -112,3 +112,11 @@ Welche Tags welche Gewandung auslösen:
 | Stille | Übertönen und Wecken +2 | fahles Blau |
 | Sturm | Feuer +1, Durchbohren −1 | Windschlieren |
 | Staub | Blenden −1, Täuschen +1 | Dunst |
+
+## Schiedsrichter (Idee des Nutzers: „Confidence – wenn die Engine unsicher ist, wird Claude gefragt“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Die Engine kennt ihre Zweifel** | Ein Fehlschlag gilt als *unsicher*, wenn: ein Mechanismus um genau einen Punkt zu schwach war, ein Blocker oder eine Immunität gegriffen hat (das Modell ist dort evtl. zu grob), oder wenn gar keine Angriffsfläche gefunden wurde (eine Wechselwirkung, die die Tags nicht kennen). Scheitert ein Zug nur an den Größenregeln, gilt er nicht als unsicher. | `uncertainty()` in `src/engine/attempt.ts`, `CounterCheck.failedAt` |
+| **Claude als Schiedsrichter** | Nur in solchen unsicheren Fällen urteilt Claude, und zwar streng: gesunder Menschenverstand und Sagenlogik ja, „irgendwie geht das schon“ nein. Das Urteil nennt einen existierenden Mechanismus und eine Begründung in einem Satz. | `src/llm/referee.ts` |
+| **Präzedenzfälle** | Jedes Urteil (ja oder nein) wird validiert und für genau dieses Paar im gelernten Pack gespeichert. Danach entscheidet die Engine es immer gleich und ohne weiteren Claude-Aufruf. Die Größenregeln gelten weiter. Im Grimoire stehen die Urteile unter „⚖ Schiedssprüche“, in der Arena erscheint die Begründung unter dem Namen. | `rulings` im Pack, `checkRuling`, `addRuling` |

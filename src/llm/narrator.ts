@@ -48,6 +48,7 @@ export async function narrateWithClaude(
           move.form.scale < target.scale ? "Der Kleinere besiegt den Größeren – ein eleganter Zug." : "",
           move.check === null || move.check.outcome === "vernichtet" ? "" : `Siegart: ${target.name} wird ${OUTCOME_WORDS[move.check.outcome] ?? move.check.outcome} – NICHT vernichtet.`,
           move.check?.startled === true ? `${target.name} erschrickt und flieht.` : "",
+          move.check?.ruling === true ? `Begründung des Schiedsrichters: ${move.check.steps.at(-1)?.text ?? ""}` : "",
         ]
           .filter((l) => l !== "")
           .join("\n");

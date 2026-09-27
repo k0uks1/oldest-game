@@ -808,6 +808,19 @@ canvas.arena {
   font-style: italic;
   color: #b8a8d8;
 }
+.grimoire .rulings {
+  padding: 4px 6px 8px;
+  font-size: 17px;
+  color: var(--muted);
+}
+.grimoire .rulings summary {
+  cursor: pointer;
+  color: var(--rune);
+}
+.grimoire .rulings ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
 .learned-tags {
   padding: 4px 6px 8px;
   color: var(--rune);
