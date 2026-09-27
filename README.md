@@ -15,6 +15,9 @@ Gestalt des Gegners besiegt – bis einer keine Antwort mehr findet.
 
 ## Spielen
 
+**Sofort im Browser:** https://k0uks1.github.io/oldest-game/ (Stand von `main`; jeder PR hat eine eigene Vorschau-URL im PR-Kommentar).
+Dort eigenen Claude-API-Key eintragen oder `?debug` anhängen.
+
 **Empfohlen – lokaler Server, Key bleibt auf deinem Rechner:**
 ```bash
 npm install

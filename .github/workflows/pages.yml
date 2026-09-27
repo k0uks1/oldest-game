@@ -1,0 +1,55 @@
+name: Pages
+
+# main → https://<owner>.github.io/<repo>/
+# PR   → https://<owner>.github.io/<repo>/pr-preview/pr-<n>/  (removed when the PR closes)
+#
+# One-time setup: Settings → Pages → Source "Deploy from a branch" → gh-pages / (root).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        if: github.event.action != 'closed'
+        with:
+          node-version: 22
+
+      - name: Build
+        if: github.event.action != 'closed'
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+          touch dist/.nojekyll
+
+      - name: Deploy main
+        if: github.event_name == 'push'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: dist
+          branch: gh-pages
+          clean-exclude: pr-preview/
+
+      - name: Deploy PR preview
+        if: github.event_name == 'pull_request'
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: dist
+          umbrella-dir: pr-preview
