@@ -33,9 +33,11 @@ describe("Claude proxy", () => {
     const cap: { body?: Record<string, unknown>; headers?: Headers } = {};
     const res = await handleProxy(post({ messages: [{ role: "user", content: "x" }], max_tokens: 10 }), { ...base, fetchImpl: fakeUpstream(cap) });
     assert.equal(res.status, 200);
-    assert.equal(cap.headers?.get("x-api-key"), "sk-test");
-    assert.equal(cap.headers?.get("anthropic-dangerous-direct-browser-access"), null);
-    assert.equal(cap.body?.["max_tokens"], 10);
+    const { headers, body } = cap;
+    assert.ok(headers && body);
+    assert.equal(headers.get("x-api-key"), "sk-test");
+    assert.equal(headers.get("anthropic-dangerous-direct-browser-access"), null);
+    assert.equal(body["max_tokens"], 10);
   });
 
   it("reports health without leaking the key", async () => {
