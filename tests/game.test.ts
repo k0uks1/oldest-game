@@ -161,8 +161,8 @@ describe("rule-blocked attempts", () => {
     assert.ok(m);
     const g: GameState = { ...g0, history: [m, m, m] }; // floor rises to 2 at move 4
     const r = attempt(onto, g, lx("schere"), null);
-    assert.equal(r.kind, "rejected");
-    assert.ok(r.kind === "rejected" && r.reason.includes("Arena ist gewachsen"));
+    assert.ok(r.kind === "rejected");
+    assert.ok(r.reason.includes("Arena ist gewachsen"));
     assert.equal(r.state, g);
   });
 });
