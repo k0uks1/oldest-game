@@ -14,7 +14,7 @@ import type { Ontology } from "../engine/ontology/ontology.ts";
 import { parseForm } from "../engine/parse.ts";
 import { findCounters } from "../engine/rules.ts";
 import type { Form, GameState, PlayerId } from "../engine/types.ts";
-import { estimateCostUsd, loadSettings, saveSettings, sessionUsage, type LlmSettings } from "../llm/client.ts";
+import { detectLocalProxy, estimateCostUsd, isClaudeReady, loadSettings, saveSettings, sessionUsage, type LlmSettings } from "../llm/client.ts";
 import { narrateWithClaude } from "../llm/narrator.ts";
 import { parseWithClaude } from "../llm/parser.ts";
 import { narrateEnd, narrateMove } from "../narrate/offline.ts";
@@ -144,7 +144,7 @@ export class App {
     );
     this.arena.start();
     this.render();
-    this.showStart();
+    void this.init();
   }
 
   // ── Flow ────────────────────────────────────────────────────────────────
@@ -166,6 +166,25 @@ export class App {
 
   private get debug(): boolean {
     return this.settings.debugOffline;
+  }
+
+  /** Proxy auto-detected at runtime (local `npm start` server) – never persisted. */
+  private localProxy: string | null = null;
+
+  /** Effective LLM settings: a configured proxy wins, then the local server, then BYOK. */
+  private get llm(): LlmSettings {
+    return this.settings.proxyUrl === "" && this.localProxy !== null ? { ...this.settings, proxyUrl: this.localProxy } : this.settings;
+  }
+
+  private async init(): Promise<void> {
+    if (!this.debug) {
+      const proxy = await detectLocalProxy();
+      if (proxy !== null) {
+        this.localProxy = proxy.url;
+        this.settings = { ...this.settings, model: proxy.model };
+      }
+    }
+    this.showStart();
   }
 
   private onInput(): void {
@@ -214,15 +233,15 @@ export class App {
       this.parseOffline(text);
       return;
     }
-    if (this.settings.apiKey === "") {
-      this.showSettings("Für das Spiel wird ein Claude-API-Key benötigt.");
+    if (!isClaudeReady(this.llm)) {
+      this.showSettings("Claude ist nicht verbunden. Starte das Spiel mit `npm start` (Key in .env) oder trage einen eigenen API-Key ein.");
       return;
     }
     this.busy = true;
     this.els.preview.classList.add("thinking");
     this.renderPreview("Claude ordnet die Gestalt ein …");
     try {
-      const r = await parseWithClaude(this.onto, this.settings, text);
+      const r = await parseWithClaude(this.onto, this.llm, text);
       if (this.els.input.value.trim() !== text) return; // input changed meanwhile
       if (r === undefined) {
         this.renderPreview("Claude konnte diese Gestalt nicht ins Vokabular des Spiels übersetzen. Beschreibe sie anders.");
@@ -271,13 +290,13 @@ export class App {
       }
       if (move !== undefined) {
         const offline = narrateMove(this.onto, this.state, move, index);
-        if (this.debug || this.settings.apiKey === "") {
+        if (this.debug || !isClaudeReady(this.llm)) {
           this.addChronicle(actor, `[Debug] ${offline}`);
         } else {
           const li = this.addChronicle(actor, "…");
           li.classList.add("pending");
           const snapshot = this.state;
-          void narrateWithClaude(this.onto, this.settings, snapshot, move, index, offline).then((t) => {
+          void narrateWithClaude(this.onto, this.llm, snapshot, move, index, offline).then((t) => {
             li.lastElementChild?.replaceChildren(t);
             li.classList.remove("pending");
           });
@@ -510,7 +529,7 @@ export class App {
   private showStart(): void {
     const n0 = h("input", { class: "form-input", value: this.state.players[0].name, placeholder: "Spieler 1" });
     const n1 = h("input", { class: "form-input", value: this.state.players[1].name, placeholder: "Spieler 2" });
-    const needsKey = !this.debug && this.settings.apiKey === "";
+    const needsKey = !this.debug && !isClaudeReady(this.llm);
     const key = h("input", { class: "form-input", type: "password", placeholder: "sk-ant-… (Claude API-Key)" });
     const go = (): void => {
       if (needsKey) {
@@ -616,30 +635,49 @@ export class App {
   }
 
   private showSettings(reason?: string): void {
-    const key = h("input", { class: "form-input", type: "password", value: this.settings.apiKey, placeholder: "sk-ant-…" });
-    const model = h("input", { class: "form-input", value: this.settings.model });
-    const debug = h("input", { type: "checkbox" });
+    const key = h("input", { class: "form-input", id: "llm-key", type: "password", value: this.settings.apiKey, placeholder: "sk-ant-…" });
+    const proxy = h("input", { class: "form-input", id: "llm-proxy", value: this.settings.proxyUrl, placeholder: "leer = automatisch (lokaler Server) bzw. eigener Key" });
+    const code = h("input", { class: "form-input", id: "llm-code", type: "password", value: this.settings.accessCode, placeholder: "nur für gehostete Proxys" });
+    const model = h("input", { class: "form-input", id: "llm-model", value: this.settings.model });
+    const debug = h("input", { type: "checkbox", id: "llm-debug" });
     debug.checked = this.settings.debugOffline;
     const u = sessionUsage;
+    const eff = this.llm;
+    const status =
+      this.debug
+        ? "Debug-Modus – keine API-Aufrufe."
+        : eff.proxyUrl !== ""
+          ? `Verbunden über Proxy ${eff.proxyUrl}${this.localProxy !== null && this.settings.proxyUrl === "" ? " (lokaler Server, Key in .env)" : ""}. Der API-Key bleibt auf dem Server.`
+          : eff.apiKey !== ""
+            ? "Eigener API-Key im Browser (Fallback ohne Server)."
+            : "Nicht verbunden.";
     const save = (): void => {
-      this.settings = { apiKey: key.value.trim(), model: model.value.trim(), debugOffline: debug.checked };
+      this.settings = {
+        apiKey: key.value.trim(),
+        proxyUrl: proxy.value.trim(),
+        accessCode: code.value.trim(),
+        model: model.value.trim(),
+        debugOffline: debug.checked,
+      };
       saveSettings(this.settings);
       this.closeModal();
-      this.flashBanner(this.debug ? "Debug-Modus: ohne Claude." : "Gespeichert – Claude ist bereit.", "info");
+      this.flashBanner(this.debug ? "Debug-Modus: ohne Claude." : isClaudeReady(this.llm) ? "Gespeichert – Claude ist bereit." : "Gespeichert – Claude ist noch nicht verbunden.", "info");
       this.candidate = null;
       this.onInput();
     };
     this.modal(
       "Claude",
       reason === undefined ? null : h("p", { class: "warn" }, reason),
-      h("p", { class: "hint" }, "Das Spiel nutzt Claude Haiku, um Gestalten einzuordnen und Züge zu erzählen. Wer gewinnt, entscheidet immer die deterministische Regel-Engine. Der Key bleibt in deinem Browser (localStorage) – nur lokal verwenden."),
-      h("label", {}, "API-Key", key),
-      h("label", {}, "Modell", model),
-      h("label", { class: "check" }, debug, " Debug-Modus: mechanischer Parser & Template-Erzählung, keine API-Aufrufe"),
+      h("p", { class: "status" }, status),
+      h("p", { class: "hint" }, "Claude Haiku ordnet Gestalten ein und erzählt die Züge; wer gewinnt, entscheidet immer die Regel-Engine. Empfohlen: `npm start` mit ANTHROPIC_API_KEY in .env – dann bleibt der Key auf deinem Rechner und nie im Browser."),
+      h("label", { for: "llm-proxy" }, "Proxy-URL (optional)", proxy),
+      h("label", { for: "llm-code" }, "Zugangscode (optional)", code),
+      h("label", { for: "llm-key" }, "Eigener API-Key (nur ohne Proxy)", key),
+      h("label", { for: "llm-model" }, "Modell (ohne Proxy; der Proxy legt es selbst fest)", model),
+      h("label", { class: "check" }, debug, " Debug-Modus: mechanischer Parser & Textbausteine, keine API-Aufrufe"),
       h("p", { class: "hint" }, `Diese Sitzung: ${String(u.calls)} Aufrufe · ${String(u.input + u.cacheRead + u.cacheWrite)} Input- / ${String(u.output)} Output-Tokens · ca. $${estimateCostUsd(u).toFixed(4)}`),
       h("div", { class: "actions" }, h("button", { class: "btn primary", onclick: save }, "Speichern")),
     );
-    key.focus();
   }
 
   private showEnd(): void {

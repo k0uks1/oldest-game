@@ -8,7 +8,8 @@ classifies and narrates; a deterministic rule engine decides.** Pixel-art dungeo
 
 ```bash
 npm install
-npm run dev        # watch build + http://localhost:5173  (…/?debug = without Claude)
+npm start          # build + local server with Claude proxy (ANTHROPIC_API_KEY from .env)
+npm run dev        # watch build + same server  (…/?debug = without Claude)
 npm run check      # typecheck + lint + tests + build – run before every PR
 npm test           # node:test via tsx (tests/*.test.ts)
 npm run build      # → dist/index.html (single self-contained file, opens from disk)
@@ -30,6 +31,7 @@ src/
   narrate/offline.ts template narration (debug / fallback)
   render/            sprite generation (pure) + canvas arena (DOM)
   ui/                hot-seat UI, no framework
+server/              Claude proxy core (Web Request/Response) + local Node server + Cloudflare Worker
 scripts/             build (esbuild → single HTML), simulate, gen-pack (stress data)
 tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k forms)
 ```
@@ -77,8 +79,11 @@ one use per form, Wille budget.
 
 ## Claude integration
 
-- Default model `claude-haiku-4-5-20251001`, called directly from the browser
-  (`anthropic-dangerous-direct-browser-access`). The key lives in localStorage – **local use only,
-  never deploy a build publicly with a key**.
+- Default model `claude-haiku-4-5-20251001`.
+- **Preferred transport: proxy.** `server/proxy.ts` holds the key (env / `.env`), pins model and
+  `max_tokens`, whitelists request fields; the client auto-detects the local server via `/api/health`.
+  Hosted: same core as a Cloudflare Worker with `ACCESS_CODE`.
+- Fallback for the standalone file: bring-your-own-key directly from the browser
+  (`anthropic-dangerous-direct-browser-access`), key in localStorage. Never ship a build containing a key.
 - The system prompt (vocabulary + mechanisms) is stable and sent with `cache_control`.
 - Debug mode (`?debug` or settings) = mechanical parser + template narration, zero API calls.

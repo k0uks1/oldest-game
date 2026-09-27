@@ -124,7 +124,9 @@ jobs:
               "",
               `1. **[index.html herunterladen](${process.env.ARTIFACT_URL})** (ZIP)`,
               "2. Entpacken und `index.html` im Browser öffnen – keine Installation nötig.",
-              "3. Claude-API-Key eintragen – oder `index.html?debug` für den Debug-Modus ohne Claude.",
+              "3. Eigenen Claude-API-Key eintragen – oder `index.html?debug` für den Debug-Modus ohne Claude.",
+              "",
+              "Mit Key-Proxy statt Key im Browser: Branch auschecken, `.env` anlegen, `npm start`.",
               "",
               `Commit \`${context.sha.slice(0, 7)}\` · [CI-Lauf & Balancing-Report](${run})`,
             ].join("\n");

@@ -3,10 +3,9 @@
  * self-contained dist/index.html (open it directly from disk, no server needed).
  *
  *   npm run build           – production build (minified)
- *   npm run dev             – watch + local server on http://localhost:5173
+ *   npm run dev             – watch + local server (incl. Claude proxy) on http://localhost:5173
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
@@ -78,13 +77,8 @@ if (serve) {
     ],
   });
   await ctx.watch();
-  const port = Number(process.env["PORT"] ?? 5173);
-  createServer((_, res) => {
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-    res.end(html);
-  }).listen(port, () => {
-    console.log(`▶ http://localhost:${String(port)}  (Debug ohne Claude: http://localhost:${String(port)}/?debug)`);
-  });
+  const { localEnv, startServer } = await import("../server/local.ts");
+  startServer({ port: Number(process.env["PORT"] ?? 5173), html: () => html, env: localEnv() });
 } else {
   emit(await esbuild.build(options));
 }
