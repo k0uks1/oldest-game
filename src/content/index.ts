@@ -10,6 +10,7 @@ import natur from "./core/forms/natur.json" with { type: "json" };
 import tiere from "./core/forms/tiere.json" with { type: "json" };
 import alltag from "./core/forms/alltag.json" with { type: "json" };
 import maerchen from "./core/forms/maerchen.json" with { type: "json" };
+import fields from "./core/fields.json" with { type: "json" };
 import modifiers from "./core/modifiers.json" with { type: "json" };
 import tags from "./core/tags.json" with { type: "json" };
 import verbs from "./core/verbs.json" with { type: "json" };
@@ -26,6 +27,7 @@ export const CORE_PACK_RAW: unknown = {
   verbs,
   modifiers,
   forms: FORM_FILES.flat(),
+  fields,
 };
 
 export function loadPack(raw: unknown): ContentPack {

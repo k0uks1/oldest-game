@@ -200,6 +200,8 @@ interface Ring {
   life: number;
   max: number;
   color: string;
+  /** Growth in px/s (default 90). */
+  grow?: number;
 }
 
 function canvas(w: number, h: number): HTMLCanvasElement {
@@ -271,6 +273,8 @@ export class Arena {
   private readonly motes: Mote[] = [];
   private readonly eyes: Eye[] = [];
   private witnesses = 0;
+  /** Arena fields ("Nässe", "Glut" …) – intensity per field id, eased towards 0/1. */
+  private readonly fieldFx = new Map<string, { level: number; target: number }>();
   /** Discovery star floating above a fighter. */
   private discoveryGlow: { side: Side; life: number } | null = null;
 
@@ -308,6 +312,20 @@ export class Arena {
    */
   setTier(floor: number): void {
     this.cosmicTarget = Math.max(0, Math.min(1, (floor - 1) / 5.5));
+  }
+
+  /** Which arena fields are active (ids from content/core/fields.json). Unknown ids are ignored. */
+  setFields(ids: readonly string[]): void {
+    for (const [id, fx] of this.fieldFx) if (!ids.includes(id)) fx.target = 0;
+    for (const id of ids) {
+      const fx = this.fieldFx.get(id);
+      if (fx === undefined) this.fieldFx.set(id, { level: 0, target: 1 });
+      else fx.target = 1;
+    }
+  }
+
+  private field(id: string): number {
+    return this.fieldFx.get(id)?.level ?? 0;
   }
 
   /** How many eyes watch from the dark (grows with the duel). */
@@ -803,6 +821,8 @@ export class Arena {
     this.flash = Math.max(0, this.flash - dt * 1.8);
     this.thinking += (this.thinkingTarget - this.thinking) * Math.min(1, dt * 4);
     this.updateCosmos(dt);
+    for (const fx of this.fieldFx.values()) fx.level += (fx.target - fx.level) * Math.min(1, dt * 1.5);
+    this.emitFieldParticles(dt);
     for (const m of this.motes) {
       m.phase += dt;
       m.x += (m.vx + Math.sin(m.phase * 0.7) * 2) * dt;
@@ -840,7 +860,7 @@ export class Arena {
       const r = this.rings[i];
       if (r === undefined) continue;
       r.life += dt;
-      r.r += dt * 90;
+      r.r += dt * (r.grow ?? 90);
       if (r.life > r.max) this.rings.splice(i, 1);
     }
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
@@ -916,6 +936,82 @@ export class Arena {
     }
   }
 
+  private emitFieldParticles(dt: number): void {
+    if (this.reducedMotion) return;
+    const r = this.rand;
+    const glut = this.field("glut");
+    if (glut > 0.05 && r() < dt * 30 * glut) {
+      this.particles.push({ x: r() * WIDTH, y: GROUND_Y + r() * (HEIGHT - GROUND_Y), vx: (r() - 0.5) * 6, vy: -12 - r() * 18, life: 0, max: 1 + r(), color: r() < 0.5 ? "#ff8a30" : "#ffc64a", size: 1, gravity: -4, glow: true });
+    }
+    const nass = this.field("nass");
+    if (nass > 0.05 && r() < dt * 8 * nass) {
+      this.rings.push({ x: 20 + r() * (WIDTH - 40), y: FLOOR_Y + 8 + r() * (HEIGHT - FLOOR_Y - 12), r: 1, life: 0, max: 0.9, color: "#7fc6e8", grow: 14 });
+    }
+    const sturm = this.field("sturm");
+    if (sturm > 0.05 && r() < dt * 40 * sturm) {
+      this.particles.push({ x: -4, y: 20 + r() * (GROUND_Y - 20), vx: 180 + r() * 120, vy: (r() - 0.5) * 10, life: 0, max: 3, color: "#c8d0e0", size: 1, gravity: 0, glow: false });
+    }
+    const staub = this.field("staub");
+    if (staub > 0.05 && r() < dt * 20 * staub) {
+      this.particles.push({ x: r() * WIDTH, y: r() * GROUND_Y, vx: (r() - 0.5) * 4, vy: 2 + r() * 4, life: 0, max: 2.5, color: "#8a7a64", size: 1, gravity: 0, glow: false });
+    }
+  }
+
+  /** Puddle shimmer, frost rim – drawn onto the floor before the fighters. */
+  private drawFieldFloor(): void {
+    const b = this.base;
+    const nass = this.field("nass");
+    if (nass > 0.01) {
+      b.globalAlpha = 0.18 * nass;
+      b.fillStyle = "#3f8fc9";
+      for (let y = FLOOR_Y + 6; y < HEIGHT; y += 5) {
+        const off = Math.round(Math.sin(this.time * 1.7 + y * 0.4) * 6);
+        b.fillRect(40 + off, y, WIDTH - 80, 1);
+      }
+      b.globalAlpha = 1;
+    }
+    const frost = this.field("frost");
+    if (frost > 0.01) {
+      // rime creeping in from the edges of the floor, sparse in the middle
+      b.fillStyle = "#dff4ff";
+      for (let i = 0; i < 420; i++) {
+        const x = (i * 7919) % WIDTH;
+        const y = FLOOR_Y + ((i * 104729) % (HEIGHT - FLOOR_Y));
+        const edge = Math.min(x, WIDTH - x) / (WIDTH / 2);
+        if (edge > 0.25 + 0.75 * frost * ((i % 7) / 7)) continue;
+        b.globalAlpha = 0.5 * frost * (1 - edge);
+        b.fillRect(x, y, 1 + (i % 3 === 0 ? 1 : 0), 1);
+      }
+      b.globalAlpha = 1;
+    }
+  }
+
+  /** Darkness, dust haze and silence over everything. */
+  private drawFieldOverlay(): void {
+    const b = this.base;
+    const dark = this.field("finsternis");
+    if (dark > 0.01) {
+      b.globalAlpha = 0.45 * dark;
+      b.fillStyle = "#020106";
+      b.fillRect(-10, -10, WIDTH + 20, HEIGHT + 20);
+      b.globalAlpha = 1;
+    }
+    const staub = this.field("staub");
+    if (staub > 0.01) {
+      b.globalAlpha = 0.12 * staub;
+      b.fillStyle = "#6a5a44";
+      b.fillRect(-10, -10, WIDTH + 20, HEIGHT + 20);
+      b.globalAlpha = 1;
+    }
+    const still = this.field("stille");
+    if (still > 0.01) {
+      b.globalAlpha = 0.15 * still;
+      b.fillStyle = "#1a2030";
+      b.fillRect(-10, -10, WIDTH + 20, HEIGHT + 20);
+      b.globalAlpha = 1;
+    }
+  }
+
   private drawBolts(): void {
     for (const bolt of this.bolts) {
       const a = Math.max(0, 1 - bolt.life / bolt.max) * (Math.floor(bolt.life * 30) % 2 === 0 ? 1 : 0.6);
@@ -969,6 +1065,7 @@ export class Arena {
     g.translate(sx, sy);
     b.drawImage(this.backdrop, 0, 0);
     this.drawStars();
+    this.drawFieldFloor();
     this.drawEyes();
     this.drawTorches();
     this.drawMotes();
@@ -1000,6 +1097,7 @@ export class Arena {
         g.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
       }
     }
+    this.drawFieldOverlay();
     b.restore();
     g.restore();
     this.composite();

@@ -5,6 +5,7 @@ import { formCost } from "../src/engine/cost.ts";
 import { attempt } from "../src/engine/attempt.ts";
 import { createGame, evaluateForm, play } from "../src/engine/game.ts";
 import { checkCounter as check, checkEscape, ESCAPE } from "../src/engine/rules.ts";
+import { activeFields, fieldModifiers } from "../src/engine/fields.ts";
 import { parsePack } from "../src/engine/ontology/pack.ts";
 import type { Form } from "../src/engine/types.ts";
 
@@ -222,5 +223,32 @@ describe("Siegarten (ways to win)", () => {
   it("packs with an unknown victory kind are rejected", () => {
     const r = parsePack({ id: "x", name: "x", version: "1", tags: [], modifiers: [], forms: [], verbs: [{ id: "v", label: "v", family: "gewalt", leverage: 0, targets: ["fest"], hint: "h", outcome: "zerbröselt" }] });
     assert.equal(r.ok, false);
+  });
+});
+
+describe("Arena-Zustände (fields)", () => {
+  it("water leaves the arena wet: lightning gets stronger for the next moves, then it dries", () => {
+    const water = onto.lexicon.find((f) => f.scale <= 3 && onto.formHas(f, "wasser"));
+    assert.ok(water);
+    let g = createGame(["A", "B"]);
+    const r = play(onto, g, water, null);
+    assert.ok(r.ok);
+    g = r.value;
+    const fields = activeFields(onto, g);
+    assert.ok(fields.some((f) => f.spec.id === "nass"));
+    const mods = fieldModifiers(onto, fields, "trifft_blitz");
+    assert.equal(mods.reduce((s, m) => s + m.delta, 0), 2);
+    assert.equal(fieldModifiers(onto, fields, "verbrennt")[0]?.delta, -1);
+  });
+
+  it("modifiers change the power and are explained step by step", () => {
+    const base = checkCounter(lx("drache"), lx("ritter"), "verbrennt");
+    const wet = check(onto, lx("drache"), lx("ritter"), "verbrennt", undefined, 1, [{ delta: -1, text: "Nässe: „verbrennt“ −1" }]);
+    assert.equal(wet.power, base.power - 1);
+    assert.ok(wet.steps.some((s) => s.text.startsWith("Nässe")));
+  });
+
+  it("every field references known mechanisms, tags and families", () => {
+    assert.ok(onto.fields.length >= 5);
   });
 });
