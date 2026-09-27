@@ -74,3 +74,9 @@ Welche Tags welche Gewandung auslösen:
 | Idee | Was sie tut | Wo |
 |---|---|---|
 | **Form folgt Funktion** | Waffen bekommen ihre Silhouette aus dem, was sie *tun*, und dem, woraus sie bestehen. Es gibt 15 Varianten: Zerschlagen ohne Schneiden wird zum Hammer, Zerschlagen und Schneiden zur Axt, Holz und Metall mit Durchbohren zum Speer mit Wimpel, Holz mit Durchbohren zum Bogen und Läutern zum Pflock. Schneidendes Metall ergibt ab Stufe 3 ein Schwert, darunter einen Dolch. Außerdem gibt es Sense, Schaufel, Schirm, Besen, Zauberstab, Flöte, Horn und Streichholz. Gelernte Waffen passen damit automatisch. | `VARIANTS` in `src/render/figures.ts`, `variantFor()` |
+## Angriffe (PR „feat/angriffe“, Wunsch des Nutzers: „passendere Angriffsanimationen“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **15 Angriffsstile** | Jeder Mechanismus bekommt ein eigenes Bild, statt dass überall dasselbe Geschoss fliegt: Hieb (echter Sprung über die Arena mit Schnittbogen), Feuerball mit Glut, Bodenwelle aus Wasser, aufbrechende Erde, Eissplitter, Blitz aus dem Himmel, Wind in Wellenlinien, Lichtstrahl, Schattenschwaden, Giftblasen am Boden, Lebensentzug (Partikel fließen zurück zum Angreifer), Schallringe, Gedankenschleier, Runenkreis und kosmischer Sog aus allen Richtungen. Gelernte Mechanismen erben den Stil ihrer Familie. | `attackStyle`, `STYLE_BY_VERB` in `src/render/arena.ts` |
+| **Nicht jeder Sieg vernichtet** | Wer verängstigt, übertönt oder weggeweht wird, dreht sich um und rennt davon (der Knall und das Pferd). Wer eingeschläfert wird oder vergisst, sinkt schlafend weg. Wer verführt, gezähmt oder befreundet wird, geht in rosa Funken über. Alles andere zerfällt wie bisher. | `attackOutcome`, `Arena.depart` |

@@ -75,6 +75,8 @@ interface Fighter {
   alpha: number;
   offsetX: number;
   offsetY: number;
+  /** 1 = faces the opponent, -1 = turned away (fleeing). */
+  facing: 1 | -1;
   flash: number;
   readonly seed: number;
   readonly aura: Aura;
@@ -100,6 +102,74 @@ interface Particle {
   glow: boolean;
 }
 
+/** How an attack looks – chosen from the mechanism, see {@link attackStyle}. */
+export type AttackStyle =
+  | "slash" | "fire" | "water" | "earth" | "ice" | "bolt" | "wind" | "light"
+  | "dark" | "poison" | "drain" | "sound" | "mind" | "rune" | "cosmic";
+
+const STYLE_BY_VERB: Readonly<Record<string, AttackStyle>> = {
+  verbrennt: "fire", schmilzt: "fire", verdampft: "fire",
+  ertraenkt: "water", loescht: "water", erodiert: "water", loest_auf: "water",
+  begraebt: "earth", versteinert: "earth", sprengt: "earth",
+  gefriert: "ice",
+  trifft_blitz: "bolt", kurzschluss: "bolt",
+  verweht: "wind", erstickt: "wind",
+  blendet: "light", durchleuchtet: "light", ueberstrahlt: "light", sonnenlicht: "light", laeutert: "light",
+  verdunkelt: "dark", verflucht: "dark",
+  vergiftet: "poison", infiziert: "poison", verrottet: "poison", zersetzt: "poison", rostet: "poison", zerfrisst: "poison", verdorrt: "poison", verhungern: "poison",
+  saugt_aus: "drain", entzieht_energie: "drain",
+  uebertoent: "sound", weckt: "sound", einschlaefern: "sound",
+  bannt: "rune", erloest: "rune", entzaubert: "rune", wahrer_name: "rune", bricht_pakt: "rune", versiegelt: "rune", kaltes_eisen: "rune", spiegelt: "rune", verwandelt: "rune", heilt: "rune",
+  ueberdauert: "cosmic", beendet: "cosmic", trotzt: "cosmic", fuellt: "cosmic", ordnet: "cosmic", entfesselt: "cosmic",
+};
+
+const STYLE_BY_FAMILY: Readonly<Record<string, AttackStyle>> = {
+  gewalt: "slash", element: "fire", leben: "poison", sinne: "sound", geist: "mind", magie: "rune", kosmos: "cosmic",
+};
+
+/** What happens to the loser: destroyed, driven off, lulled to sleep or won over. */
+export type AttackOutcome = "destroy" | "flee" | "sleep" | "charm";
+
+const OUTCOME_BY_VERB: Readonly<Record<string, AttackOutcome>> = {
+  aengstigt: "flee", uebertoent: "flee", verweht: "flee", langweilt: "flee", verwaltet: "flee", verklagt: "flee", befreit: "flee", demuetigt: "flee", zweifel: "flee",
+  einschlaefern: "sleep", vergessen: "sleep", verzweiflung: "sleep",
+  lockt: "charm", verfuehrt: "charm", befreundet: "charm", zaehmt: "charm", verzaubert: "charm", befiehlt: "charm", erloest: "charm",
+};
+
+export function attackOutcome(verbId: string): AttackOutcome {
+  return OUTCOME_BY_VERB[verbId] ?? "destroy";
+}
+
+/** Visual style for a mechanism: specific verbs first, then its family. Unknown (learned) verbs follow their family. */
+export function attackStyle(verbId: string, family: string): AttackStyle {
+  return STYLE_BY_VERB[verbId] ?? STYLE_BY_FAMILY[family] ?? "slash";
+}
+
+const STYLE_COLORS: Readonly<Record<AttackStyle, readonly [string, string]>> = {
+  slash: ["#f4f0ff", "#ffffff"],
+  fire: ["#ff6a20", "#ffc64a"],
+  water: ["#3f8fc9", "#bff0ff"],
+  earth: ["#6a5040", "#c4a484"],
+  ice: ["#7fc6e8", "#f0fcff"],
+  bolt: ["#9ab0ff", "#ffffff"],
+  wind: ["#b8c8d8", "#f4f8ff"],
+  light: ["#fff0a0", "#ffffff"],
+  dark: ["#2c1840", "#b050ff"],
+  poison: ["#62b030", "#d8ff70"],
+  drain: ["#b8263a", "#ff7a8a"],
+  sound: ["#c8a0ff", "#f0e0ff"],
+  mind: ["#e080ff", "#ffd0ff"],
+  rune: ["#c8a0ff", "#fff0a0"],
+  cosmic: ["#a0c0ff", "#ffffff"],
+};
+
+interface Bolt {
+  readonly points: readonly (readonly [number, number])[];
+  life: number;
+  readonly max: number;
+  readonly color: string;
+}
+
 interface Projectile {
   from: number;
   to: number;
@@ -107,7 +177,7 @@ interface Projectile {
   duration: number;
   color: string;
   glow: string;
-  family: string;
+  style: AttackStyle;
   /** Stops short of the target (failed attempt hits a barrier). */
   stopShort: boolean;
   done: () => void;
@@ -162,6 +232,7 @@ export class Arena {
   private readonly particles: Particle[] = [];
   private readonly projectiles: Projectile[] = [];
   private readonly rings: Ring[] = [];
+  private readonly bolts: Bolt[] = [];
   private readonly spriteCache = new Map<string, SpriteEntry>();
   private shake = 0;
   private flash = 0;
@@ -285,6 +356,7 @@ export class Arena {
     this.fighters[1] = null;
     this.particles.length = 0;
     this.projectiles.length = 0;
+    this.bolts.length = 0;
     this.rings.length = 0;
   }
 
@@ -347,6 +419,7 @@ export class Arena {
       alpha: 1,
       offsetX: 0,
       offsetY: 0,
+      facing: 1,
       flash: 0,
       seed: hash32(form.id),
       aura: this.auraFor(form),
@@ -388,12 +461,12 @@ export class Arena {
   }
 
   /** Attacker on `side` strikes the other side, which is destroyed. */
-  async attack(side: Side, family: string, weaknessHit: boolean): Promise<void> {
+  async attack(side: Side, style: AttackStyle, weaknessHit: boolean, outcome: AttackOutcome = "destroy"): Promise<void> {
     const other: Side = side === 0 ? 1 : 0;
     const attacker = this.fighters[side];
     const target = this.fighters[other];
     if (attacker === null) return;
-    await this.strike(side, family, false);
+    await this.strike(side, style, false);
     if (target === null) return;
     await this.suspense(other);
     this.onCue?.("impact");
@@ -404,16 +477,49 @@ export class Arena {
     this.burst(SIDE_X[other], GROUND_Y - target.sprite.pixels.height / 2, attacker.sprite.palette.glow, weaknessHit ? 90 : 50);
     this.rings.push({ x: SIDE_X[other], y: GROUND_Y - target.sprite.pixels.height / 2, r: 6, life: 0, max: 0.5, color: attacker.sprite.palette.glow });
     await wait(260);
-    this.disintegrate(other);
-    await wait(700);
+    if (outcome === "destroy") {
+      this.disintegrate(other);
+      await wait(700);
+    } else await this.depart(other, outcome);
     this.fighters[other] = null;
   }
 
+  /** The loser leaves without being destroyed: runs off, falls asleep, or drifts away charmed. */
+  private async depart(side: Side, outcome: Exclude<AttackOutcome, "destroy">): Promise<void> {
+    const f = this.fighters[side];
+    if (f === null) return;
+    const away = side === 0 ? -1 : 1;
+    if (outcome === "flee") {
+      f.facing = -1;
+      for (let k = 0; k < 12; k++) this.particles.push({ x: SIDE_X[side], y: GROUND_Y - 2, vx: -away * (10 + this.rand() * 20), vy: -10 - this.rand() * 20, life: 0, max: 0.5, color: "#6a6080", size: 2, gravity: 40, glow: false });
+      await this.tween(this.reducedMotion ? 50 : 750, (t) => {
+        f.offsetX = away * 240 * t * t;
+        f.offsetY = -Math.abs(Math.sin(t * 20)) * 3;
+      });
+    } else if (outcome === "sleep") {
+      for (let k = 0; k < 3; k++) {
+        this.particles.push({ x: SIDE_X[side] + 8, y: GROUND_Y - f.sprite.pixels.height, vx: 8, vy: -14, life: -k * 0.35, max: 1.2, color: "#c8d8ff", size: 2, gravity: 0, glow: true });
+      }
+      await this.tween(this.reducedMotion ? 50 : 1300, (t) => {
+        f.offsetY = 4 * t;
+        f.alpha = 1 - t * t;
+      });
+    } else {
+      for (let k = 0; k < 24; k++) {
+        this.particles.push({ x: SIDE_X[side] + (this.rand() - 0.5) * f.sprite.pixels.width, y: GROUND_Y - this.rand() * f.sprite.pixels.height, vx: 0, vy: -12 - this.rand() * 10, life: -this.rand() * 0.5, max: 1, color: this.rand() < 0.5 ? "#ff9ad0" : "#ffe0f0", size: 1, gravity: 0, glow: true });
+      }
+      await this.tween(this.reducedMotion ? 50 : 1100, (t) => {
+        f.alpha = 1 - t;
+        f.offsetY = -8 * t;
+      });
+    }
+  }
+
   /** A failed attempt: the attacker's strike breaks on the target, then the attacker shatters. */
-  async fizzle(side: Side, family: string): Promise<void> {
+  async fizzle(side: Side, style: AttackStyle): Promise<void> {
     const other: Side = side === 0 ? 1 : 0;
     const target = this.fighters[other];
-    await this.strike(side, family, true);
+    await this.strike(side, style, true);
     await this.suspense(other);
     const x = SIDE_X[other] + (side === 0 ? -1 : 1) * ((target?.sprite.pixels.width ?? 40) / 2 + 6);
     this.onCue?.("fizzle");
@@ -433,14 +539,14 @@ export class Arena {
    * An escape: the target lashes out, the evader slips away (up into the air or down
    * into water/earth), the blow hits nothing and the target withdraws into the dark.
    */
-  async evade(side: Side, targetFamily: string, direction: "up" | "down"): Promise<void> {
+  async evade(side: Side, targetStyle: AttackStyle, direction: "up" | "down"): Promise<void> {
     const other: Side = side === 0 ? 1 : 0;
     const evader = this.fighters[side];
     const target = this.fighters[other];
     if (evader === null) return;
     const dy = direction === "up" ? -30 : 16;
     const dodge = this.tween(this.reducedMotion ? 50 : 420, (t) => (evader.offsetY = dy * Math.sin(t * Math.PI * 0.5)));
-    if (target !== null) await this.strike(other, targetFamily, true);
+    if (target !== null) await this.strike(other, targetStyle, true);
     await dodge;
     this.onCue?.("fizzle");
     this.burst(SIDE_X[side], GROUND_Y - 30 + dy, evader.sprite.palette.glow, 20);
@@ -465,28 +571,137 @@ export class Arena {
     if (f !== null) f.offsetX = 0;
   }
 
-  private async strike(side: Side, family: string, stopShort: boolean): Promise<void> {
+  private async strike(side: Side, style: AttackStyle, stopShort: boolean): Promise<void> {
     const attacker = this.fighters[side];
     if (attacker === null) return;
+    const other: Side = side === 0 ? 1 : 0;
+    const target = this.fighters[other];
     const dir = side === 0 ? 1 : -1;
+    const [color, glow] = STYLE_COLORS[style];
+    const tx = SIDE_X[other];
+    const reachX = stopShort ? SIDE_X[side] + (tx - SIDE_X[side]) * 0.72 : tx;
+    const ty = GROUND_Y - (target?.sprite.pixels.height ?? 40) / 2;
     await this.tween(180, (t) => (attacker.offsetX = -dir * 6 * t));
     this.onCue?.("strike");
+    const back = (): void => void this.tween(250, (t) => (attacker.offsetX = attacker.offsetX * (1 - t)));
+
+    switch (style) {
+      case "slash": {
+        // a real lunge: the attacker crosses the arena and cuts
+        const gap = Math.abs(tx - SIDE_X[side]) - (attacker.sprite.pixels.width + (target?.sprite.pixels.width ?? 30)) / 2 - 4;
+        const dist = Math.max(10, stopShort ? gap * 0.7 : gap);
+        await this.tween(this.reducedMotion ? 40 : 150, (t) => (attacker.offsetX = dir * (-6 + (dist + 6) * t * t)));
+        this.slashArc(stopShort ? reachX : tx, ty, dir, stopShort);
+        await wait(140);
+        void this.tween(320, (t) => (attacker.offsetX = dir * dist * (1 - t)));
+        return;
+      }
+      case "bolt": {
+        const x = stopShort ? tx - dir * 26 : tx;
+        this.bolts.push(makeBolt(x, stopShort ? GROUND_Y - 4 : ty, this.rand, glow));
+        this.flash = 0.3;
+        this.flashColor = glow;
+        await wait(90);
+        this.bolts.push(makeBolt(x + 2, stopShort ? GROUND_Y - 4 : ty, this.rand, color));
+        this.burst(x, stopShort ? GROUND_Y - 4 : ty, glow, 30);
+        await wait(160);
+        back();
+        return;
+      }
+      case "light": {
+        this.bolts.push({ points: [[SIDE_X[side] + dir * 14, ty - 6], [reachX, ty - 6]], life: 0, max: 0.45, color: glow });
+        this.bolts.push({ points: [[SIDE_X[side] + dir * 14, ty - 5], [reachX, ty - 5]], life: 0, max: 0.45, color });
+        this.flash = 0.2;
+        this.flashColor = glow;
+        await wait(380);
+        back();
+        return;
+      }
+      case "earth": {
+        const x0 = reachX;
+        for (let k = 0; k < 7; k++) {
+          const x = x0 + (k - 3) * 6 + (this.rand() - 0.5) * 3;
+          for (let j = 0; j < 8; j++) {
+            this.particles.push({ x, y: GROUND_Y, vx: (this.rand() - 0.5) * 6, vy: -60 - this.rand() * 70 - j * 6, life: -k * 0.04, max: 0.7, color: this.rand() < 0.6 ? color : glow, size: 2, gravity: 180, glow: false });
+          }
+        }
+        this.shake = 3;
+        await wait(420);
+        back();
+        return;
+      }
+      case "drain": {
+        // life flows from the target back to the attacker
+        for (let k = 0; k < 60; k++) {
+          const from = { x: reachX + (this.rand() - 0.5) * 20, y: ty + (this.rand() - 0.5) * 30 };
+          const dur = 0.5 + this.rand() * 0.3;
+          this.particles.push({ x: from.x, y: from.y, vx: (SIDE_X[side] - from.x) / dur, vy: (GROUND_Y - 30 - from.y) / dur - 20, life: -k * 0.008, max: dur, color: this.rand() < 0.5 ? color : glow, size: 1, gravity: 40, glow: true });
+        }
+        await wait(650);
+        back();
+        return;
+      }
+      case "rune": {
+        const x = reachX;
+        for (let k = 0; k < 3; k++) this.rings.push({ x, y: GROUND_Y - 2, r: 30 - k * 8, life: -k * 0.12, max: 0.8, color: k === 1 ? glow : color });
+        for (let k = 0; k < 16; k++) {
+          const ang = (k / 16) * Math.PI * 2;
+          this.particles.push({ x: x + Math.cos(ang) * 26, y: ty + Math.sin(ang) * 18, vx: -Math.cos(ang) * 30, vy: -Math.sin(ang) * 22, life: -0.2, max: 0.8, color: glow, size: 2, gravity: 0, glow: true });
+        }
+        await wait(700);
+        back();
+        return;
+      }
+      case "cosmic": {
+        for (let k = 0; k < 90; k++) {
+          const ang = this.rand() * Math.PI * 2;
+          const r = 140 + this.rand() * 80;
+          const dur = 0.6 + this.rand() * 0.3;
+          const sx = reachX + Math.cos(ang) * r;
+          const sy = ty + Math.sin(ang) * r * 0.6;
+          this.particles.push({ x: sx, y: sy, vx: (reachX - sx) / dur, vy: (ty - sy) / dur, life: -this.rand() * 0.2, max: dur, color: this.rand() < 0.3 ? color : glow, size: 1, gravity: 0, glow: true });
+        }
+        await wait(820);
+        this.flash = 0.35;
+        this.flashColor = glow;
+        back();
+        return;
+      }
+      default:
+        break;
+    }
+    // travelling effects: fire, water, ice, wind, dark, poison, sound, mind
     await this.tween(120, (t) => (attacker.offsetX = dir * (-6 + 22 * t)));
+    const duration: Record<string, number> = { fire: 0.45, water: 0.6, ice: 0.22, wind: 0.5, dark: 0.7, poison: 0.8, sound: 0.45, mind: 0.9 };
     await new Promise<void>((done) => {
       this.projectiles.push({
         from: SIDE_X[side] + dir * 20,
-        to: SIDE_X[side === 0 ? 1 : 0],
+        to: tx,
         t: 0,
-        duration: family === "gewalt" ? 0.2 : 0.5,
-        color: attacker.sprite.palette.main[2],
-        glow: attacker.sprite.palette.glow,
-        family,
+        duration: duration[style] ?? 0.5,
+        color,
+        glow,
+        style,
         stopShort,
         done,
       });
     });
-    void this.tween(250, (t) => (attacker.offsetX = dir * 16 * (1 - t)));
+    back();
   }
+
+  private slashArc(x: number, y: number, dir: number, blocked: boolean): void {
+    const [c, g] = STYLE_COLORS.slash;
+    for (let k = 0; k < 3; k++) {
+      for (let i = 0; i < 14; i++) {
+        const t = i / 13;
+        const ang = -1.1 + t * 2.2;
+        const r = 16 + k * 4;
+        this.particles.push({ x: x - dir * 6 + Math.cos(ang) * r * dir * 0.5, y: y + Math.sin(ang) * r, vx: dir * 30, vy: 0, life: -t * 0.08 - k * 0.03, max: 0.22, color: k === 0 ? g : c, size: 1, gravity: 0, glow: true });
+      }
+    }
+    if (blocked) this.burst(x, y, "#e8e0f0", 16);
+  }
+
 
   private disintegrate(side: Side): void {
     const f = this.fighters[side];
@@ -590,18 +805,86 @@ export class Arena {
       const pr = this.projectiles[i];
       if (pr === undefined) continue;
       pr.t += dt / pr.duration;
-      const reach = pr.stopShort ? 0.78 : 1;
+      const reach = pr.stopShort ? 0.72 : 1;
       const t = Math.min(reach, pr.t);
-      const x = pr.from + (pr.to - pr.from) * t;
-      const y = GROUND_Y - 40 - Math.sin(t * Math.PI) * (pr.family === "kosmos" ? 40 : 14);
-      for (let k = 0; k < 4; k++) {
-        this.particles.push({ x, y: y + (this.rand() - 0.5) * 6, vx: (this.rand() - 0.5) * 30, vy: (this.rand() - 0.5) * 30, life: 0, max: 0.25 + this.rand() * 0.3, color: this.rand() < 0.5 ? pr.color : pr.glow, size: 1 + Math.floor(this.rand() * 2), gravity: 0, glow: true });
-      }
+      this.emitProjectile(pr, t, dt);
       if (pr.t >= reach) {
         this.projectiles.splice(i, 1);
         pr.done();
       }
     }
+    for (let i = this.bolts.length - 1; i >= 0; i--) {
+      const bolt = this.bolts[i];
+      if (bolt === undefined) continue;
+      bolt.life += dt;
+      if (bolt.life > bolt.max) this.bolts.splice(i, 1);
+    }
+
+  }
+
+  /** Particles along a travelling attack, shaped by its style. */
+  private emitProjectile(pr: Projectile, t: number, dt: number): void {
+    const r = this.rand;
+    const x = pr.from + (pr.to - pr.from) * t;
+    const dir = Math.sign(pr.to - pr.from);
+    const air = GROUND_Y - 40 - Math.sin(t * Math.PI) * 14;
+    const push = (px: number, py: number, vx: number, vy: number, max: number, size: number, gravity: number, color: string, glow = true): void => {
+      this.particles.push({ x: px, y: py, vx, vy, life: 0, max, color, size, gravity, glow });
+    };
+    switch (pr.style) {
+      case "fire":
+        for (let k = 0; k < 6; k++) push(x + (r() - 0.5) * 6, air + (r() - 0.5) * 6, -dir * 20 + (r() - 0.5) * 20, -20 - r() * 30, 0.3 + r() * 0.3, r() < 0.4 ? 2 : 1, -10, r() < 0.5 ? pr.color : pr.glow);
+        push(x, air, 0, 0, 0.06, 4, 0, pr.glow);
+        break;
+      case "water":
+        for (let k = 0; k < 5; k++) push(x + (r() - 0.5) * 10, GROUND_Y - 2 - r() * 10, dir * 10, -30 - r() * 50, 0.4 + r() * 0.3, r() < 0.5 ? 2 : 1, 160, r() < 0.6 ? pr.color : pr.glow, r() < 0.5);
+        break;
+      case "ice":
+        for (let k = 0; k < 3; k++) push(x - dir * k * 3, air + (r() - 0.5) * 8, dir * 40, 0, 0.12, 1, 0, r() < 0.5 ? pr.color : pr.glow);
+        if (r() < dt * 30) push(x, air, (r() - 0.5) * 40, (r() - 0.5) * 40, 0.3, 1, 60, pr.glow);
+        break;
+      case "wind": {
+        const wob = Math.sin(t * 18) * 10;
+        for (let k = 0; k < 3; k++) push(x, air + wob + (r() - 0.5) * 4, -dir * 30, Math.cos(t * 18) * 30, 0.35, 1, 0, r() < 0.5 ? pr.color : pr.glow, r() < 0.4);
+        break;
+      }
+      case "dark":
+        for (let k = 0; k < 3; k++) push(x + (r() - 0.5) * 10, air + (r() - 0.5) * 10, (r() - 0.5) * 10, -5 - r() * 8, 0.6 + r() * 0.4, 3, 0, pr.color, false);
+        if (r() < 0.6) push(x + (r() - 0.5) * 8, air + (r() - 0.5) * 8, 0, -6, 0.5, 1, 0, pr.glow);
+        break;
+      case "poison":
+        if (r() < 0.8) push(x + (r() - 0.5) * 12, GROUND_Y - 2, (r() - 0.5) * 6, -8 - r() * 16, 0.7 + r() * 0.5, r() < 0.3 ? 2 : 1, -6, r() < 0.6 ? pr.color : pr.glow);
+        break;
+      case "sound":
+        if (r() < dt * 22) this.rings.push({ x, y: air, r: 3, life: 0, max: 0.35, color: pr.glow });
+        break;
+      case "mind": {
+        const wob = Math.sin(t * 9) * 16;
+        for (let k = 0; k < 2; k++) push(x, air - 10 + wob, (r() - 0.5) * 8, (r() - 0.5) * 8, 0.6, 1, 0, r() < 0.5 ? pr.color : pr.glow);
+        break;
+      }
+      default:
+        for (let k = 0; k < 4; k++) push(x, air + (r() - 0.5) * 6, (r() - 0.5) * 30, (r() - 0.5) * 30, 0.25 + r() * 0.3, 1 + Math.floor(r() * 2), 0, r() < 0.5 ? pr.color : pr.glow);
+    }
+  }
+
+  private drawBolts(): void {
+    for (const bolt of this.bolts) {
+      const a = Math.max(0, 1 - bolt.life / bolt.max) * (Math.floor(bolt.life * 30) % 2 === 0 ? 1 : 0.6);
+      for (const ctx of [this.base, this.glow]) {
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = bolt.color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (const [i, [px, py]] of bolt.points.entries()) {
+          if (i === 0) ctx.moveTo(Math.round(px) + 0.5, Math.round(py) + 0.5);
+          else ctx.lineTo(Math.round(px) + 0.5, Math.round(py) + 0.5);
+        }
+        ctx.stroke();
+      }
+    }
+    this.base.globalAlpha = 1;
+    this.glow.globalAlpha = 1;
   }
 
   private emitAura(side: Side, f: Fighter): void {
@@ -645,6 +928,7 @@ export class Arena {
     for (const [side, f] of this.fighters.entries()) if (f !== null) this.drawLightPool(side as Side, f);
     for (const [side, f] of this.fighters.entries()) if (f !== null) this.drawFighter(side as Side, f);
     this.drawDiscoveryStar();
+    this.drawBolts();
     for (const r of this.rings) {
       const a = Math.max(0, 1 - r.life / r.max);
       for (const ctx of [b, g]) {
@@ -755,9 +1039,10 @@ export class Arena {
     b.fillRect(SIDE_X[side] - shw + Math.round(f.offsetX), GROUND_Y - 1, shw * 2, 3);
     // materialise: reveal rows from bottom
     const visible = Math.ceil(h * easeOut(f.appear));
+    const mirrored = (side === 1) !== (f.facing === -1);
     const blit = (ctx: CanvasRenderingContext2D, img: HTMLCanvasElement): void => {
       ctx.save();
-      if (side === 1) {
+      if (mirrored) {
         ctx.translate(x + w, 0);
         ctx.scale(-1, 1);
         ctx.drawImage(img, 0, h - visible, w, visible, 0, y + h - visible, w, visible);
@@ -789,7 +1074,7 @@ export class Arena {
       b.save();
       b.globalAlpha = f.flash * f.alpha;
       b.globalCompositeOperation = "lighter";
-      if (side === 1) {
+      if (mirrored) {
         b.translate(x + w, 0);
         b.scale(-1, 1);
         b.drawImage(f.sprite.image, 0, y);
@@ -962,6 +1247,19 @@ export class Arena {
       ctx.globalAlpha = 1;
     }
   }
+}
+
+/** A jagged lightning path from the top of the arena down to (x, y). */
+function makeBolt(x: number, y: number, rand: () => number, color: string): Bolt {
+  const points: [number, number][] = [];
+  let cx = x + (rand() - 0.5) * 30;
+  for (let py = 0; py < y; py += 8 + rand() * 8) {
+    points.push([cx, py]);
+    cx += (rand() - 0.5) * 14;
+    cx += (x - cx) * 0.25;
+  }
+  points.push([x, y]);
+  return { points, life: 0, max: 0.35, color };
 }
 
 function silhouetteOf(img: PixelImage, color: string): PixelImage {
