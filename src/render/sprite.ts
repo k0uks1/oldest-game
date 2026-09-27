@@ -51,7 +51,7 @@ export function epx(grid: Grid): Grid {
 }
 
 function toGrid(rows: readonly string[]): Grid {
-  return rows.map((r) => [...r]);
+  return rows.map((r) => Array.from(r));
 }
 
 /**

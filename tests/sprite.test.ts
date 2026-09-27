@@ -26,9 +26,11 @@ describe("sprites", () => {
       ["#", "#"],
     ]);
     assert.equal(g.length, 4);
-    assert.equal(g[0]?.length, 4);
+    const row0 = g[0];
+    assert.ok(row0);
+    assert.equal(row0.length, 4);
     for (const [x, y] of [[1, 1], [1, 2], [2, 1], [2, 2]] as const) assert.equal(g[y]?.[x], "#");
-    assert.equal(g[0]?.[0], ".", "corner against empty space is rounded off");
+    assert.equal(row0[0], ".", "corner against empty space is rounded off");
   });
 
   it("sprite size follows scale with constant pixel size", () => {

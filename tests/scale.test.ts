@@ -68,7 +68,7 @@ describe(`scale: ${SIZE.tags} tags · ${SIZE.verbs} verbs · ${SIZE.modifiers} m
     });
     console.log(`  1000 parses: ${ms.toFixed(0)} ms`);
     assert.ok(r.ok);
-    if (r.ok) assert.equal(r.base.id, onto.formByAlias(f.name)?.id);
+    assert.equal(r.base.id, onto.formByAlias(f.name)?.id);
     assert.ok(ms < 5_000);
   });
 

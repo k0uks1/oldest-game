@@ -57,10 +57,6 @@ jobs:
             if (existing) await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
             else await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
 
-      - name: Lint muss grün sein
-        if: steps.lint.outcome == 'failure'
-        run: exit 1
-
       - name: Test
         run: npm test
 
@@ -84,6 +80,10 @@ jobs:
           name: balance-report-${{ github.sha }}
           path: balance-report.txt
           retention-days: 30
+
+      - name: Lint muss grün sein
+        if: steps.lint.outcome == 'failure'
+        run: exit 1
 
       - name: Job summary
         run: |

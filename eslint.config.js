@@ -29,4 +29,9 @@ export default tseslint.config(
     files: ["scripts/**", "tests/**"],
     rules: { "no-console": "off" },
   },
+  {
+    // node:test's describe/it return promises that the runner awaits itself.
+    files: ["tests/**"],
+    rules: { "@typescript-eslint/no-floating-promises": "off" },
+  },
 );

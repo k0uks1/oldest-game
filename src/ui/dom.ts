@@ -24,7 +24,7 @@ export interface Attrs {
 
 export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs = {}, ...children: Child[]): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs) as [string, unknown][]) {
+  for (const [k, v] of Object.entries(attrs) as [string, string | number | boolean | ((e: Event) => void) | undefined][]) {
     if (v === undefined || v === false) continue;
     if (k.startsWith("on") && typeof v === "function") {
       el.addEventListener(k.slice(2), v as EventListener);
@@ -46,10 +46,4 @@ export function append(el: Element, children: readonly Child[]): void {
 
 export function clear(el: Element): void {
   while (el.firstChild !== null) el.removeChild(el.firstChild);
-}
-
-export function $<T extends HTMLElement>(root: ParentNode, selector: string): T {
-  const el = root.querySelector<T>(selector);
-  if (el === null) throw new Error(`Element fehlt: ${selector}`);
-  return el;
 }

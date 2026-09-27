@@ -101,10 +101,18 @@ export class App {
         h(
           "nav",
           {},
-          h("button", { class: "btn ghost", onclick: () => this.showRules() }, "Regeln"),
-          h("button", { class: "btn ghost", onclick: () => this.showCompendium() }, "Kompendium"),
-          h("button", { class: "btn ghost", onclick: () => this.showSettings() }, "Claude"),
-          h("button", { class: "btn ghost", onclick: () => this.showStart() }, "Neues Spiel"),
+          h("button", { class: "btn ghost", onclick: () => {
+            this.showRules();
+          } }, "Regeln"),
+          h("button", { class: "btn ghost", onclick: () => {
+            this.showCompendium();
+          } }, "Kompendium"),
+          h("button", { class: "btn ghost", onclick: () => {
+            this.showSettings();
+          } }, "Claude"),
+          h("button", { class: "btn ghost", onclick: () => {
+            this.showStart();
+          } }, "Neues Spiel"),
         ),
       ),
       h("section", { class: "stage" }, canvas, els.hud[0], els.hud[1], els.banner),
@@ -117,14 +125,18 @@ export class App {
           { class: "input-row" },
           input,
           checkBtn,
-          h("button", { class: "btn", title: "Zeigt eine mögliche Antwort – kostet 2 Wille", onclick: () => this.onOracle() }, "Orakel"),
+          h("button", { class: "btn", title: "Zeigt eine mögliche Antwort – kostet 2 Wille", onclick: () => {
+            this.onOracle();
+          } }, "Orakel"),
         ),
         els.preview,
         h(
           "div",
           { class: "actions" },
           playBtn,
-          h("button", { class: "btn danger", onclick: () => this.onPass() }, "Aufgeben"),
+          h("button", { class: "btn danger", onclick: () => {
+            this.onPass();
+          } }, "Aufgeben"),
         ),
       ),
       h("section", { class: "log" }, h("h2", {}, "Chronik"), els.chronicle),
@@ -326,7 +338,7 @@ export class App {
     this.els.round.textContent =
       s.phase === "opening"
         ? "Eröffnung"
-        : `Runde ${String(roundNumber(s) + (s.history.length % 2 === 1 ? 0 : 0))} / ${String(s.config.roundLimit)} · Mindeststufe ${String(arenaMinScale(s))}`;
+        : `Runde ${String(Math.min(roundNumber(s), s.config.roundLimit))} / ${String(s.config.roundLimit)} · Mindeststufe ${String(arenaMinScale(s))}`;
     for (const p of [0, 1] as const) this.renderHud(p);
     clear(this.els.prompt);
     if (s.phase === "finished") {
@@ -418,7 +430,7 @@ export class App {
       if (this.selectedVerb === null && firstPlayable !== undefined) this.selectedVerb = firstPlayable.verb;
       for (const o of options) verbs.append(this.renderOption(o));
       const sel = options.find((o) => o.verb === this.selectedVerb);
-      this.els.playBtn.disabled = used || sel === undefined || !sel.playable;
+      this.els.playBtn.disabled = used || !sel?.playable;
     }
     el.append(spriteBox, info, verbs);
   }
@@ -529,7 +541,9 @@ export class App {
         "div",
         { class: "actions" },
         h("button", { class: "btn primary", onclick: go }, "Duell beginnen"),
-        h("button", { class: "btn ghost", onclick: () => this.showRules() }, "Regeln"),
+        h("button", { class: "btn ghost", onclick: () => {
+            this.showRules();
+          } }, "Regeln"),
         needsKey ? h("button", { class: "btn ghost", title: "Ohne Claude – nur zum Testen", onclick: debugStart }, "Debug ohne Claude") : null,
       ),
     );
@@ -636,7 +650,9 @@ export class App {
       h("p", { class: "lore" }, narrateEnd(s)),
       h("p", {}, `${a.name}: Eleganz ${String(a.eleganz)}, Wille ${String(a.wille)} · ${b.name}: Eleganz ${String(b.eleganz)}, Wille ${String(b.wille)}`),
       h("p", { class: "hint" }, `${String(s.history.length)} Gestalten wurden beschworen.`),
-      h("div", { class: "actions" }, h("button", { class: "btn primary", onclick: () => this.showStart() }, "Neues Spiel")),
+      h("div", { class: "actions" }, h("button", { class: "btn primary", onclick: () => {
+            this.showStart();
+          } }, "Neues Spiel")),
     );
   }
 }

@@ -72,15 +72,15 @@ describe("formFromLlm – mapping model output onto the ontology", () => {
 describe("callClaude", () => {
   it("sends a cached system prompt, forces the tool and parses the reply", async () => {
     let sent: { url: string; init: RequestInit } | undefined;
-    const fakeFetch = (async (url: string, init: RequestInit) => {
+    const fakeFetch = ((url: string, init: RequestInit) => {
       sent = { url, init };
-      return new Response(
+      return Promise.resolve(new Response(
         JSON.stringify({
           content: [{ type: "tool_use", name: "gestalt", input: { ok: true } }],
           usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100 },
         }),
         { status: 200 },
-      );
+      ));
     }) as unknown as typeof fetch;
     const r = await callClaude(
       { ...DEFAULT_SETTINGS, apiKey: "test" },
@@ -90,7 +90,7 @@ describe("callClaude", () => {
     assert.deepEqual(r.toolInput, { ok: true });
     assert.equal(r.usage.cacheRead, 100);
     assert.ok(sent);
-    const body = JSON.parse(String(sent.init.body)) as Record<string, unknown>;
+    const body = JSON.parse(sent.init.body as string) as Record<string, unknown>;
     assert.deepEqual(body["tool_choice"], { type: "tool", name: "gestalt" });
     assert.equal(body["model"], "claude-haiku-4-5-20251001");
     const headers = sent.init.headers as Record<string, string>;

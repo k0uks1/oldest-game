@@ -140,8 +140,8 @@ class ShapeChecker {
 }
 
 /** Assign optional props without violating `exactOptionalPropertyTypes`. */
-function opt<K extends string, V>(key: K, value: V | undefined): { [P in K]?: V } {
-  return (value === undefined ? {} : { [key]: value }) as { [P in K]?: V };
+function opt<K extends string, V>(key: K, value: V | undefined): Partial<Record<K, V>> {
+  return (value === undefined ? {} : { [key]: value }) as Partial<Record<K, V>>;
 }
 
 export type PackResult = { ok: true; pack: ContentPack } | { ok: false; errors: string[] };

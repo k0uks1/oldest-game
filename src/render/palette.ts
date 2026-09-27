@@ -66,7 +66,7 @@ export function paletteFor(onto: Ontology, form: Form): SpritePalette {
 
 export function hexToRgb(hex: string): [number, number, number] {
   let h = hex.replace("#", "");
-  if (h.length === 3) h = [...h].map((c) => c + c).join("");
+  if (h.length === 3) h = Array.from(h, (c) => c + c).join("");
   const n = Number.parseInt(h, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
