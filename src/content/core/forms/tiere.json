@@ -36,7 +36,7 @@
   {"id": "schnecke", "name": "Schnecke", "archetype": "blob", "scale": 1, "plane": "leben", "tags": ["weichtier", "gepanzert"], "verbs": ["zerfrisst", "ueberdauert"], "aliases": ["weinbergschnecke", "nacktschnecke"]},
   {"id": "regenwurm", "name": "Regenwurm", "archetype": "serpent", "scale": 1, "plane": "leben", "tags": ["tier", "graebt"], "verbs": ["verrottet"], "aliases": ["wurm", "würmer"]},
   {"id": "maulwurf", "name": "Maulwurf", "archetype": "beast", "scale": 2, "plane": "leben", "tags": ["saeugetier", "graebt"], "not": ["sieht"], "verbs": ["begraebt"], "aliases": ["wühlmaus"]},
-  {"id": "biber", "name": "Biber", "archetype": "beast", "scale": 2, "plane": "leben", "tags": ["saeugetier", "schwimmt", "graebt"], "verbs": ["zerfrisst"], "aliases": ["biberdamm"]},
+  {"id": "biber", "name": "Biber", "archetype": "beast", "scale": 2, "plane": "leben", "tags": ["saeugetier", "schwimmt", "graebt"], "verbs": ["zerfrisst", "staut"], "aliases": ["biberdamm"]},
   {"id": "eisbaer", "name": "Eisbär", "archetype": "beast", "scale": 4, "plane": "leben", "tags": ["saeugetier", "eis", "schwimmt"], "verbs": ["zerreisst", "gefriert"], "aliases": ["polarbär", "eisbär"]},
   {"id": "hyaene", "name": "Hyänenrudel", "archetype": "swarm", "scale": 3, "plane": "leben", "tags": ["saeugetier", "schwarm", "gierig"], "verbs": ["zerreisst", "ueberrennt"], "weak": ["gierig"], "aliases": ["hyäne", "hyänen", "schakale"]},
   {"id": "luchs", "name": "Luchs", "archetype": "beast", "scale": 2, "plane": "leben", "tags": ["saeugetier"], "verbs": ["zerreisst"], "aliases": ["wildkatze"]},
