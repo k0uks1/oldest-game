@@ -17,6 +17,7 @@ export const ARCHETYPES = [
   "humanoid", "beast", "serpent", "bird", "insect", "swarm", "blob", "plant", "tree", "flame",
   "wave", "cloud", "rock", "crystal", "orb", "eye", "star", "planet", "void", "skull", "ghost",
   "weapon", "tower", "book", "heart", "hourglass", "mask", "key", "fish", "spider", "dragon", "giant",
+  "cloth", "box", "bottle", "vehicle", "house", "cup",
 ] as const;
 /** Visual archetype – selects the sprite silhouette. */
 export type Archetype = (typeof ARCHETYPES)[number];
@@ -45,6 +46,8 @@ export interface Form {
   /** Where this form came from – lexicon entry, composed, or LLM. */
   readonly origin: "lexikon" | "komponiert" | "llm";
   readonly flavor?: string;
+  /** Custom 16×16 pixel art (validated, see engine/pixelart.ts) – drawn by Claude for brand-new forms. */
+  readonly sprite?: readonly string[];
 }
 
 export type PlayerId = 0 | 1;

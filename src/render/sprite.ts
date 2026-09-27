@@ -105,8 +105,10 @@ export function spriteSize(scale: number): number {
  * archetype has one, otherwise the 16×16 mask – then EPX up to the target size.
  */
 export function buildGrid(onto: Ontology, form: Form): Grid {
-  const figure = variantFor(onto, form) ?? FIGURES[form.archetype];
-  let grid = figure === undefined ? toGrid(MASKS[form.archetype]) : dress(onto, form, toGrid(figure));
+  // Claude-drawn pixel art wins – it was made for exactly this form.
+  const figure = form.sprite === undefined ? (variantFor(onto, form) ?? FIGURES[form.archetype]) : undefined;
+  let grid =
+    form.sprite !== undefined ? toGrid(form.sprite) : figure === undefined ? toGrid(MASKS[form.archetype]) : dress(onto, form, toGrid(figure));
   const target = spriteSize(form.scale);
   while (grid.length < target) grid = epx(grid);
   return grid;

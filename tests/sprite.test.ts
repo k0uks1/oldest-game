@@ -16,7 +16,7 @@ describe("sprites", () => {
       assert.equal(m.length, 16, a);
       for (const row of m) {
         assert.equal(row.length, 16, `${a}: ${row}`);
-        assert.match(row, /^[.#+o*]+$/, a);
+        assert.match(row, /^[.#+o*,]+$/, a);
       }
     }
   });
@@ -90,5 +90,50 @@ describe("sprites", () => {
     const f = onto.formById("feuerelementar");
     assert.ok(f);
     assert.equal(paletteFor(onto, f).main[1], "#a3300f");
+  });
+});
+
+describe("pixel art drawn by Claude", () => {
+  const blanket = [
+    "................",
+    "................",
+    "..############..",
+    ".#++++++++++++#.",
+    ".#+,++++++,+++#.",
+    ".##############.",
+    ".#++++++++++++#.",
+    ".#++,+++++,+++#.",
+    ".##############.",
+    "..#++++++++++#..",
+    "..#++,++++,++#..",
+    "...##########...",
+    "................",
+    "................",
+    "................",
+    "................",
+  ];
+
+  it("accepts one clear shape, tolerates spaces and stray symbols", async () => {
+    const { validPixelArt } = await import("../src/engine/pixelart.ts");
+    assert.ok(validPixelArt(blanket));
+    assert.ok(validPixelArt(blanket.map((r) => r.replaceAll(".", " "))));
+    assert.equal(validPixelArt(blanket.map((r) => r.replaceAll("#", "X")))?.[2], "..############..");
+  });
+
+  it("rejects wrong sizes, empty frames and scattered noise", async () => {
+    const { validPixelArt } = await import("../src/engine/pixelart.ts");
+    assert.equal(validPixelArt(blanket.slice(1)), undefined);
+    assert.equal(validPixelArt(Array.from({ length: 16 }, () => ".".repeat(16))), undefined);
+    const noise = Array.from({ length: 16 }, (_, y) => Array.from({ length: 16 }, (_, x) => ((x + y) % 2 === 0 ? "#" : ".")).join(""));
+    assert.equal(validPixelArt(noise), undefined);
+  });
+
+  it("a form with custom pixel art is drawn from it, not from its archetype", () => {
+    const sword = onto.formById("schwert");
+    assert.ok(sword);
+    const custom = { ...sword, id: "g:loeschdecke", name: "Löschdecke", sprite: blanket };
+    const a = buildGrid(onto, custom).map((r) => r.join("")).join("");
+    const b = buildGrid(onto, sword).map((r) => r.join("")).join("");
+    assert.notEqual(a, b);
   });
 });

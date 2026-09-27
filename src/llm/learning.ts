@@ -107,6 +107,7 @@ export function learn(
     ...(form.weak.length > 0 ? { weak: form.weak } : {}),
     aliases,
     ...(form.flavor === undefined ? {} : { flavor: form.flavor }),
+    ...(form.sprite === undefined ? {} : { sprite: form.sprite }),
     ...(discovery === undefined ? {} : { discoveredBy: discovery.by.slice(0, 40), discoveredAt: discovery.at.slice(0, 24) }),
   });
 

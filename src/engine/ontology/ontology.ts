@@ -1,3 +1,4 @@
+import { validPixelArt } from "../pixelart.ts";
 import { normalize } from "../text.ts";
 import { ARCHETYPES, PLANES, type Archetype, type Form, type Plane, type Scale } from "../types.ts";
 import { Trie, TrigramIndex } from "./indexes.ts";
@@ -319,6 +320,7 @@ export class Ontology {
       weak: spec.weak ?? [],
       origin: "lexikon",
       ...(spec.flavor === undefined ? {} : { flavor: spec.flavor }),
+      ...spriteOf(spec),
     };
   }
 
@@ -539,3 +541,8 @@ function findCycles(parents: readonly (readonly number[])[], tags: readonly TagS
   return errors;
 }
 
+
+function spriteOf(spec: FormSpec): { sprite?: readonly string[] } {
+  const sprite = spec.sprite === undefined ? undefined : validPixelArt(spec.sprite);
+  return sprite === undefined ? {} : { sprite };
+}
