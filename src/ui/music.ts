@@ -1,20 +1,30 @@
 /**
  * Procedural dungeon music – a small chiptune sequencer on WebAudio, no files.
  *
- * A-minor with a harmonic-minor turn (Am – F – Dm – E): drone and bass always,
- * then arpeggio, off-beat hats, a seeded melody and a kick join as the arena
- * escalates. Tempo rises with the tier too, so late rounds feel urgent.
+ * A-minor with a harmonic-minor turn. Four sections (A A B C, 8 bars each) with their own
+ * progressions; drone, bass and a slow filtered pad always, then arpeggio, hats, a motif-based
+ * melody and a kick join as the arena escalates. Everything sits in a generated dungeon reverb,
+ * with the occasional water drip, far-away bell and draught of wind – still chiptune, but a place.
  */
 
 const MUTE_KEY = "oldest-game:music-mute";
 
 /** Semitones from A for each chord's root, third, fifth (bar-long chords). */
-const PROGRESSION: readonly (readonly [number, number, number])[] = [
-  [0, 3, 7], // Am
-  [-4, 0, 3], // F
-  [5, 8, 12], // Dm
-  [7, 11, 14], // E (harmonic minor: G#)
+type Chord = readonly [number, number, number];
+const AM: Chord = [0, 3, 7];
+const F_: Chord = [-4, 0, 3];
+const DM: Chord = [5, 8, 12];
+const E_: Chord = [7, 11, 14]; // harmonic minor: G#
+const G_: Chord = [-2, 2, 5];
+const C_: Chord = [3, 7, 10];
+/** Sections of 8 bars: A A B C – the progression shifts so the loop does not wear out. */
+const SECTIONS: readonly (readonly Chord[])[] = [
+  [AM, F_, DM, E_],
+  [AM, F_, DM, E_],
+  [AM, G_, F_, E_],
+  [DM, AM, C_, E_],
 ];
+const PROGRESSION = SECTIONS[0] ?? [AM];
 /** A natural minor + G# for the melody. */
 const SCALE = [0, 2, 3, 5, 7, 8, 11, 12];
 const A2 = 110;
@@ -33,6 +43,7 @@ export class Music {
   private pulse: PeriodicWave | null = null;
   private noise: AudioBuffer | null = null;
   private seed = 1;
+  private nextAmbience = 0;
   muted: boolean;
 
   constructor() {
@@ -56,6 +67,27 @@ export class Music {
     lp.frequency.value = 3200;
     out.connect(lp);
     lp.connect(ctx.destination);
+    // A generated stone-hall impulse: 2.8 s of decaying, slightly darkened noise per channel.
+    const irLen = Math.floor(ctx.sampleRate * 2.8);
+    const ir = ctx.createBuffer(2, irLen, ctx.sampleRate);
+    let seed = 11;
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      let prev = 0;
+      for (let i = 0; i < irLen; i++) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        const n = (seed / 0x7fffffff) * 2 - 1;
+        prev = prev * 0.6 + n * 0.4;
+        d[i] = prev * Math.pow(1 - i / irLen, 2.4);
+      }
+    }
+    const reverb = ctx.createConvolver();
+    reverb.buffer = ir;
+    const wet = ctx.createGain();
+    wet.gain.value = 0.55;
+    lp.connect(reverb);
+    reverb.connect(wet);
+    wet.connect(ctx.destination);
     this.out = out;
     // 12.5 % pulse – the classic NES lead
     const n = 32;
@@ -121,33 +153,128 @@ export class Music {
   }
 
   private playStep(step: number, t: number): void {
-    const bar = Math.floor(step / 16) % PROGRESSION.length;
+    const barIndex = Math.floor(step / 16);
+    const section = SECTIONS[Math.floor(barIndex / 8) % SECTIONS.length] ?? PROGRESSION;
+    const chord = section[barIndex % section.length] ?? AM;
     const s16 = step % 16;
-    const chord = PROGRESSION[bar] ?? [0, 3, 7];
     const len = this.secondsPer16th;
     // drone: one long note per bar
-    if (s16 === 0) this.voice("sawtooth", hz(chord[0] - 12), t, len * 16, 0.05, 500);
-    // bass: 1, the "and" of 2, 3
-    if (s16 === 0 || s16 === 6 || s16 === 8) this.voice("triangle", hz(s16 === 6 ? chord[2] : chord[0]), t, len * 3, 0.5);
+    if (s16 === 0) this.voice("sawtooth", hz(chord[0] - 12), t, len * 16, 0.045, 420);
+    // pad: a slow, filtered chord that breathes (detuned pair per note)
+    if (s16 === 0) this.pad(chord, t, len * 16);
+    // bass: 1, the "and" of 2, 3 – an octave jump at the end of every other bar
+    if (s16 === 0 || s16 === 6 || s16 === 8) this.voice("triangle", hz(s16 === 6 ? chord[2] : chord[0]), t, len * 3, 0.45);
+    if (barIndex % 2 === 1 && s16 === 14) this.voice("triangle", hz(chord[0] + 12), t, len * 2, 0.3);
     // arpeggio from tier 2
     if (this.tier >= 2 && s16 % 2 === 0) {
       const pattern = [0, 1, 2, 1];
       const note = chord[pattern[(s16 / 2) % 4] ?? 0] ?? 0;
-      this.voice("pulse", hz(note + 24), t, len * 1.6, 0.12);
+      this.voice("pulse", hz(note + 24), t, len * 1.6, 0.1);
     }
     // hats from tier 3
     if (this.tier >= 3 && s16 % 4 === 2) this.hat(t);
-    // seeded melody from tier 4: one phrase per 4 bars, many rests
+    // melody from tier 4: a seeded two-bar motif per section, repeated as call and varied answer
     if (this.tier >= 4 && s16 % 2 === 0) {
-      const phraseStep = (Math.floor(step / 2) % 32) + this.seed * 7;
-      const r = Math.abs(Math.sin(phraseStep * 12.9898 + this.seed) * 43758.5453) % 1;
-      if (r < 0.45) {
-        const deg = Math.floor(r * 100) % SCALE.length;
-        this.voice("pulse", hz((SCALE[deg] ?? 0) + 36), t, len * (r < 0.15 ? 4 : 2), 0.09);
+      const motifStep = (barIndex % 2) * 8 + s16 / 2;
+      const answer = Math.floor(barIndex / 2) % 2 === 1;
+      const key = motifStep + Math.floor(barIndex / 8) * 31 + this.seed * 7;
+      const r = Math.abs(Math.sin(key * 12.9898 + this.seed) * 43758.5453) % 1;
+      if (r < 0.42) {
+        const deg = (Math.floor(r * 100) + (answer && motifStep > 11 ? 2 : 0)) % SCALE.length;
+        this.voice("pulse", hz((SCALE[deg] ?? 0) + 36), t, len * (r < 0.14 ? 4 : 2), 0.08);
       }
     }
     // kick from tier 5
     if (this.tier >= 5 && (s16 === 0 || s16 === 8)) this.kick(t);
+    // a far-away bell at the start of each section
+    if (barIndex % 8 === 0 && s16 === 0) this.bell(hz(chord[0] - 12), t);
+    // ambience: drips and draughts, independent of the beat
+    if (this.ctx !== null && this.ctx.currentTime > this.nextAmbience) {
+      const r = Math.random();
+      if (r < 0.6) this.drip(t);
+      else this.wind(t);
+      this.nextAmbience = this.ctx.currentTime + 4 + Math.random() * 7;
+    }
+  }
+
+  /** Slow chord pad: detuned saw pairs through a lowpass whose cutoff swells and falls. */
+  private pad(chord: Chord, t: number, dur: number): void {
+    const ctx = this.ctx;
+    const out = this.out;
+    if (ctx === null || out === null) return;
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.Q.value = 2;
+    f.frequency.setValueAtTime(300, t);
+    f.frequency.linearRampToValueAtTime(900 + this.tier * 80, t + dur * 0.5);
+    f.frequency.linearRampToValueAtTime(300, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.035, t + dur * 0.3);
+    g.gain.linearRampToValueAtTime(0.0001, t + dur * 1.05);
+    f.connect(g);
+    g.connect(out);
+    for (const n of chord) {
+      for (const detune of [-7, 7]) {
+        const o = ctx.createOscillator();
+        o.type = "sawtooth";
+        o.frequency.value = hz(n + 12);
+        o.detune.value = detune;
+        o.connect(f);
+        o.start(t);
+        o.stop(t + dur * 1.1);
+      }
+    }
+  }
+
+  /** A deep, distant bell – mostly reverb. */
+  private bell(freq: number, t: number): void {
+    for (const [mult, vol] of [[1, 0.12], [2.76, 0.05], [5.4, 0.025]] as const) this.voice("sine", freq * mult * 2, t, 4.5, vol);
+  }
+
+  /** A single drop of water somewhere in the dark. */
+  private drip(t: number): void {
+    const f = 1600 + Math.random() * 1400;
+    const ctx = this.ctx;
+    const out = this.out;
+    if (ctx === null || out === null) return;
+    const o = ctx.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(f, t);
+    o.frequency.exponentialRampToValueAtTime(f * 1.6, t + 0.05);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.09, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    o.connect(g);
+    g.connect(out);
+    o.start(t);
+    o.stop(t + 0.15);
+  }
+
+  /** A draught through the corridors: slowly swelling band-passed noise. */
+  private wind(t: number): void {
+    const ctx = this.ctx;
+    const out = this.out;
+    if (ctx === null || out === null || this.noise === null) return;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = "bandpass";
+    f.Q.value = 3;
+    f.frequency.setValueAtTime(300, t);
+    f.frequency.linearRampToValueAtTime(650, t + 2.5);
+    f.frequency.linearRampToValueAtTime(350, t + 5);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.05, t + 2);
+    g.gain.linearRampToValueAtTime(0.0001, t + 5);
+    src.connect(f);
+    f.connect(g);
+    g.connect(out);
+    src.start(t);
+    src.stop(t + 5.2);
   }
 
   private voice(type: OscillatorType | "pulse", freq: number, t: number, dur: number, vol: number, lowpass = 0): void {

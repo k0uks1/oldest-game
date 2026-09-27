@@ -6,7 +6,7 @@
 
 const MUTE_KEY = "oldest-game:mute";
 
-export type Cue = "summon" | "reveal" | "strike" | "impact" | "fizzle" | "discovery" | "menu" | "end";
+export type Cue = "summon" | "reveal" | "strike" | "impact" | "fizzle" | "discovery" | "menu" | "end" | "boom";
 
 export class Sound {
   private ctx: AudioContext | null = null;
@@ -106,6 +106,12 @@ export class Sound {
         break;
       case "menu":
         this.bell(880, t, 0.4, 0.05);
+        break;
+      case "boom":
+        // a long, deep blast: sub drop + rumbling noise
+        this.tone(90, t, 2.5, 1.0, "sine", 0, 24);
+        this.noise(t, 2.8, 0.9, 60, 400);
+        this.noise(t + 0.05, 0.5, 0.6, 2000, 300);
         break;
       case "end":
         for (const [i, f] of [220, 261.6, 329.6, 440].entries()) this.bell(f, t + i * 0.25, 3, 0.16);
