@@ -16,6 +16,7 @@ export interface Attrs {
   readonly for?: string;
   readonly role?: string;
   readonly "aria-label"?: string;
+  readonly "aria-live"?: "polite" | "assertive" | "off";
   readonly onclick?: (e: MouseEvent) => void;
   readonly oninput?: (e: Event) => void;
   readonly onkeydown?: (e: KeyboardEvent) => void;

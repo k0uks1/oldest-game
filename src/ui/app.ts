@@ -1,6 +1,5 @@
 import { attempt, type AttemptOutcome } from "../engine/attempt.ts";
-import { formCost } from "../engine/cost.ts";
-import { arenaMinScale, createGame, currentTarget, evaluateForm, moveCost, pass, roundNumber, type MoveOption } from "../engine/game.ts";
+import { createGame, currentTarget, pass, roundNumber } from "../engine/game.ts";
 import { parseForm } from "../engine/parse.ts";
 import type { Form, GameState, PlayerId } from "../engine/types.ts";
 import {
@@ -23,21 +22,16 @@ import { narrateEnd, narrateFailure, narrateMove } from "../narrate/offline.ts";
 import { Arena } from "../render/arena.ts";
 import { clear, h } from "./dom.ts";
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 function sameShape(a: Form, b: Form): boolean {
   const eq = (x: readonly string[], y: readonly string[]): boolean => x.length === y.length && x.every((v) => y.includes(v));
   return a.scale === b.scale && eq(a.tags, b.tags) && eq(a.not, b.not) && eq(a.verbs, b.verbs);
 }
 
 const SCALE_NAMES = ["", "winzig", "klein", "menschengroß", "groß", "gewaltig", "Landschaft", "Welt", "kosmisch"];
-
-interface Candidate {
-  /** The input text this candidate was parsed from. */
-  readonly text: string;
-  readonly form: Form;
-  readonly source: "lexikon" | "komponiert" | "llm";
-  readonly note: string;
-  readonly intendedVerb: string | null;
-}
 
 /**
  * Hot-seat UI controller. All rules come from the pure engine.
@@ -49,8 +43,6 @@ interface Candidate {
 export class App {
   private state: GameState;
   private readonly arena: Arena;
-  private candidate: Candidate | null = null;
-  private selectedVerb: string | null = null;
   private busy = false;
   private settings: LlmSettings = loadSettings();
   /** Proxy auto-detected at runtime (local `npm start` server) – never persisted. */
@@ -61,7 +53,7 @@ export class App {
     root: HTMLElement;
     input: HTMLInputElement;
     submit: HTMLButtonElement;
-    details: HTMLElement;
+    revealName: HTMLElement;
     prompt: HTMLElement;
     chronicle: HTMLElement;
     chronicleWrap: HTMLDetailsElement;
@@ -96,9 +88,6 @@ export class App {
       autocomplete: "off",
       spellcheck: false,
       "aria-label": "Was wirst du?",
-      oninput: () => {
-        this.onInput();
-      },
       onkeydown: (e) => {
         if (e.key === "Enter") void this.onSubmit();
       },
@@ -110,7 +99,7 @@ export class App {
       root,
       input,
       submit,
-      details: h("section", { class: "details" }),
+      revealName: h("div", { class: "reveal-name", "aria-live": "polite" }),
       prompt: h("div", { class: "prompt" }),
       chronicle,
       chronicleWrap,
@@ -127,7 +116,7 @@ export class App {
     clear(root);
     root.append(
       h("header", { class: "topbar" }, h("h1", {}, "The Oldest Game"), els.round, els.nav),
-      h("section", { class: "stage" }, canvas, els.hud[0], els.hud[1], els.plates[0], els.plates[1], els.caption, els.banner),
+      h("section", { class: "stage" }, canvas, els.hud[0], els.hud[1], els.plates[0], els.plates[1], els.revealName, els.caption, els.banner),
       h(
         "section",
         { class: "command" },
@@ -148,7 +137,6 @@ export class App {
           ),
         ),
       ),
-      els.details,
       chronicleWrap,
       els.modal,
     );
@@ -248,29 +236,19 @@ export class App {
 
   private resetInput(): void {
     this.els.input.value = "";
-    this.candidate = null;
-    this.selectedVerb = null;
   }
 
-  private onInput(): void {
-    const text = this.els.input.value.trim();
-    if (this.candidate !== null && this.candidate.text !== text) {
-      this.candidate = null;
-      this.selectedVerb = null;
-      this.renderDetails();
-    }
-  }
-
-  /** Enter / "Werden". Real game: classify with Claude and play at once. Debug: preview first. */
+  /** Enter / "Werden": classify (Claude, or the mechanical parser in debug) and play at once. */
   private async onSubmit(): Promise<void> {
     const text = this.els.input.value.trim();
     if (text === "" || this.busy || this.state.phase === "finished") return;
     if (this.debug) {
-      if (this.candidate?.text === text) {
-        await this.execute(this.candidate.form, this.selectedVerb ?? this.candidate.intendedVerb);
-      } else {
-        this.parseOffline(text);
+      const r = parseForm(this.onto, text);
+      if (!r.ok) {
+        this.flashBanner(`${r.error}${r.suggestions.length > 0 ? ` Meintest du: ${r.suggestions.slice(0, 3).join(", ")}?` : ""}`, "bad");
+        return;
       }
+      await this.execute(r.form, null);
       return;
     }
     if (!isClaudeReady(this.llm)) {
@@ -306,12 +284,10 @@ export class App {
         void this.store.save(l.value.pack).catch(() => {
           this.flashBanner("Gelerntes konnte nicht gespeichert werden.", "bad");
         });
-        const extra = [...l.value.newTags, ...l.value.newVerbs];
-        if (extra.length > 0 || r.base === null) {
-          this.flashBanner(`✦ Neu im Kompendium: ${l.value.form.name}${extra.length > 0 ? ` (${extra.join(", ")})` : ""}`, "info");
-        }
       }
-      await this.execute(l.value.form, r.intendedVerb, true);
+      const extra = [...l.value.newTags, ...l.value.newVerbs];
+      const note = l.value.isNew && (extra.length > 0 || r.base === null) ? `✦ Neu im Kompendium${extra.length > 0 ? `: ${extra.join(", ")}` : ""}` : null;
+      await this.execute(l.value.form, r.intendedVerb, true, note);
     } catch (e) {
       this.flashBanner(e instanceof Error ? e.message : "Claude antwortet nicht.", "bad");
     } finally {
@@ -327,28 +303,8 @@ export class App {
     if (!on) this.els.input.focus();
   }
 
-  /** Debug path: mechanical parser, no LLM. */
-  private parseOffline(text: string): void {
-    const r = parseForm(this.onto, text);
-    if (!r.ok) {
-      this.renderDetails(`${r.error}${r.suggestions.length > 0 ? ` Meintest du: ${r.suggestions.join(", ")}?` : ""}`);
-      return;
-    }
-    const mods = [...new Set(r.modifiers.map((m) => m.label))];
-    const note = [
-      "Debug-Parser",
-      r.form.origin === "komponiert" ? `${r.base.name}${mods.length > 0 ? ` · ${mods.join(", ")}` : ""}` : "",
-      r.ignored.length > 0 ? `ignoriert: ${r.ignored.join(", ")}` : "",
-    ]
-      .filter((x) => x !== "")
-      .join(" · ");
-    this.candidate = { text, form: r.form, source: r.form.origin === "komponiert" ? "komponiert" : "lexikon", note, intendedVerb: null };
-    this.selectedVerb = null;
-    this.renderDetails();
-  }
-
   /** Run an attempt through the engine and play it out in the arena. */
-  private async execute(form: Form, intendedVerb: string | null, alreadyBusy = false): Promise<void> {
+  private async execute(form: Form, intendedVerb: string | null, alreadyBusy = false, learnedNote: string | null = null): Promise<void> {
     const actor = this.state.active;
     const outcome = attempt(this.onto, this.state, form, intendedVerb);
     if (outcome.kind === "rejected") {
@@ -359,9 +315,8 @@ export class App {
     this.state = outcome.state;
     this.resetInput();
     this.hideCaption();
-    this.render();
     try {
-      await this.animate(actor, form, outcome);
+      await this.animate(actor, form, outcome, learnedNote);
     } finally {
       if (!alreadyBusy) this.setBusy(false);
       this.render();
@@ -369,29 +324,72 @@ export class App {
     }
   }
 
-  private async animate(actor: PlayerId, form: Form, outcome: Exclude<AttemptOutcome, { kind: "rejected" }>): Promise<void> {
+  /**
+   * The reveal: a dark silhouette rises, the name is spelled out, light floods in –
+   * then the strike, a held breath, and only then the outcome.
+   */
+  private async animate(
+    actor: PlayerId,
+    form: Form,
+    outcome: Exclude<AttemptOutcome, { kind: "rejected" }>,
+    learnedNote: string | null,
+  ): Promise<void> {
     const index = this.state.history.length - 1;
     const narration = this.narrate(outcome, index);
-    await this.arena.summon(actor, form);
+    this.arena.setThinking(false);
+    for (const p of [0, 1] as const) if (p === actor) this.els.plates[p].textContent = "";
+    await this.arena.summon(actor, form, true);
+    await this.spellName(form.name);
+    await this.arena.reveal(actor);
+    this.els.plates[actor].textContent = form.name;
+    this.hideName();
+    if (learnedNote !== null) this.flashBanner(learnedNote, "info");
+    let why: readonly string[] = [];
     if (outcome.kind === "success") {
       const move = outcome.move;
       this.retry = false;
+      why = move.check?.steps.map((st) => st.text) ?? ["Eröffnung."];
       if (move.verb !== null) {
         const family = this.onto.verbs.get(move.verb)?.spec.family ?? "gewalt";
         await this.arena.attack(actor, family, move.check?.weaknessHit === true);
-        if (move.eleganz > 1) this.flashBanner(`+${String(move.eleganz)} Eleganz`, "good");
+        this.flashBanner(move.eleganz > 1 ? `Es genügt. +${String(move.eleganz)} Eleganz` : "Es genügt.", "good");
       }
     } else {
       this.retry = true;
-      const verb = outcome.failure.closest?.verb;
+      const f = outcome.failure;
+      why = [...(f.closest?.check.steps.map((st) => st.text) ?? []), f.reason].filter((t, i, a) => a.indexOf(t) === i);
+      const verb = f.closest?.verb;
       await this.arena.fizzle(actor, (verb === undefined ? undefined : this.onto.verbs.get(verb)?.spec.family) ?? "gewalt");
-      this.flashBanner(`−${String(outcome.failure.cost)} Wille`, "bad");
+      this.flashBanner(`Es genügt nicht … −${String(f.cost)} Wille`, "bad");
     }
-    const li = this.addChronicle(actor, "…", outcome.kind === "failure");
+    this.render();
+    const li = this.addChronicle(actor, form.name, "…", outcome.kind === "failure", why);
     this.showCaption("…", true);
     const text = await narration;
-    li.lastElementChild?.replaceChildren(text);
+    li.querySelector(".text")?.replaceChildren(text);
     this.showCaption(text, false);
+  }
+
+  /** Spell the name letter by letter over the arena. */
+  private async spellName(name: string): Promise<void> {
+    const el = this.els.revealName;
+    el.textContent = "";
+    el.className = "reveal-name show";
+    const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      el.textContent = name;
+      await sleep(400);
+      return;
+    }
+    for (const ch of Array.from(name)) {
+      el.textContent += ch;
+      await sleep(ch === " " ? 40 : 70);
+    }
+    await sleep(350);
+  }
+
+  private hideName(): void {
+    setTimeout(() => (this.els.revealName.className = "reveal-name"), 900);
   }
 
   /** Start narration immediately (runs in parallel with the animation). */
@@ -441,7 +439,6 @@ export class App {
       );
       this.els.input.placeholder = "Ich bin …";
     }
-    this.renderDetails();
   }
 
   private renderHud(p: PlayerId): void {
@@ -458,101 +455,13 @@ export class App {
     );
   }
 
-  /** Debug-only breakdown of the candidate: tags, cost, every mechanism with its check. */
-  private renderDetails(message?: string): void {
-    const el = this.els.details;
-    clear(el);
-    el.hidden = !this.debug;
-    if (!this.debug) return;
-    if (message !== undefined) {
-      el.append(h("p", { class: "hint" }, message));
-      return;
-    }
-    const c = this.candidate;
-    if (c === null) {
-      el.append(h("p", { class: "hint" }, "Enter parst die Eingabe mechanisch und zeigt die Prüfung; ein zweites Enter spielt den Zug."));
-      return;
-    }
-    const form = c.form;
-    const cost = formCost(this.onto, form);
-    const total = moveCost(this.onto, this.state, form);
-    const sprite = this.arena.spriteCanvas(form);
-    const img = h("canvas", { class: "sprite" });
-    img.width = sprite.width;
-    img.height = sprite.height;
-    img.getContext("2d")?.drawImage(sprite, 0, 0);
-    img.style.width = `${String(sprite.width * (sprite.width <= 66 ? 2 : 1))}px`;
-    const declared = new Set(form.tags);
-    const weak = new Set(form.weak);
-    const tags = this.onto
-      .formTags(form)
-      .sort((a, b) => Number(declared.has(b)) - Number(declared.has(a)))
-      .slice(0, 28);
-    const info = h(
-      "div",
-      { class: "info" },
-      h("div", { class: "title" }, h("span", { class: "name" }, form.name), h("span", { class: "badge" }, c.source)),
-      c.note === "" ? null : h("div", { class: "note" }, c.note),
-      h(
-        "div",
-        { class: "meta" },
-        `Stufe ${String(form.scale)} (${SCALE_NAMES[form.scale] ?? ""}) · ${form.plane} · Kosten `,
-        h("strong", {}, String(total)),
-        total !== cost.total ? ` (inkl. Overkill +${String(total - cost.total)})` : "",
-        ` · Mindeststufe ${String(arenaMinScale(this.state))}`,
-      ),
-      h(
-        "div",
-        { class: "tags" },
-        ...tags.map((t) => h("span", { class: `tag${declared.has(t) ? " own" : ""}${weak.has(t) ? " weak" : ""}` }, this.onto.tagLabel(t))),
-      ),
-      form.flavor === undefined ? null : h("div", { class: "flavor" }, form.flavor),
-    );
-    const verbs = h("div", { class: "verbs" });
-    if (currentTarget(this.state) !== null) {
-      const options = evaluateForm(this.onto, this.state, form);
-      const intended = options.find((o) => o.playable && o.verb === c.intendedVerb);
-      const first = intended ?? options.find((o) => o.playable);
-      if (this.selectedVerb === null && first !== undefined) this.selectedVerb = first.verb;
-      for (const o of options) verbs.append(this.renderOption(o));
-    }
-    el.append(h("div", { class: "sprite-box" }, img), info, verbs);
-  }
-
-  private renderOption(o: MoveOption): HTMLElement {
-    const spec = this.onto.verbs.get(o.verb)?.spec;
-    const reason = !o.check.valid
-      ? (o.check.steps.at(-1)?.text ?? "")
-      : o.echoed
-        ? "Echo – gerade erst benutzt."
-        : o.belowArena
-          ? `Eskalation – mindestens Stufe ${String(arenaMinScale(this.state))} nötig.`
-          : !o.affordable
-            ? "Zu wenig Wille."
-            : (o.check.steps.at(-1)?.text ?? "");
-    return h(
-      "button",
-      {
-        class: `verb${o.playable ? " ok" : " no"}${this.selectedVerb === o.verb ? " selected" : ""}`,
-        disabled: !o.playable,
-        title: spec?.hint ?? "",
-        onclick: () => {
-          this.selectedVerb = o.verb;
-          this.renderDetails();
-        },
-      },
-      h("span", { class: "vlabel" }, spec?.label ?? o.verb),
-      h("span", { class: "vlev" }, `Hebel ${String(spec?.leverage ?? 0)}`),
-      h("span", { class: "vwhy" }, reason),
-    );
-  }
-
-  private addChronicle(player: PlayerId, text: string, failed: boolean): HTMLElement {
+  private addChronicle(player: PlayerId, formName: string, text: string, failed: boolean, why: readonly string[]): HTMLElement {
     const li = h(
       "li",
       { class: `p${String(player)}${failed ? " failed" : ""}` },
-      h("span", { class: "who" }, `${this.state.players[player].name}${failed ? " · gescheitert" : ""}`),
+      h("span", { class: "who" }, `${this.state.players[player].name} · ${formName}${failed ? " · zerschellt" : ""}`),
       h("span", { class: "text" }, text),
+      why.length === 0 ? null : h("details", { class: "why" }, h("summary", {}, "Warum?"), h("ol", {}, ...why.map((w) => h("li", {}, w)))),
     );
     this.els.chronicle.prepend(li);
     return li;
@@ -704,7 +613,6 @@ export class App {
               onclick: () => {
                 this.els.input.value = f.name;
                 this.closeModal();
-                this.onInput();
                 this.els.input.focus();
               },
             },
@@ -800,7 +708,6 @@ export class App {
       saveSettings(this.settings);
       this.closeModal();
       this.flashBanner(this.debug ? "Debug-Modus: ohne Claude." : isClaudeReady(this.llm) ? "Gespeichert – Claude ist bereit." : "Gespeichert – Claude ist noch nicht verbunden.", "info");
-      this.candidate = null;
       this.renderNav();
       this.render();
     };
