@@ -97,8 +97,13 @@ export function parseForm(onto: Ontology, input: string): ParseResult {
   // 3. typo tolerance
   for (let i = tokens.length - 1; i >= 0 && head === undefined; i--) {
     const t = tokens[i] ?? "";
-    if (t.length < 5 || onto.modifierByWord(t) !== undefined) continue;
-    const best = onto.fuzzyForms(t, t.length >= 8 ? 2 : 1, 1)[0];
+    // Short words are too close to each other ("Tisch" ≠ "Fisch", "Milch" ≠ "Molch") and typos
+    // rarely hit the first letter – only then is a near miss worth guessing.
+    // Two edits only as stuck/missing keys ("Dracheee"), never as two swapped letters ("Toilette" ≠ "Tablette").
+    if (t.length < 7 || onto.modifierByWord(t) !== undefined) continue;
+    const best = onto
+      .fuzzyForms(t, t.length >= 8 ? 2 : 1, 5)
+      .find((c) => c.key.startsWith(t.charAt(0)) && (c.distance < 2 || Math.abs(c.key.length - t.length) === c.distance));
     if (best !== undefined) {
       head = { form: best.value, prefix: "" };
       headStart = headEnd = i;

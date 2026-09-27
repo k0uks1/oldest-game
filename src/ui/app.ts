@@ -1,4 +1,5 @@
 import { attempt, type AttemptOutcome } from "../engine/attempt.ts";
+import { APP_VERSION } from "../version.ts";
 import { arenaMinScale, createGame, currentTarget, pass, roundNumber } from "../engine/game.ts";
 import { activeFields } from "../engine/fields.ts";
 import { parseForm } from "../engine/parse.ts";
@@ -317,6 +318,7 @@ export class App {
           this.showStart();
         }),
         playing ? giveUp : null,
+        h("div", { class: "version" }, `v${APP_VERSION}`),
       ),
     );
     layer.onclick = (e) => {
@@ -883,6 +885,7 @@ export class App {
         h("button", { class: "btn primary", onclick: go }, "Duell beginnen"),
         needsKey ? h("button", { class: "btn ghost", title: "Ohne Claude – nur zum Testen", onclick: debugStart }, "Debug ohne Claude") : null,
       ),
+      h("p", { class: "version" }, `v${APP_VERSION}`),
     );
     n0.focus();
   }

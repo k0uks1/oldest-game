@@ -22,12 +22,14 @@ import selbstspiel1 from "./core/forms/selbstspiel1.json" with { type: "json" };
 import selbstspiel2 from "./core/forms/selbstspiel2.json" with { type: "json" };
 import werkzeug from "./core/forms/werkzeug.json" with { type: "json" };
 import spiele from "./core/forms/spiele.json" with { type: "json" };
+import basis from "./core/forms/basis.json" with { type: "json" };
+import basis2 from "./core/forms/basis2.json" with { type: "json" };
 import modifiers from "./core/modifiers.json" with { type: "json" };
 import tags from "./core/tags.json" with { type: "json" };
 import verbs from "./core/verbs.json" with { type: "json" };
 
 /** Forms are split by theme to keep files reviewable; order = lookup priority for aliases. */
-const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte, alltag, maerchen, film, werbung, alltag2, zukunft, tierreich, goetter, grundelemente, selbstspiel1, selbstspiel2, werkzeug, spiele];
+const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte, alltag, maerchen, film, werbung, alltag2, zukunft, tierreich, goetter, grundelemente, selbstspiel1, selbstspiel2, werkzeug, spiele, basis, basis2];
 
 /** The built-in content pack ("Grundspiel"). */
 export const CORE_PACK_RAW: unknown = {

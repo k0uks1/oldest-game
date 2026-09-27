@@ -158,3 +158,15 @@ Welche Tags welche Gewandung auslösen:
 ## Spielfiguren (Nutzerwunsch: StarCraft, Warcraft, Overwatch, Halo, Klassiker)
 
 48 Gestalten mit passenden Mechanismen und Schwächen: der Zergling-Schwarm, der von Flächenwirkung lebt, der stolze Lichkönig, Mercy, die heilt und erlöst, Master Chief, der gehorcht, Pac-Man, der verschlingt, GLaDOS und „Der Kuchen“, der lockt und täuscht (Schwäche: falsch). Sie nutzen die allgemeinen Grundformen. Markenfiguren werden bewusst nicht nachgezeichnet. Einige Figuren laufen unter beschreibenden Namen, etwa „Klempner mit Mütze“ oder „Blauer Igel“; die bekannten Namen funktionieren als Aliase. Simulation mit 600 Partien: 296 zu 304, also ausgeglichen.
+
+## Grundbegriffe zuerst (Nutzerfeedback: „eher Kieselstein oder Ritterschwert statt Stein und Schwert“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Wortlisten-Test** | 521 einfache deutsche Wörter (Stein, Stock, Tisch, Stuhl, Mann, Brot, Leiter, Tor …) wurden direkt gegen den Parser geprüft. Vorher fehlten 173 oder landeten bei etwas Falschem: Tisch → Fisch, Stuhl → Stahl, Stock → Vulkanier, Milch → Feuersalamander, Toilette → Medizin. | `basis.json`, `basis2.json` |
+| **217 Grundbegriffe** | Menschen, Körperteile, Tiere, Essen, Haus und Möbel, Kleidung, Werkzeug, Fahrzeuge, Orte, Instrumente. Hatte eine speziellere Gestalt den Grundbegriff als Alias (Kriegshammer → „hammer“, Pulverfass → „bombe“), gehört der Name jetzt der Grundform. Übrig bleiben nur Synonyme wie Berg → Gebirge oder Handy → Smartphone. | Content |
+| **Strengere Tippfehler-Toleranz** | Kurze Wörter liegen zu nah beieinander. Ein Tippfehler wird erst ab 7 Buchstaben geraten, der erste Buchstabe muss stimmen, und zwei Fehler zählen nur als verdoppelte oder fehlende Taste („Dracheee“), nie als zwei vertauschte Buchstaben. Zweibuchstabige Namen („Ei“) werden exakt gefunden. | `parseForm`, `Ontology` |
+
+## Versionsnummer (Nutzerwunsch: „damit man weiß, was gerade live ist“)
+
+Jeder PR erhöht `package.json` → `version`. Der Build schreibt die Version ins Spiel, und sie steht dezent auf dem Startbildschirm und unten im Menü, zum Beispiel „v0.32.0“. PR-Vorschauen zeigen zusätzlich „· PR 32“. Details in `src/version.ts` und `appVersion()` in `scripts/build.ts`.

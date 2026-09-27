@@ -253,7 +253,11 @@ export class Ontology {
         const keys = pass === "name" ? [spec.name, spec.id] : [...(spec.aliases ?? []), normalize(spec.name).split(" ").at(-1) ?? ""];
         for (const raw of keys) {
           const k = lookupKey(raw);
-          if (k.length < 3) continue;
+          if (k.length < 3) {
+            // two-letter names ("Ei") are found by exact match only – never as suffix or typo
+            if (pass === "name" && k.length === 2 && !this.aliasExact.has(k)) this.aliasExact.set(k, form);
+            continue;
+          }
           const existing = this.aliasExact.get(k);
           if (existing === undefined) {
             this.aliasExact.set(k, form);
