@@ -13,7 +13,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   mythicLeverage: 4,
   regenGrowthEvery: 1,
   escalateEveryMoves: 3,
-  openingEleganz: 2,
+  openingEleganz: 1,
   failurePenalty: 3,
   roundLimit: 10,
   discoveryEleganz: 1,
