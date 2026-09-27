@@ -79,7 +79,7 @@ export function evaluateForm(onto: Ontology, state: GameState, form: Form): Move
   return verbs
     .map((verb) => {
       const check =
-        ruling !== undefined && verb === ruling.verb
+        verb === ruling?.verb
           ? checkRuling(onto, form, target, ruling, state.config, minScale)
           : verb === ESCAPE
             ? checkEscape(onto, form, target, state.config, minScale)

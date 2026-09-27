@@ -138,7 +138,7 @@ describe("referee precedents (Schiedssprüche)", () => {
     const r = attempt(onto, g.value, need(onto.formById("salz")), "zersetzt");
     assert.ok(r.kind === "success", r.kind === "failure" ? r.failure.reason : r.kind);
     assert.equal(r.move.check?.ruling, true);
-    assert.ok(r.move.check?.steps.some((s) => s.text.includes("Rüstung rosten")));
+    assert.ok(r.move.check.steps.some((s) => s.text.includes("Rüstung rosten")));
   });
 
   it("uncertain failures are flagged; a negative ruling stops further asking", async () => {
