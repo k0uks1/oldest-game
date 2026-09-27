@@ -64,3 +64,24 @@ export async function narrateFailureWithClaude(
     return fallback;
   }
 }
+
+/**
+ * A short epilogue for the finished duel – the chain of forms retold as one legend.
+ * Only facts from the engine go in; the outcome is fixed.
+ */
+export async function narrateEpilogueWithClaude(settings: LlmSettings, state: GameState, fallback: string): Promise<string> {
+  if (state.winner === null && state.history.length === 0) return fallback;
+  const chain = state.history.map((m) => `${state.players[m.player].name}: ${m.form.name}${m.discovery ? " (nie zuvor gesehen)" : ""}`).join(" → ");
+  const facts = [
+    `Verlauf: ${chain}`,
+    `Ende: ${fallback}`,
+    "Schreibe einen Epilog in 2–3 Sätzen (höchstens 60 Wörter), wie eine alte Legende, die man sich über dieses Duell erzählt. Nenne den Sieger.",
+  ].join("\n");
+  try {
+    const r = await callClaude(settings, { system: SYSTEM, user: facts, maxTokens: 220, temperature: 0.9 });
+    const text = r.text.trim();
+    return text === "" ? fallback : text;
+  } catch {
+    return fallback;
+  }
+}

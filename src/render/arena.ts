@@ -19,6 +19,41 @@ const TORCH_X = [36, 444] as const;
 
 export type Side = 0 | 1;
 
+/** Moments the UI may want to underline with sound. */
+export type ArenaCue = "summon" | "reveal" | "strike" | "impact" | "fizzle" | "discovery";
+
+interface Brick {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+  /** 0..1 – the brick opens to the void once the cosmic factor passes this. */
+  readonly threshold: number;
+}
+
+interface Star {
+  readonly x: number;
+  readonly y: number;
+  readonly brick: number;
+  readonly phase: number;
+  readonly color: string;
+}
+
+interface Mote {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  phase: number;
+}
+
+interface Eye {
+  readonly x: number;
+  readonly y: number;
+  readonly phase: number;
+  readonly color: string;
+}
+
 interface SpriteEntry {
   readonly image: HTMLCanvasElement;
   readonly glow: HTMLCanvasElement;
@@ -137,6 +172,25 @@ export class Arena {
   private running = false;
   private readonly rand = rng(1234);
   private readonly reducedMotion: boolean;
+  /** Optional sound hook – the arena only says *when*, the UI decides *how*. */
+  onCue: ((cue: ArenaCue) => void) | null = null;
+
+  // Escalation mood: the wall dissolves brick by brick into a starfield.
+  private readonly bricks: readonly Brick[];
+  private readonly stars: readonly Star[];
+  private readonly starfield: HTMLCanvasElement;
+  private readonly backdrop: HTMLCanvasElement;
+  private cosmic = 0;
+  private cosmicTarget = 0;
+  private openBricks = 0;
+  private readonly open: Uint8Array;
+
+  // Ambience: dust in the torchlight, eyes watching from the dark.
+  private readonly motes: Mote[] = [];
+  private readonly eyes: Eye[] = [];
+  private witnesses = 0;
+  /** Discovery star floating above a fighter. */
+  private discoveryGlow: { side: Side; life: number } | null = null;
 
   constructor(
     target: HTMLCanvasElement,
@@ -151,6 +205,60 @@ export class Arena {
     this.bloomFar = ctx2d(canvas(WIDTH / 4, Math.ceil(HEIGHT / 4)));
     this.background = paintBackground();
     this.reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    this.bricks = wallBricks();
+    this.open = new Uint8Array(this.bricks.length);
+    this.starfield = paintStarfield();
+    this.stars = scatterStars(this.bricks);
+    this.backdrop = canvas(WIDTH, HEIGHT);
+    ctx2d(this.backdrop).drawImage(this.background, 0, 0);
+    const r = rng(4242);
+    for (let i = 0; i < 38; i++) this.motes.push({ x: r() * WIDTH, y: 20 + r() * (GROUND_Y - 20), vx: (r() - 0.5) * 3, vy: (r() - 0.5) * 2, phase: r() * 10 });
+    for (let i = 0; i < 12; i++) {
+      // pairs of eyes in the dark upper wall, away from the torches
+      const x = 70 + Math.floor(r() * 340);
+      this.eyes.push({ x, y: 8 + Math.floor(r() * 40), phase: r() * 20, color: r() < 0.7 ? "#ff5a3c" : "#f0c850" });
+    }
+  }
+
+  /**
+   * Escalation made visible: `floor` is the arena's minimum scale. From tier 2 on
+   * bricks start to fall away and reveal the void behind the wall.
+   */
+  setTier(floor: number): void {
+    this.cosmicTarget = Math.max(0, Math.min(1, (floor - 1) / 5.5));
+  }
+
+  /** How many eyes watch from the dark (grows with the duel). */
+  setWitnesses(n: number): void {
+    this.witnesses = Math.max(0, Math.min(this.eyes.length, n));
+  }
+
+  /** A first discovery: golden sparks spiral up, a star hangs over the new form. */
+  async discover(side: Side): Promise<void> {
+    const f = this.fighters[side];
+    if (f === null) return;
+    this.onCue?.("discovery");
+    this.discoveryGlow = { side, life: 0 };
+    const cx = SIDE_X[side];
+    const top = GROUND_Y - f.sprite.pixels.height;
+    for (let i = 0; i < 70; i++) {
+      const a = (i / 70) * Math.PI * 6;
+      const rr = 6 + (i / 70) * f.sprite.pixels.width * 0.6;
+      this.particles.push({
+        x: cx + Math.cos(a) * rr,
+        y: GROUND_Y - (i / 70) * f.sprite.pixels.height,
+        vx: -Math.sin(a) * 18,
+        vy: -18 - this.rand() * 20,
+        life: -i * 0.008,
+        max: 0.9 + this.rand() * 0.5,
+        color: this.rand() < 0.6 ? "#ffd86a" : "#fff4c8",
+        size: 1,
+        gravity: -4,
+        glow: true,
+      });
+    }
+    this.rings.push({ x: cx, y: top - 10, r: 2, life: 0, max: 0.9, color: "#ffd86a" });
+    await wait(this.reducedMotion ? 100 : 700);
   }
 
   start(): void {
@@ -243,6 +351,7 @@ export class Arena {
       flying: this.onto.formHas(form, "fliegt") || ["star", "orb", "ghost", "eye"].includes(form.archetype),
     };
     const color = sprite.palette.glow;
+    this.onCue?.("summon");
     this.rings.push({ x: SIDE_X[side], y: GROUND_Y, r: 4, life: 0, max: 0.8, color });
     for (let i = 0; i < 50; i++) {
       this.particles.push({
@@ -266,6 +375,7 @@ export class Arena {
     const f = this.fighters[side];
     if (f === null) return;
     const cy = GROUND_Y - f.sprite.pixels.height / 2;
+    this.onCue?.("reveal");
     this.rings.push({ x: SIDE_X[side], y: cy, r: 4, life: 0, max: 0.6, color: f.sprite.palette.glow });
     this.burst(SIDE_X[side], cy, f.sprite.palette.glow, 60);
     this.flash = 0.25;
@@ -284,6 +394,7 @@ export class Arena {
     await this.strike(side, family, false);
     if (target === null) return;
     await this.suspense(other);
+    this.onCue?.("impact");
     target.flash = 1;
     this.shake = weaknessHit ? 8 : 5;
     this.flash = weaknessHit ? 0.55 : 0.35;
@@ -303,6 +414,7 @@ export class Arena {
     await this.strike(side, family, true);
     await this.suspense(other);
     const x = SIDE_X[other] + (side === 0 ? -1 : 1) * ((target?.sprite.pixels.width ?? 40) / 2 + 6);
+    this.onCue?.("fizzle");
     this.rings.push({ x, y: GROUND_Y - 30, r: 3, life: 0, max: 0.45, color: "#e8e0f0" });
     this.burst(x, GROUND_Y - 30, "#e8e0f0", 24);
     this.shake = 3;
@@ -333,6 +445,7 @@ export class Arena {
     if (attacker === null) return;
     const dir = side === 0 ? 1 : -1;
     await this.tween(180, (t) => (attacker.offsetX = -dir * 6 * t));
+    this.onCue?.("strike");
     await this.tween(120, (t) => (attacker.offsetX = dir * (-6 + 22 * t)));
     await new Promise<void>((done) => {
       this.projectiles.push({
@@ -407,6 +520,20 @@ export class Arena {
     this.shake = Math.max(0, this.shake - dt * 20);
     this.flash = Math.max(0, this.flash - dt * 1.8);
     this.thinking += (this.thinkingTarget - this.thinking) * Math.min(1, dt * 4);
+    this.updateCosmos(dt);
+    for (const m of this.motes) {
+      m.phase += dt;
+      m.x += (m.vx + Math.sin(m.phase * 0.7) * 2) * dt;
+      m.y += (m.vy + Math.cos(m.phase * 0.5) * 1.5) * dt;
+      if (m.x < 0) m.x += WIDTH;
+      if (m.x > WIDTH) m.x -= WIDTH;
+      if (m.y < 10) m.y = GROUND_Y;
+      if (m.y > GROUND_Y) m.y = 10;
+    }
+    if (this.discoveryGlow !== null) {
+      this.discoveryGlow.life += dt;
+      if (this.discoveryGlow.life > 3.2 || this.fighters[this.discoveryGlow.side] === null) this.discoveryGlow = null;
+    }
     for (const [side, f] of this.fighters.entries()) {
       if (f === null) continue;
       f.appear = Math.min(1, f.appear + dt * 1.8);
@@ -421,6 +548,7 @@ export class Arena {
       const p = this.particles[i];
       if (p === undefined) continue;
       p.life += dt;
+      if (p.life < 0) continue; // delayed spawn
       p.vy += p.gravity * dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
@@ -483,11 +611,15 @@ export class Arena {
     const sy = Math.round((this.rand() - 0.5) * this.shake);
     b.translate(sx, sy);
     g.translate(sx, sy);
-    b.drawImage(this.background, 0, 0);
+    b.drawImage(this.backdrop, 0, 0);
+    this.drawStars();
+    this.drawEyes();
     this.drawTorches();
+    this.drawMotes();
     this.drawRune();
     for (const [side, f] of this.fighters.entries()) if (f !== null) this.drawLightPool(side as Side, f);
     for (const [side, f] of this.fighters.entries()) if (f !== null) this.drawFighter(side as Side, f);
+    this.drawDiscoveryStar();
     for (const r of this.rings) {
       const a = Math.max(0, 1 - r.life / r.max);
       for (const ctx of [b, g]) {
@@ -500,6 +632,7 @@ export class Arena {
       }
     }
     for (const p of this.particles) {
+      if (p.life < 0) continue;
       const fade = Math.max(0, 1 - p.life / p.max);
       b.globalAlpha = fade;
       b.fillStyle = p.color;
@@ -628,6 +761,121 @@ export class Arena {
       } else b.drawImage(f.sprite.image, x, y);
       b.restore();
     }
+  }
+
+  /** Open bricks one by one as the cosmic factor rises; each falls away as dust. */
+  private updateCosmos(dt: number): void {
+    if (this.cosmic === this.cosmicTarget) return;
+    const speed = this.reducedMotion ? 10 : 0.12;
+    this.cosmic = this.cosmic < this.cosmicTarget ? Math.min(this.cosmicTarget, this.cosmic + dt * speed) : Math.max(this.cosmicTarget, this.cosmic - dt * 2);
+    let changed = false;
+    for (const [i, br] of this.bricks.entries()) {
+      const want = this.cosmic > br.threshold ? 1 : 0;
+      if (this.open[i] === want) continue;
+      this.open[i] = want;
+      changed = true;
+      if (want === 1 && !this.reducedMotion) {
+        for (let k = 0; k < 6; k++) {
+          this.particles.push({ x: br.x + this.rand() * br.w, y: br.y + this.rand() * br.h, vx: (this.rand() - 0.5) * 10, vy: 5 + this.rand() * 10, life: 0, max: 1 + this.rand(), color: "#2e2740", size: 2, gravity: 60, glow: false });
+        }
+      }
+    }
+    if (!changed) return;
+    const ctx = ctx2d(this.backdrop);
+    ctx.drawImage(this.background, 0, 0);
+    let n = 0;
+    for (const [i, br] of this.bricks.entries()) {
+      if (this.open[i] !== 1) continue;
+      n++;
+      ctx.drawImage(this.starfield, br.x, br.y, br.w, br.h, br.x, br.y, br.w, br.h);
+    }
+    this.openBricks = n;
+  }
+
+  private drawStars(): void {
+    if (this.openBricks === 0) return;
+    const g = this.glow;
+    for (const st of this.stars) {
+      if (this.open[st.brick] !== 1) continue;
+      const tw = this.reducedMotion ? 0.6 : 0.35 + 0.65 * Math.max(0, Math.sin(this.time * 1.3 + st.phase));
+      g.globalAlpha = tw;
+      g.fillStyle = st.color;
+      g.fillRect(st.x, st.y, 1, 1);
+    }
+    g.globalAlpha = 1;
+  }
+
+  private drawEyes(): void {
+    if (this.witnesses === 0) return;
+    for (let i = 0; i < this.witnesses; i++) {
+      const e = this.eyes[i];
+      if (e === undefined) continue;
+      // blink: closed for a short moment every few seconds, each pair on its own rhythm
+      const cycle = (this.time + e.phase) % (4 + (i % 3));
+      if (cycle < 0.14) continue;
+      const fadeIn = Math.min(1, cycle / 1.5);
+      const look = this.fighters[this.lookSide()] === null ? 0 : this.lookSide() === 0 ? -1 : 1;
+      for (const ctx of [this.base, this.glow]) {
+        ctx.globalAlpha = (ctx === this.glow ? 0.45 : 0.8) * fadeIn;
+        ctx.fillStyle = e.color;
+        ctx.fillRect(e.x + look, e.y, 1, 1);
+        ctx.fillRect(e.x + 4 + look, e.y, 1, 1);
+      }
+    }
+    this.base.globalAlpha = 1;
+    this.glow.globalAlpha = 1;
+  }
+
+  /** The eyes follow whoever arrived last. */
+  private lookSide(): Side {
+    const a = this.fighters[0];
+    const b = this.fighters[1];
+    if (a === null) return 1;
+    if (b === null) return 0;
+    return a.appear < b.appear ? 0 : 1;
+  }
+
+  /** Dust in the air – only visible where light falls on it. */
+  private drawMotes(): void {
+    const lights: { x: number; y: number; r: number }[] = TORCH_X.map((x) => ({ x, y: 84, r: 70 }));
+    for (const [side, f] of this.fighters.entries()) {
+      if (f !== null && f.sprite.palette.emissive && f.reveal > 0.5) lights.push({ x: SIDE_X[side as Side], y: GROUND_Y - f.sprite.pixels.height / 2, r: 60 });
+    }
+    const b = this.base;
+    b.fillStyle = "#ffd9a0";
+    for (const m of this.motes) {
+      let lit = 0;
+      for (const l of lights) {
+        const d = Math.hypot(m.x - l.x, (m.y - l.y) * 1.3);
+        if (d < l.r) lit = Math.max(lit, 1 - d / l.r);
+      }
+      if (lit <= 0.05) continue;
+      b.globalAlpha = lit * (0.4 + 0.3 * Math.sin(m.phase * 2));
+      b.fillRect(Math.round(m.x), Math.round(m.y), 1, 1);
+    }
+    b.globalAlpha = 1;
+  }
+
+  private drawDiscoveryStar(): void {
+    const d = this.discoveryGlow;
+    if (d === null) return;
+    const f = this.fighters[d.side];
+    if (f === null) return;
+    const { x, y, w } = this.fighterRect(d.side, f);
+    const cx = x + Math.floor(w / 2);
+    const cy = y - 12 + Math.round(Math.sin(this.time * 2) * 2);
+    const a = Math.min(1, d.life * 3) * Math.min(1, (3.2 - d.life) / 0.8);
+    const arm = 3 + Math.round(Math.sin(this.time * 5) + 1);
+    for (const ctx of [this.base, this.glow]) {
+      ctx.globalAlpha = a;
+      ctx.fillStyle = "#fff4c8";
+      ctx.fillRect(cx, cy - arm, 1, arm * 2 + 1);
+      ctx.fillRect(cx - arm, cy, arm * 2 + 1, 1);
+      ctx.fillStyle = "#ffd86a";
+      ctx.fillRect(cx - 1, cy - 1, 3, 3);
+    }
+    this.base.globalAlpha = 1;
+    this.glow.globalAlpha = 1;
   }
 
   private drawTorches(): void {
@@ -813,4 +1061,66 @@ function paintBackground(): HTMLCanvasElement {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
   return c;
+}
+
+/** Brick rectangles of the back wall (same grid as paintBackground), pillars excluded. */
+function wallBricks(): Brick[] {
+  const r = rng(77);
+  const out: Brick[] = [];
+  for (let row = 0; row * 10 < FLOOR_Y - 10; row++) {
+    const off = row % 2 === 0 ? 0 : 12;
+    for (let col = -1; col * 24 < WIDTH; col++) {
+      const x = col * 24 + off;
+      const y = row * 10;
+      const x0 = Math.max(0, x);
+      const x1 = Math.min(WIDTH, x + 24);
+      if (x1 - x0 < 4) continue;
+      // keep the pillars standing in the void
+      if (x1 > 14 && x0 < 58) continue;
+      if (x1 > 422 && x0 < 466) continue;
+      // upper bricks go first, with noise so it looks like crumbling, not a wipe
+      const height = y / FLOOR_Y;
+      out.push({ x: x0, y, w: x1 - x0, h: 10, threshold: Math.min(0.98, 0.05 + height * 0.6 + r() * 0.35) });
+    }
+  }
+  return out;
+}
+
+/** The void behind the wall: deep violet with a faint nebula band. */
+function paintStarfield(): HTMLCanvasElement {
+  const c = canvas(WIDTH, HEIGHT);
+  const ctx = ctx2d(c);
+  ctx.fillStyle = "#05030b";
+  ctx.fillRect(0, 0, WIDTH, FLOOR_Y);
+  const neb = ctx.createLinearGradient(0, 20, WIDTH, 140);
+  neb.addColorStop(0, "rgba(60,20,90,0)");
+  neb.addColorStop(0.45, "rgba(80,30,120,0.35)");
+  neb.addColorStop(0.6, "rgba(30,60,120,0.3)");
+  neb.addColorStop(1, "rgba(20,10,40,0)");
+  ctx.fillStyle = neb;
+  ctx.fillRect(0, 0, WIDTH, FLOOR_Y);
+  // dither the nebula into pixel noise
+  const r = rng(5);
+  for (let y = 0; y < FLOOR_Y; y++) {
+    for (let x = 0; x < WIDTH; x++) {
+      if (r() < 0.25) {
+        ctx.fillStyle = "rgba(5,3,11,0.6)";
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+  return c;
+}
+
+function scatterStars(bricks: readonly Brick[]): Star[] {
+  const r = rng(31);
+  const colors = ["#ffffff", "#c8d8ff", "#ffe8c8", "#c8a0ff"];
+  const out: Star[] = [];
+  for (const [i, br] of bricks.entries()) {
+    const n = r() < 0.5 ? 1 : r() < 0.5 ? 2 : 0;
+    for (let k = 0; k < n; k++) {
+      out.push({ x: br.x + 1 + Math.floor(r() * (br.w - 2)), y: br.y + 1 + Math.floor(r() * (br.h - 2)), brick: i, phase: r() * 20, color: colors[Math.floor(r() * colors.length)] ?? "#ffffff" });
+    }
+  }
+  return out;
 }

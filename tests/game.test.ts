@@ -119,6 +119,19 @@ describe("attempt – playing without knowing", () => {
     assert.equal(r.move.verb, "verbrennt");
   });
 
+  it("a discovery (never seen before) earns extra eleganz – only on success", () => {
+    const g = must(play(createGame(["A", "B"]), lx("ritter"), null));
+    const plain = attempt(onto, g, lx("rost"), null);
+    const novel = attempt(onto, g, lx("rost"), null, true);
+    assert.ok(plain.kind === "success" && novel.kind === "success");
+    assert.equal(novel.move.eleganz, plain.move.eleganz + g.config.discoveryEleganz);
+    assert.equal(novel.move.discovery, true);
+    assert.equal(plain.move.discovery, false);
+    const failed = attempt(onto, g, lx("salz"), null, true);
+    assert.ok(failed.kind === "failure");
+    assert.equal(failed.state.players[1].eleganz, g.players[1].eleganz);
+  });
+
   it("rejects without cost when Wille is insufficient", () => {
     const g = must(play(createGame(["A", "B"]), lx("katze"), null));
     const r = tryIt(g, "vulkan");

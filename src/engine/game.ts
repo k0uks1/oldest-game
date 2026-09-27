@@ -98,7 +98,7 @@ export function moveCost(onto: Ontology, state: GameState, form: Form): number {
  * Apply a move. Pure: returns a new state or an explanation why the move is illegal.
  * If `verb` is null for a counter, the best playable mechanism is chosen.
  */
-export function play(onto: Ontology, state: GameState, form: Form, verb: string | null): Result<GameState> {
+export function play(onto: Ontology, state: GameState, form: Form, verb: string | null, discovery = false): Result<GameState> {
   if (state.phase === "finished") return { ok: false, error: "Das Spiel ist vorbei." };
   if (state.usedFormIds.includes(form.id)) {
     return { ok: false, error: `${form.name} wurde in diesem Spiel schon beschworen.` };
@@ -148,10 +148,10 @@ export function play(onto: Ontology, state: GameState, form: Form, verb: string 
 
   const refund = target === null ? 0 : underdogRefund(form.scale, target.scale);
   const eleganz =
-    target === null || check === null
+    (target === null || check === null
       ? state.config.openingEleganz
-      : eleganzFor(form.scale, target.scale, check.weaknessHit);
-  const move: Move = { player: state.active, form, verb: chosenVerb, cost, eleganz, refund, check };
+      : eleganzFor(form.scale, target.scale, check.weaknessHit)) + (discovery ? state.config.discoveryEleganz : 0);
+  const move: Move = { player: state.active, form, verb: chosenVerb, cost, eleganz, refund, check, discovery };
 
   const cap = state.config.maxWille;
   const updatedMe: PlayerState = {

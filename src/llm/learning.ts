@@ -67,7 +67,21 @@ export function findLearned(onto: Ontology, text: string): Form | undefined {
  * Integrate a Claude classification into the learned pack.
  * `base` = compiled packs that never change at runtime (the core).
  */
-export function learn(base: readonly ContentPack[], learned: ContentPack, text: string, form: Form, delta: LearningDelta): LearnResult {
+export interface Discovery {
+  /** Player name – shown in the grimoire. */
+  readonly by: string;
+  /** ISO date (the engine never reads the clock; the caller supplies it). */
+  readonly at: string;
+}
+
+export function learn(
+  base: readonly ContentPack[],
+  learned: ContentPack,
+  text: string,
+  form: Form,
+  delta: LearningDelta,
+  discovery?: Discovery,
+): LearnResult {
   if (learned.forms.length >= MAX_LEARNED_FORMS) return { ok: false, reason: "Das Gedächtnis des Spiels ist voll." };
   const id = `g:${slug(text)}`;
   const existing = learned.forms.find((f) => f.id === id);
@@ -93,6 +107,7 @@ export function learn(base: readonly ContentPack[], learned: ContentPack, text: 
     ...(form.weak.length > 0 ? { weak: form.weak } : {}),
     aliases,
     ...(form.flavor === undefined ? {} : { flavor: form.flavor }),
+    ...(discovery === undefined ? {} : { discoveredBy: discovery.by.slice(0, 40), discoveredAt: discovery.at.slice(0, 24) }),
   });
 
   const newTagIds = new Set(delta.tags.map((t) => t.id));

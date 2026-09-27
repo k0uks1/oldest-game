@@ -15,6 +15,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   openingEleganz: 2,
   failurePenalty: 3,
   roundLimit: 10,
+  discoveryEleganz: 1,
   echoWindow: 2,
 };
 
