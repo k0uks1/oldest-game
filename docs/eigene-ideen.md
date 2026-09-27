@@ -120,3 +120,10 @@ Welche Tags welche Gewandung auslösen:
 | **Die Engine kennt ihre Zweifel** | Ein Fehlschlag gilt als *unsicher*, wenn: ein Mechanismus um genau einen Punkt zu schwach war, ein Blocker oder eine Immunität gegriffen hat (das Modell ist dort evtl. zu grob), oder wenn gar keine Angriffsfläche gefunden wurde (eine Wechselwirkung, die die Tags nicht kennen). Scheitert ein Zug nur an den Größenregeln, gilt er nicht als unsicher. | `uncertainty()` in `src/engine/attempt.ts`, `CounterCheck.failedAt` |
 | **Claude als Schiedsrichter** | Nur in solchen unsicheren Fällen urteilt Claude, und zwar streng: gesunder Menschenverstand und Sagenlogik ja, „irgendwie geht das schon“ nein. Das Urteil nennt einen existierenden Mechanismus und eine Begründung in einem Satz. | `src/llm/referee.ts` |
 | **Präzedenzfälle** | Jedes Urteil (ja oder nein) wird validiert und für genau dieses Paar im gelernten Pack gespeichert. Danach entscheidet die Engine es immer gleich und ohne weiteren Claude-Aufruf. Die Größenregeln gelten weiter. Im Grimoire stehen die Urteile unter „⚖ Schiedssprüche“, in der Arena erscheint die Begründung unter dem Namen. | `rulings` im Pack, `checkRuling`, `addRuling` |
+
+## Eigene Sprites für Neues (Nutzerfeedback: „Löschdecke bekam das Schwert-Symbol“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Claude zeichnet mit** | Für eine wirklich neue Gestalt (ohne Anker im Lexikon) liefert Claude ein 16×16-Pixelbild in derselben Zeichensprache wie die eingebauten Masken. Es wird validiert: Größe, erlaubte Zeichen (mit Toleranz für Leerzeichen und fremde Zeichen), ein Füllgrad zwischen 10 und 85 % und eine zusammenhängende Silhouette statt Rauschen. Danach wird es im Grimoire gespeichert und wie jede Figur schattiert, beleuchtet und konturiert. Ist das Bild ungültig, greift der Archetyp. | `src/engine/pixelart.ts`, `FormSpec.sprite`, Werkzeugfeld `pixel_art` |
+| **Sechs neue Grundformen** | Tuch, Kiste, Flasche, Fahrzeug, Haus und Becher kommen hinzu. 19 bestehende Gestalten nutzen sie jetzt, etwa Teppich, Käfig, Flasche, Weihwasser, Auto, Bus, Lebkuchenhaus und Kaffee. | `src/render/masks.ts` |
