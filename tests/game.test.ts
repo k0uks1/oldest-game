@@ -104,8 +104,7 @@ describe("attempt – playing without knowing", () => {
     const g = must(play(createGame(["A", "B"]), lx("ritter"), null));
     const before = g.players[1].wille;
     const r = tryIt(g, "salz"); // salt has nothing to hold against a knight
-    assert.equal(r.kind, "failure");
-    if (r.kind !== "failure") return;
+    assert.ok(r.kind === "failure");
     assert.equal(r.state.active, 1);
     assert.equal(r.state.history.length, 1);
     assert.ok(r.state.players[1].wille < before);
@@ -116,8 +115,8 @@ describe("attempt – playing without knowing", () => {
   it("uses the mechanism the player described when it works", () => {
     const g = must(play(createGame(["A", "B"]), lx("ritter"), null));
     const r = attempt(onto, g, lx("drache"), "verbrennt");
-    assert.equal(r.kind, "success");
-    if (r.kind === "success") assert.equal(r.move.verb, "verbrennt");
+    assert.ok(r.kind === "success");
+    assert.equal(r.move.verb, "verbrennt");
   });
 
   it("rejects without cost when Wille is insufficient", () => {

@@ -366,7 +366,7 @@ export class App {
       s.phase === "opening" ? "Eröffnung" : `Runde ${String(Math.min(roundNumber(s), s.config.roundLimit))} / ${String(s.config.roundLimit)}`;
     for (const p of [0, 1] as const) this.renderHud(p);
     const last = s.history.at(-1);
-    for (const p of [0, 1] as const) this.els.plates[p].textContent = last !== undefined && last.player === p ? last.form.name : "";
+    for (const p of [0, 1] as const) this.els.plates[p].textContent = last?.player === p ? last.form.name : "";
     clear(this.els.prompt);
     const who = h("strong", { class: `p${String(s.active)}` }, active.name);
     if (s.phase === "finished") {
