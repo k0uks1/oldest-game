@@ -61,7 +61,17 @@ body {
 
 .stage {
   position: relative;
+}
+.screen {
+  position: relative;
   line-height: 0;
+}
+/* On wide screens the tale floats over the arena (as before); on phones it flows below it. */
+.tale {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  line-height: 1.2;
 }
 canvas.arena {
   width: 100%;
@@ -830,37 +840,166 @@ canvas.arena {
   color: var(--faint);
 }
 
+/* Portrait phones: a taller arena – the centre of the scene is cropped in, the fighters stay visible. */
+@media (max-width: 700px) and (orientation: portrait) {
+  canvas.arena {
+    aspect-ratio: auto;
+    height: min(40dvh, 110vw);
+    object-fit: cover;
+  }
+  .plate.left {
+    left: 6%;
+  }
+  .plate.right {
+    right: 6%;
+  }
+}
+
 @media (max-width: 700px) {
+  html,
+  body {
+    font-size: 18px;
+  }
+  #app {
+    min-height: 100dvh;
+    justify-content: flex-start;
+    gap: 6px;
+    padding-inline: max(8px, env(safe-area-inset-left, 0px));
+    padding-block: max(6px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-bottom, 0px));
+  }
+  /* the arena spans the full width – no fading edges eating the HUD */
+  #app > .stage {
+    margin-inline: -8px;
+  }
+  canvas.arena {
+    -webkit-mask-image: linear-gradient(to bottom, #000 85%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 85%, transparent 100%);
+  }
+  .modal {
+    background: #0a0712;
+  }
   .hud {
-    width: 36%;
-    left: 4%;
+    top: 2%;
+    width: 38%;
+  }
+  .hud.left {
+    left: 3%;
   }
   .hud.right {
-    left: auto;
-    right: 4%;
+    right: 3%;
   }
   .hud .name {
-    font-size: 17px;
+    font-size: 16px;
+  }
+  .hud .stats {
+    font-size: 14px;
+  }
+  .hud .delta {
+    font-size: 18px;
+  }
+  .crown {
+    top: 1%;
+  }
+  .sigil {
+    width: 40px;
+    height: 40px;
+    padding: 6px;
+  }
+  .round {
+    font-size: 16px;
+  }
+  .fields {
+    font-size: 13px;
+  }
+  .plate {
+    bottom: 4%;
+    font-size: 14px;
+    width: 46%;
+  }
+  .plate.left {
+    left: 2%;
+  }
+  .plate.right {
+    right: 2%;
+  }
+  .reveal-name {
+    font-size: clamp(26px, 9vw, 44px);
+    top: 34%;
+  }
+  .reveal-sub {
+    top: calc(34% + 26px);
+    font-size: 14px;
+  }
+  /* banner + narration below the arena, stacked, space reserved so nothing jumps or overlaps */
+  .tale {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-height: 5.2em;
+    padding-inline: 4px;
+  }
+  .banner,
+  .caption {
+    position: static;
+    transform: none;
+    width: 100%;
+    max-width: none;
+  }
+  .banner {
+    font-size: 24px;
+  }
+  .banner.show {
+    transform: none;
   }
   .caption {
-    top: auto;
-    bottom: 20%;
-    width: 94%;
+    padding: 2px 6px;
+    font-size: 17px;
+    background: none;
   }
   .summon-input {
-    font-size: 22px;
-    padding-inline: 28px;
+    font-size: 20px;
+    padding-inline: 34px;
+  }
+  .enter-hint {
+    font-size: 20px;
+  }
+  /* menus and dialogs become full screen sheets */
+  .menu-layer,
+  .modal-layer {
+    padding: 0;
   }
   .menu-item {
-    font-size: 28px;
+    font-size: 30px;
+    padding-block: 6px;
+    min-height: 48px;
+  }
+  .modal {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: max(12px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px));
+    border: none;
+  }
+  .modal h2 {
+    font-size: 32px;
   }
   .modal .names {
     grid-template-columns: 1fr;
   }
-  .sigil {
-    width: 28px;
-    height: 28px;
+  .btn {
+    min-height: 44px;
   }
+  .grimoire {
+    max-height: none;
+  }
+}
+
+button,
+input,
+.tab {
+  touch-action: manipulation;
 }
 
 @media (prefers-reduced-motion: reduce) {

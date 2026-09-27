@@ -5,8 +5,8 @@ import { has, intersection } from "./ontology/tagset.ts";
 import type { CheckStep, CounterCheck, Form, GameConfig, Scale } from "./types.ts";
 
 export const DEFAULT_CONFIG: GameConfig = {
-  startWille: 20,
-  maxWille: 40,
+  startWille: 30,
+  maxWille: 50,
   regen: 3,
   maxOpeningScale: 3,
   maxScaleJump: 2,
@@ -15,7 +15,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   regenGrowthEvery: 1,
   escalateEveryMoves: 3,
   openingEleganz: 1,
-  failurePenalty: 3,
+  failurePenalty: 1,
   roundLimit: 10,
   discoveryEleganz: 1,
   escapeRoutes: {

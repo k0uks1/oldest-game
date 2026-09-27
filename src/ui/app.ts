@@ -17,7 +17,7 @@ import {
 import { browserStore, serverStore, type LearnedStore } from "../llm/learned-store.ts";
 import { addRuling, emptyLearnedPack, findLearned, learn } from "../llm/learning.ts";
 import { refereeWithClaude } from "../llm/referee.ts";
-import { narrateEpilogueWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
+import { brief, narrateEpilogueWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
 import { Ontology } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
 import { parseWithClaude } from "../llm/parser.ts";
@@ -207,16 +207,20 @@ export class App {
       h(
         "section",
         { class: "stage" },
-        canvas,
-        els.hud[0],
-        els.hud[1],
-        h("div", { class: "crown" }, sigilBtn, els.round, els.fields),
-        els.plates[0],
-        els.plates[1],
-        els.revealName,
-        els.revealSub,
-        els.caption,
-        els.banner,
+        h(
+          "div",
+          { class: "screen" },
+          canvas,
+          els.hud[0],
+          els.hud[1],
+          h("div", { class: "crown" }, sigilBtn, els.round, els.fields),
+          els.plates[0],
+          els.plates[1],
+          els.revealName,
+          els.revealSub,
+        ),
+        // Outcome line and narration: over the arena on wide screens, below it on phones – never on top of each other.
+        h("div", { class: "tale" }, els.banner, els.caption),
       ),
       h("section", { class: "command" }, h("div", { class: "line" }, input, enterHint)),
       els.menu,
@@ -695,7 +699,7 @@ export class App {
   private captionTimer: ReturnType<typeof setTimeout> | undefined;
   private showCaption(text: string, pending: boolean): void {
     const c = this.els.caption;
-    c.textContent = text;
+    c.textContent = brief(text, 150);
     c.className = `caption show${pending ? " pending" : ""}`;
     if (this.captionTimer !== undefined) clearTimeout(this.captionTimer);
     if (!pending) this.captionTimer = setTimeout(() => (c.className = "caption"), 9000);
@@ -817,7 +821,7 @@ export class App {
         li(`Siegarten: Nicht jeder Sieg vernichtet. Man kann in die Flucht schlagen (ein Knall und das Pferd rennt – „Schreck“ zählt wie eine Schwäche), verführen, einschläfern, bannen, versteinern – oder befrieden: Wer ohne Leid gewinnt, bekommt ${String(c.mercyEleganz)} Eleganz als Gnade.`),
         li("Arena-Zustände: Züge hinterlassen Spuren. Nach Wasser ist die Arena nass (Blitz +2, Feuer −1), nach Feuer glüht sie, nach Frost ist alles spröde, nach Dunkelheit blendet Licht doppelt, in der Stille trifft jeder Laut. Das Wort unter der Runde zeigt, was gerade gilt."),
         li(`Echo: Ein Mechanismus der letzten ${String(c.echoWindow)} Züge darf nicht wiederholt werden. Jede Gestalt nur einmal pro Spiel.`),
-        li(`Du weißt vorher nicht, ob deine Gestalt reicht. Reicht sie nicht, zerschellt sie: Du zahlst ihren Preis an Wille plus ${String(c.failurePenalty)}, sie ist verbraucht, und du versuchst es erneut. Wem der Wille ausgeht, der verliert.`),
+        li(`Du weißt vorher nicht, ob deine Gestalt reicht. Reicht sie nicht, zerschellt sie: Du zahlst die Hälfte ihres Preises plus ${String(c.failurePenalty)} Wille, sie ist verbraucht, und du versuchst es erneut. Wem der Wille ausgeht, der verliert.`),
         li(`Wer aufgibt oder keine Antwort findet, verliert. Nach ${String(c.roundLimit)} Runden gewinnt die höhere Eleganz.`),
       ),
       h("p", { class: "hint" }, "Beschreibe frei, was du bist – gern auch, wie du angreifst. Claude (Haiku) übersetzt das in Eigenschaften und Mechanismen; entscheiden tut immer die Regel-Engine. Esc öffnet das Menü."),

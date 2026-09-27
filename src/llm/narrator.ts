@@ -4,6 +4,19 @@ import type { Failure } from "../engine/attempt.ts";
 import type { GameState, Move } from "../engine/types.ts";
 import { callClaude, type LlmSettings } from "./client.ts";
 
+/**
+ * Hard cap on the client side too: the model is asked for one short sentence, but whatever
+ * comes back is cut to the first sentence(s) that fit – a phone screen full of prose helps nobody.
+ */
+export function brief(raw: string, maxChars: number): string {
+  const text = raw.replace(/\s+/g, " ").replace(/^["„»«]+|["“»«]+$/g, "").trim();
+  if (text.length <= maxChars) return text;
+  const first = (/^[^.!?…]+[.!?…]+/.exec(text) ?? [""])[0].trim();
+  if (first !== "" && first.length <= maxChars) return first;
+  const cut = text.slice(0, maxChars);
+  return `${cut.slice(0, cut.lastIndexOf(" ") > 40 ? cut.lastIndexOf(" ") : maxChars).trim()} …`;
+}
+
 const OUTCOME_WORDS: Readonly<Record<string, string>> = {
   vertrieben: "in die Flucht geschlagen",
   verfuehrt: "verführt / umgarnt",
@@ -14,8 +27,8 @@ const OUTCOME_WORDS: Readonly<Record<string, string>> = {
 };
 
 const SYSTEM = `Du bist der Erzähler von „The Oldest Game“, einem Duell der Vorstellungskraft in einer
-Dungeon-Arena, im Stil düsterer Fantasy-Comics. Du beschreibst in 1–2 kurzen, bildhaften deutschen Sätzen
-(höchstens 45 Wörter) einen Zug, dessen Ausgang BEREITS FESTSTEHT. Erfinde keinen anderen Ausgang, keine
+Dungeon-Arena, im Stil düsterer Fantasy-Comics. Du beschreibst in GENAU EINEM kurzen, bildhaften deutschen Satz
+(höchstens 14 Wörter – Kürze ist Würze) einen Zug, dessen Ausgang BEREITS FESTSTEHT. Erfinde keinen anderen Ausgang, keine
 Regeln und keine Zahlen. Keine Anführungszeichen um die ganze Antwort, kein Markdown.`;
 
 /** Richer narration of an already-resolved move. Falls back to offline text on any error. */
@@ -53,8 +66,8 @@ export async function narrateWithClaude(
           .filter((l) => l !== "")
           .join("\n");
   try {
-    const r = await callClaude(settings, { system: SYSTEM, user: facts, maxTokens: 160, temperature: 0.8 });
-    const text = r.text.trim();
+    const r = await callClaude(settings, { system: SYSTEM, user: facts, maxTokens: 60, temperature: 0.8 });
+    const text = brief(r.text, 150);
     return text === "" ? fallback : text;
   } catch {
     return fallback;
@@ -77,8 +90,8 @@ export async function narrateFailureWithClaude(
     .filter((l) => l !== "")
     .join("\n");
   try {
-    const r = await callClaude(settings, { system: SYSTEM, user: facts, maxTokens: 160, temperature: 0.8 });
-    const text = r.text.trim();
+    const r = await callClaude(settings, { system: SYSTEM, user: facts, maxTokens: 60, temperature: 0.8 });
+    const text = brief(r.text, 150);
     return text === "" ? fallback : text;
   } catch {
     return fallback;
@@ -95,11 +108,11 @@ export async function narrateEpilogueWithClaude(settings: LlmSettings, state: Ga
   const facts = [
     `Verlauf: ${chain}`,
     `Ende: ${fallback}`,
-    "Schreibe einen Epilog in 2–3 Sätzen (höchstens 60 Wörter), wie eine alte Legende, die man sich über dieses Duell erzählt. Nenne den Sieger.",
+    "Schreibe einen Epilog in höchstens 2 kurzen Sätzen (zusammen höchstens 30 Wörter), wie eine alte Legende, die man sich über dieses Duell erzählt. Nenne den Sieger.",
   ].join("\n");
   try {
-    const r = await callClaude(settings, { system: SYSTEM, user: facts, maxTokens: 220, temperature: 0.9 });
-    const text = r.text.trim();
+    const r = await callClaude(settings, { system: SYSTEM, user: facts, maxTokens: 110, temperature: 0.9 });
+    const text = brief(r.text, 260);
     return text === "" ? fallback : text;
   } catch {
     return fallback;
