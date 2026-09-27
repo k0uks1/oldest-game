@@ -2,8 +2,8 @@ import { attempt, type AttemptOutcome } from "../engine/attempt.ts";
 import { arenaMinScale, createGame, currentTarget, pass, roundNumber } from "../engine/game.ts";
 import { activeFields } from "../engine/fields.ts";
 import { parseForm } from "../engine/parse.ts";
-import { ESCAPE } from "../engine/rules.ts";
-import type { Form, GameState, PlayerId } from "../engine/types.ts";
+import { ESCAPE, reaches } from "../engine/rules.ts";
+import type { CounterCheck, Form, GameState, PlayerId } from "../engine/types.ts";
 import {
   detectLocalProxy,
   estimateCostUsd,
@@ -15,7 +15,7 @@ import {
   type LlmSettings,
 } from "../llm/client.ts";
 import { browserStore, serverStore, type LearnedStore } from "../llm/learned-store.ts";
-import { addRuling, emptyLearnedPack, findLearned, learn } from "../llm/learning.ts";
+import { addRuling, emptyLearnedPack, findLearned, learn, reconcileLearned } from "../llm/learning.ts";
 import { refereeWithClaude } from "../llm/referee.ts";
 import { brief, narrateEpilogueWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
 import { Ontology } from "../engine/ontology/ontology.ts";
@@ -132,6 +132,7 @@ export class App {
     hud: [HTMLElement, HTMLElement];
     plates: [HTMLElement, HTMLElement];
     caption: HTMLElement;
+    why: HTMLElement;
     round: HTMLElement;
     fields: HTMLElement;
     banner: HTMLElement;
@@ -191,11 +192,15 @@ export class App {
       revealName: h("div", { class: "reveal-name", "aria-live": "polite" }),
       revealSub: h("div", { class: "reveal-sub" }),
       chronicle: h("ol", { class: "chronicle" }),
-      hud: [h("div", { class: "hud left" }), h("div", { class: "hud right" })] as [HTMLElement, HTMLElement],
+      hud: [
+        h("div", { class: "hud left", role: "button", title: "Was bedeutet das?", onclick: () => { this.showInfo("wille"); } }),
+        h("div", { class: "hud right", role: "button", title: "Was bedeutet das?", onclick: () => { this.showInfo("wille"); } }),
+      ] as [HTMLElement, HTMLElement],
       plates: [h("div", { class: "plate left" }), h("div", { class: "plate right" })] as [HTMLElement, HTMLElement],
       caption: h("div", { class: "caption", role: "status" }),
-      round: h("div", { class: "round" }),
-      fields: h("div", { class: "fields" }),
+      why: h("div", { class: "why-line" }),
+      round: h("div", { class: "round", role: "button", onclick: () => { this.showInfo("runde"); } }),
+      fields: h("div", { class: "fields", role: "button", onclick: () => { this.showInfo("arena"); } }),
       banner: h("div", { class: "banner", role: "alert" }),
       menu: h("div", { class: "menu-layer" }),
       modal: h("div", { class: "modal-layer" }),
@@ -220,7 +225,7 @@ export class App {
           els.revealSub,
         ),
         // Outcome line and narration: over the arena on wide screens, below it on phones – never on top of each other.
-        h("div", { class: "tale" }, els.banner, els.caption),
+        h("div", { class: "tale" }, els.banner, els.caption, els.why),
       ),
       h("section", { class: "command" }, h("div", { class: "line" }, input, enterHint)),
       els.menu,
@@ -356,15 +361,20 @@ export class App {
   }
 
   private async loadLearned(): Promise<void> {
-    const pack = await this.store.load();
-    if (pack.forms.length === 0 && pack.tags.length === 0) return;
-    try {
-      this.setOntology(Ontology.compile([...this.basePacks, pack]));
-      this.learned = pack;
-    } catch (e) {
-      console.warn("Gelerntes Pack ignoriert:", e);
+    const stored = await this.store.load();
+    if (stored.forms.length === 0 && stored.tags.length === 0 && (stored.rulings ?? []).length === 0) return;
+    // The core may have grown since this pack was saved – keep everything that still fits.
+    const pack = reconcileLearned(this.basePacks, stored);
+    if (pack === undefined) {
+      console.warn("Gelerntes Pack passt nicht mehr zum Kern – ignoriert.");
+      return;
     }
+    this.setOntology(Ontology.compile([...this.basePacks, pack]));
+    this.learned = pack;
   }
+
+  /** Arena floor last shown in the HUD – a rise gets a short pulse. */
+  private shownFloor = 1;
 
   private setOntology(onto: Ontology): void {
     this.onto = onto;
@@ -563,13 +573,16 @@ export class App {
         const how = VICTORY_TEXT[kind] ?? "";
         this.flashBanner(`Es genügt${how === "" ? "." : ` – ${how}`}${move.eleganz > 1 ? `  ✦ ${String(move.eleganz)}` : ""}`, "good");
       }
+      if (move.check !== null) this.showWhy(form, move.check, true);
     } else {
       this.retry = true;
       const f = outcome.failure;
       why = [...(f.closest?.check.steps.map((st) => st.text) ?? []), f.reason].filter((t, i, a) => a.indexOf(t) === i);
       const verb = f.closest?.verb;
-      await this.arena.fizzle(actor, verb === undefined ? "slash" : this.styleOf(verb));
+      const answer = this.onto.compileForm(f.target).verbs.find((v) => reaches(this.onto, v, f.form));
+      await this.arena.fizzle(actor, verb === undefined ? "slash" : this.styleOf(verb), answer === undefined ? null : this.styleOf(answer));
       this.flashBanner("Es genügt nicht.", "bad");
+      if (f.closest !== null) this.showWhy(form, f.closest.check, false, f.reason);
     }
     this.render();
     const li = this.addChronicle(actor, form.name, "…", outcome.kind === "failure", why, discovery);
@@ -577,6 +590,65 @@ export class App {
     const text = await narration;
     li.querySelector(".text")?.replaceChildren(text);
     this.showCaption(text, false);
+  }
+
+  /**
+   * One compact line that shows WHY – the mechanism in gold, the exposed property in ember, and
+   * badges for what tipped the scales (weakness, fright, arena, precedent, mercy).
+   */
+  private showWhy(form: Form, check: CounterCheck, success: boolean, reason?: string): void {
+    const el = this.els.why;
+    clear(el);
+    const target = success ? this.state.history.at(-2)?.form : this.state.history.at(-1)?.form;
+    const label = check.verb === ESCAPE ? "entkommt" : (this.onto.verbs.get(check.verb)?.spec.label ?? check.verb);
+    if (success) {
+      el.append(h("span", { class: "w-verb" }, `${form.name} ${label}`));
+      if (check.hitTag !== null && target !== undefined && this.onto.tagLabel(check.hitTag).toLowerCase() !== target.name.toLowerCase()) {
+        el.append(" · ", h("span", { class: "w-tag" }, `${target.name} ist ${this.onto.tagLabel(check.hitTag)}`));
+      }
+      const badges: string[] = [];
+      if (check.startled === true) badges.push("Schreck!");
+      else if (check.weaknessHit) badges.push("Schwachstelle!");
+      for (const f of this.onto.fields) for (const st of check.steps) if (st.text.startsWith(`${f.label}:`)) badges.push(st.text.replace(/: „[^“]*“/, ""));
+      if (check.ruling === true) badges.push("⚖ Schiedsspruch");
+      if (this.state.config.mercyOutcomes.includes(check.outcome)) badges.push("Gnade");
+      for (const b of badges) el.append(" ", h("span", { class: "w-badge" }, b));
+    } else {
+      el.append(h("span", { class: "w-verb" }, `${form.name} ${label}`), " · ", h("span", { class: "w-fail" }, brief(reason ?? check.steps.at(-1)?.text ?? "", 90)));
+    }
+    el.className = "why-line show";
+    if (this.whyTimer !== undefined) clearTimeout(this.whyTimer);
+    this.whyTimer = setTimeout(() => (el.className = "why-line"), 9000);
+  }
+
+  private whyTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Small explanation sheet for HUD elements – tap anything you don't understand. */
+  private showInfo(kind: "wille" | "runde" | "arena"): void {
+    const c = this.state.config;
+    const s = this.state;
+    if (kind === "wille") {
+      this.modal(
+        "Wille & Eleganz",
+        h("p", {}, h("strong", {}, "Wille"), " (die leuchtende Linie, Zahl links) ist deine Kraft, dich zu verwandeln. Jede Gestalt kostet Wille – je größer, desto teurer. Wer viel größer spielt als nötig, zahlt Aufpreis."),
+        h("p", {}, `Du bekommst jede Runde Wille zurück (anfangs ${String(c.regen)}, dann mehr). Höchstens ${String(c.maxWille)}. Zerschellt eine Gestalt, kostet sie die Hälfte ihres Preises plus ${String(c.failurePenalty)}. Wem der Wille ausgeht, der verliert.`),
+        h("p", {}, h("strong", {}, "✦ Eleganz"), " sind Punkte für kluge Siege: Kleines schlägt Großes, Schwachstellen, Gnade, neue Entdeckungen. Nach ", String(c.roundLimit), " Runden gewinnt, wer mehr Eleganz hat."),
+        h("p", { class: "hint" }, `Gerade: ${s.players[0].name} ${String(s.players[0].wille)} Wille ✦ ${String(s.players[0].eleganz)} · ${s.players[1].name} ${String(s.players[1].wille)} Wille ✦ ${String(s.players[1].eleganz)}`),
+      );
+    } else if (kind === "runde") {
+      this.modal(
+        "Runde & Eskalation",
+        h("p", {}, `Die römische Zahl ist die Runde (von ${String(c.roundLimit)}). Alle ${String(c.escalateEveryMoves)} Züge wächst die Arena: Gestalten müssen dann mindestens eine bestimmte Stufe haben – außer mit einem mythischen Hebel (Hoffnung, wahre Namen …).`),
+        h("p", {}, `Gerade gilt: mindestens Stufe ${String(arenaMinScale(s))}. Die Mauern bröckeln, je höher es geht.`),
+      );
+    } else {
+      const fields = activeFields(this.onto, s);
+      this.modal(
+        "Arena-Zustand",
+        h("p", {}, "Züge hinterlassen Spuren in der Arena. Solange ein Zustand wirkt, sind manche Mechanismen stärker oder schwächer."),
+        ...fields.map((f) => h("p", {}, h("strong", {}, f.spec.label), ` – ${f.spec.hint} (noch ${String(f.remaining)} Zug${f.remaining === 1 ? "" : "e"})`)),
+      );
+    }
   }
 
   private styleOf(verb: string): AttackStyle {
@@ -617,7 +689,10 @@ export class App {
       return useClaude ? narrateWithClaude(this.onto, this.llm, this.state, outcome.move, index, offline) : Promise.resolve(offline);
     }
     const f = outcome.failure;
-    const offline = narrateFailure(f.form.name, f.target.name, `${f.form.id}#${String(index)}`);
+    const answerVerb = this.onto.compileForm(f.target).verbs.find((v) => reaches(this.onto, v, f.form));
+    const answerSpec = answerVerb === undefined ? undefined : this.onto.verbs.get(answerVerb)?.spec;
+    const answer = answerSpec === undefined ? undefined : (answerSpec.phrase ?? `${answerSpec.label} {B}`).replace("{B}", f.form.name);
+    const offline = narrateFailure(f.form.name, f.target.name, `${f.form.id}#${String(index)}`, answer);
     return useClaude ? narrateFailureWithClaude(this.onto, this.llm, f, offline) : Promise.resolve(offline);
   }
 
@@ -634,7 +709,19 @@ export class App {
     const s = this.state;
     const target = currentTarget(s);
     const active = s.players[s.active];
-    this.els.round.textContent = s.phase === "opening" ? "" : roman(Math.min(roundNumber(s), s.config.roundLimit));
+    const floor = arenaMinScale(s);
+    clear(this.els.round);
+    if (s.phase !== "opening") {
+      this.els.round.append(roman(Math.min(roundNumber(s), s.config.roundLimit)));
+      // The arena floor is the rule that surprises people most – keep it visible once it matters.
+      if (floor > 1 && s.phase === "playing") this.els.round.append(h("span", { class: "floor" }, `ab ${SCALE_NAMES[floor] ?? String(floor)}`));
+    }
+    if (floor > this.shownFloor && s.phase === "playing" && floor > 1) {
+      this.els.round.classList.remove("grew");
+      void this.els.round.offsetWidth;
+      this.els.round.classList.add("grew");
+    }
+    this.shownFloor = s.phase === "playing" ? floor : 1;
     this.els.round.title = s.phase === "opening" ? "" : `Runde ${String(Math.min(roundNumber(s), s.config.roundLimit))} von ${String(s.config.roundLimit)}`;
     for (const p of [0, 1] as const) this.renderHud(p);
     const last = s.history.at(-1);
@@ -709,6 +796,7 @@ export class App {
 
   private hideCaption(): void {
     this.els.caption.className = "caption";
+    this.els.why.className = "why-line";
   }
 
   private bannerTimer: ReturnType<typeof setTimeout> | undefined;

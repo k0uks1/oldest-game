@@ -166,6 +166,13 @@ export function checkRuling(
   if (attacker.scale - base > config.maxScaleJump) {
     return { ...common, valid: false, steps: [...steps, { ok: false, text: `Maßlos: ${attacker.name} ist zu groß.` }], power: 0, outcome: "vernichtet", failedAt: "scale" };
   }
+  // A ruling may settle *whether* something works, never overturn proportions:
+  // the same power budget as a regular check applies (+1 grace for near misses).
+  const leverage = verb?.spec.leverage ?? 0;
+  const mythic = leverage >= config.mythicLeverage;
+  if (ruling.valid && !mythic && (base - attacker.scale > config.maxScaleDrop || attacker.scale + leverage + 1 < base)) {
+    return { ...common, valid: false, steps: [...steps, { ok: false, text: `Zu klein: ${attacker.name} kommt gegen ${target.name} nicht an.` }], power: attacker.scale + leverage, outcome: "vernichtet", failedAt: "power" };
+  }
   steps.push({ ok: ruling.valid, text: `Schiedsspruch: ${ruling.reason}` });
   return { ...common, valid: ruling.valid, steps, power: attacker.scale, outcome: verb?.spec.outcome ?? "vernichtet", ...(ruling.valid ? {} : { failedAt: "other" as const }) };
 }

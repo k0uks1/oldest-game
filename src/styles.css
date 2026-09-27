@@ -332,6 +332,75 @@ canvas.arena {
   font-size: 22px;
 }
 
+/* WHY a move worked – coloured keywords under the narration */
+.why-line {
+  position: absolute;
+  left: 50%;
+  top: calc(30% + 5.2em);
+  transform: translateX(-50%);
+  width: min(80%, 760px);
+  font-family: var(--mono);
+  font-size: clamp(16px, 1.6vw, 20px);
+  line-height: 1.25;
+  text-align: center;
+  color: var(--muted);
+  text-shadow: 0 0 8px #000, 0 0 3px #000;
+  text-wrap: balance;
+  opacity: 0;
+  transition: opacity 0.6s;
+  pointer-events: none;
+}
+.why-line.show {
+  opacity: 1;
+}
+.w-verb {
+  color: var(--gold);
+}
+.w-tag {
+  color: var(--ember);
+}
+.w-badge {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  color: var(--good);
+  font-size: 0.85em;
+}
+.w-fail {
+  color: var(--bad);
+}
+
+/* everything in the HUD explains itself on tap */
+.hud,
+.round,
+.fields span {
+  cursor: pointer;
+  pointer-events: auto;
+}
+.round .floor {
+  display: block;
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--ember);
+  opacity: 0.85;
+}
+.round.grew {
+  animation: grew 2.4s ease-out;
+}
+@keyframes grew {
+  0%,
+  30% {
+    color: var(--ember);
+    transform: scale(1.5);
+    text-shadow: 0 0 16px var(--ember);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 .reveal-name {
   position: absolute;
   left: 50%;
@@ -941,7 +1010,8 @@ canvas.arena {
     padding-inline: 4px;
   }
   .banner,
-  .caption {
+  .caption,
+  .why-line {
     position: static;
     transform: none;
     width: 100%;
@@ -957,6 +1027,9 @@ canvas.arena {
     padding: 2px 6px;
     font-size: 17px;
     background: none;
+  }
+  .why-line {
+    font-size: 15px;
   }
   .summon-input {
     font-size: 20px;

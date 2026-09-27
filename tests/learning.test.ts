@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CORE_PACK_RAW, coreOntology, loadPack } from "../src/content/index.ts";
-import { parsePack } from "../src/engine/ontology/pack.ts";
+import { parsePack, type ContentPack } from "../src/engine/ontology/pack.ts";
 import { Ontology } from "../src/engine/ontology/ontology.ts";
 import { findCounters } from "../src/engine/rules.ts";
 import { emptyLearnedPack, findLearned, learn, readLearnedPack } from "../src/llm/learning.ts";
@@ -162,6 +162,19 @@ describe("referee precedents (Schiedssprüche)", () => {
     assert.equal(r2.failure.uncertain, undefined);
   });
 
+  it("a ruling cannot overturn proportions: scissors never cut a rock", async () => {
+    const { addRuling: add } = await import("../src/llm/learning.ts");
+    const { checkRuling } = await import("../src/engine/rules.ts");
+    const core = parsePack(CORE_PACK_RAW);
+    assert.ok(core.ok);
+    const ruling = { attacker: "schere", target: "fels", valid: true, verb: "zerschneidet", reason: "Schere schlägt Stein." };
+    const stored = add([core.pack], emptyLearnedPack(), ruling);
+    assert.ok(stored);
+    const check = checkRuling(stored.onto, need(stored.onto.formById("schere")), need(stored.onto.formById("fels")), ruling);
+    assert.equal(check.valid, false);
+    assert.equal(check.failedAt, "power");
+  });
+
   it("referee answers are validated (unknown mechanism, missing reason → no ruling)", async () => {
     const { verdictFrom } = await import("../src/llm/referee.ts");
     const { attempt } = await import("../src/engine/attempt.ts");
@@ -181,3 +194,25 @@ function need<T>(x: T | undefined): T {
   assert.ok(x !== undefined);
   return x;
 }
+
+describe("learned pack after the core grew", () => {
+  it("drops entries the core now defines and keeps the rest", async () => {
+    const { reconcileLearned } = await import("../src/llm/learning.ts");
+    const core = parsePack(CORE_PACK_RAW);
+    assert.ok(core.ok);
+    const stale: ContentPack = {
+      ...emptyLearnedPack(),
+      forms: [
+        { id: "loeschdecke", name: "Löschdecke", archetype: "weapon", scale: 1, plane: "materie", tags: ["stoff"], verbs: ["erstickt"] },
+        { id: "zauberkessel_x", name: "Zauberkessel X", archetype: "cup", scale: 2, plane: "materie", tags: ["eisen"], verbs: ["zerschlaegt"] },
+        { id: "kaputt_x", name: "Kaputt X", archetype: "cup", scale: 2, plane: "materie", tags: ["gibt_es_nicht"], verbs: ["zerschlaegt"] },
+      ],
+    };
+    assert.throws(() => Ontology.compile([core.pack, stale]));
+    const fixed = reconcileLearned([core.pack], stale);
+    assert.ok(fixed);
+    assert.deepEqual(fixed.forms.map((f) => f.id), ["zauberkessel_x"]);
+    const onto = Ontology.compile([core.pack, fixed]);
+    assert.equal(onto.formById("loeschdecke")?.archetype, "cloth");
+  });
+});
