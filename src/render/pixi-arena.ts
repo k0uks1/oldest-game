@@ -11,7 +11,7 @@
  */
 import { autoDetectRenderer, BlurFilter, Container, Graphics, Rectangle, RenderTexture, Sprite, Texture, type Renderer } from "pixi.js";
 import type { Ontology } from "../engine/ontology/ontology.ts";
-import { easeOut, GROUND_Y, HEIGHT, SIDE_X, UPSCALE, WIDTH, type Fighter, type Side } from "./arena.ts";
+import { easeOut, GROUND_Y, HEIGHT, UPSCALE, WIDTH, type Fighter, type Side } from "./arena.ts";
 import { colorNum, PixiPen, radialTexture } from "./pixi-pen.ts";
 import { ArenaScene } from "./scene.ts";
 import type { StageLayout } from "./stage.ts";
@@ -26,7 +26,6 @@ interface Layer {
 interface FighterView {
   readonly base: Container;
   readonly glow: Container;
-  readonly shadow: Graphics;
   readonly silhouette: Layer;
   readonly image: Layer;
   readonly stone: Layer;
@@ -149,7 +148,6 @@ export class PixiArena extends ArenaScene {
     const v: FighterView = {
       base: new Container(),
       glow: new Container(),
-      shadow: new Graphics(),
       silhouette: this.layer(s.silhouette),
       image: this.layer(s.image),
       stone: this.layer(s.stone),
@@ -159,7 +157,7 @@ export class PixiArena extends ArenaScene {
       scan: new Graphics(),
     };
     v.flash.blendMode = "add";
-    v.base.addChild(v.shadow, v.silhouette.sprite, v.image.sprite, v.stone.sprite, v.flash);
+    v.base.addChild(v.silhouette.sprite, v.image.sprite, v.stone.sprite, v.flash);
     v.glow.addChild(v.rim.sprite, v.emissive.sprite, v.scan);
     this.fightersBase.addChild(v.base);
     this.fightersGlow.addChild(v.glow);
@@ -223,8 +221,6 @@ export class PixiArena extends ArenaScene {
       v.base.alpha = f.alpha;
       v.glow.alpha = f.alpha * (1 - f.stone);
       const { x, y, w, h } = this.fighterRect(s, f);
-      const shw = Math.round(w * 0.4);
-      v.shadow.clear().rect(SIDE_X[s] - shw + Math.round(f.offsetX), GROUND_Y - 1, shw * 2, 3).fill({ color: 0x000000, alpha: 0.45 });
       const visible = Math.ceil(h * easeOut(f.appear));
       const mirrored = (s === 1) !== (f.facing === -1);
       const place = (l: Layer, show: boolean, alpha: number): void => {

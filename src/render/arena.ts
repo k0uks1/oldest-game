@@ -3,7 +3,8 @@ import { hash32, rng } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 import { paletteFor, type SpritePalette } from "./palette.ts";
 import { renderGlow, renderSprite, type PixelImage } from "./sprite.ts";
-import { FLOOR_Y, GROUND_Y, HEIGHT, ISO, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
+import { ISO } from "./stage-iso.ts";
+import { FLOOR_Y, GROUND_Y, HEIGHT, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
 
 export { FLOOR_Y, GROUND_Y, HEIGHT, TORCH_X, WIDTH } from "./stage.ts";
 
@@ -277,6 +278,8 @@ export abstract class ArenaSim {
   protected readonly fieldFx = new Map<string, { level: number; target: number }>();
   /** Discovery star floating above a fighter. */
   protected discoveryGlow: { side: Side; life: number } | null = null;
+  /** Water drops falling from the vault (where the stage says it drips). */
+  protected readonly drops: { x: number; y: number; vy: number; readonly land: number }[] = [];
 
   /** Bumped whenever the backdrop canvas was repainted (bricks fell) – renderers re-upload. */
   protected backdropVersion = 0;
@@ -297,9 +300,9 @@ export abstract class ArenaSim {
     const r = rng(4242);
     for (let i = 0; i < 38; i++) this.motes.push({ x: r() * WIDTH, y: 20 + r() * (GROUND_Y - 20), vx: (r() - 0.5) * 3, vy: (r() - 0.5) * 2, phase: r() * 10 });
     for (let i = 0; i < 12; i++) {
-      // pairs of eyes in the dark upper wall, away from the torches
-      const x = 70 + Math.floor(r() * 340);
-      this.eyes.push({ x, y: 8 + Math.floor(r() * 40), phase: r() * 20, color: r() < 0.7 ? "#ff5a3c" : "#f0c850" });
+      // pairs of eyes in the dark – where the stage has dark places, otherwise high on the wall
+      const [x, y] = stage.eyes?.[i] ?? [70 + Math.floor(r() * 340), 8 + Math.floor(r() * 40)];
+      this.eyes.push({ x, y, phase: r() * 20, color: r() < 0.7 ? "#ff5a3c" : "#f0c850" });
     }
   }
 
@@ -1021,6 +1024,7 @@ export abstract class ArenaSim {
       f.flash = Math.max(0, f.flash - dt * 3);
       if (f.alpha > 0 && f.aura.kind !== "none" && this.rand() < dt * 18) this.emitAura(side as Side, f);
     }
+    this.updateDrops(dt);
     for (const tx of TORCH_X) {
       if (this.rand() < 0.15) this.particles.push({ x: tx, y: 80, vx: (this.rand() - 0.5) * 8, vy: -20, life: 0, max: 0.8, color: "#ffb040", size: 1, gravity: -5, glow: true });
     }
@@ -1065,6 +1069,21 @@ export abstract class ArenaSim {
       if (bolt.life > bolt.max) this.bolts.splice(i, 1);
     }
 
+  }
+
+  /** Drops fall from the dark vault and ring out on the floor. */
+  private updateDrops(dt: number): void {
+    if (!this.reducedMotion) for (const [x, land] of this.stage.drips) if (this.rand() < dt * 0.3) this.drops.push({ x, y: -2, vy: 0, land });
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const d = this.drops[i];
+      if (d === undefined) continue;
+      d.vy += 320 * dt;
+      d.y += d.vy * dt;
+      if (d.y < d.land) continue;
+      this.drops.splice(i, 1);
+      this.rings.push({ x: d.x, y: d.land, r: 1, life: 0, max: 0.8, color: "#7fc6e8", grow: 12 });
+      for (let k = 0; k < 3; k++) this.particles.push({ x: d.x, y: d.land - 1, vx: (this.rand() - 0.5) * 30, vy: -20 - this.rand() * 25, life: 0, max: 0.35, color: "#9fd8f0", size: 1, gravity: 240, glow: false });
+    }
   }
 
   /** Particles along a travelling attack, shaped by its style. */

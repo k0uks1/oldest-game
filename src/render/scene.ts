@@ -9,7 +9,7 @@
  */
 import { ArenaSim, GROUND_Y, SIDE_X, type Side } from "./arena.ts";
 import type { Pen } from "./pen.ts";
-import { FLOOR_Y, HEIGHT, TORCH_X, TORCH_Y, WIDTH } from "./stage.ts";
+import { HEIGHT, TORCH_X, TORCH_Y, WIDTH } from "./stage.ts";
 
 const RAINBOW = ["#ff5a5a", "#ffa040", "#ffe060", "#70e060", "#60a0ff", "#9a6aff"];
 
@@ -22,6 +22,7 @@ export abstract class ArenaScene extends ArenaSim {
     this.drawEyes(base, glow);
     this.drawTorchFlames(base, glow);
     this.drawMotes(base);
+    this.drawDrops(base, glow);
     this.drawRainbow(base, glow);
     this.drawRune(base, glow);
   }
@@ -50,16 +51,43 @@ export abstract class ArenaScene extends ArenaSim {
     this.drawFieldOverlay(base);
   }
 
-  /** Torchlight on the walls and a pool of light under every fighter. */
+  /** Soft things on the ground: torchlight, mist, light pools and shadows under the fighters. */
   private drawLights(base: Pen): void {
     for (const tx of TORCH_X) {
       const r = 50 + this.flicker(tx) * 4;
       base.light(tx, TORCH_Y, r, r, "#ffaa46", 0.32);
+      // and a warm patch on the floor below
+      base.light(tx, this.stage.floorTop(tx) + 8, r * 0.8, r * 0.22, "#ffaa46", 0.1);
     }
+    if (this.stage.fog) this.drawFog(base);
     for (const [side, f] of this.fighters.entries()) {
       if (f === null || f.alpha <= 0) continue;
-      const r = f.sprite.pixels.width * 0.9;
-      base.light(SIDE_X[side as Side] + f.offsetX, GROUND_Y, r, r * 0.35, f.sprite.palette.glow, (f.sprite.palette.emissive ? 0.35 : 0.12) * f.appear);
+      const w = f.sprite.pixels.width;
+      const x = SIDE_X[side as Side] + f.offsetX;
+      base.light(x, GROUND_Y, w * 0.9, w * 0.9 * 0.35, f.sprite.palette.glow, (f.sprite.palette.emissive ? 0.35 : 0.12) * f.appear);
+      // what glows lights up the wall behind it
+      if (f.sprite.palette.emissive) base.light(x, this.stage.floorTop(x) - 26, w * 0.9, 44, f.sprite.palette.glow, 0.13 * f.appear * f.reveal * f.alpha);
+      // contact shadow: smaller and fainter under whatever hovers
+      const k = f.flying ? 0.7 : 1;
+      base.light(x, GROUND_Y + 1, w * 0.5 * k, (w * 0.12 + 3) * k, "#000000", 0.6 * k * f.alpha * f.appear * f.squash);
+    }
+  }
+
+  /** Low mist drifting across the floor – a few wide, faint banks at their own pace. */
+  private drawFog(base: Pen): void {
+    for (let i = 0; i < 7; i++) {
+      const speed = this.reducedMotion ? 0 : 3 + (i % 3) * 2;
+      const x = ((i * 97 + this.time * speed) % 620) - 70;
+      const y = 176 + ((i * 37) % 84);
+      const a = 0.09 + 0.04 * Math.sin(this.time * 0.3 + i);
+      base.light(x, y, 60 + ((i * 13) % 30), 9 + (i % 4) * 2, "#3c3354", a);
+    }
+  }
+
+  private drawDrops(base: Pen, glow: Pen): void {
+    for (const d of this.drops) {
+      base.rect(d.x, Math.round(d.y), 1, 2, "#9fd8f0", 0.8);
+      glow.rect(d.x, Math.round(d.y), 1, 2, "#9fd8f0", 0.35);
     }
   }
 
@@ -76,13 +104,16 @@ export abstract class ArenaScene extends ArenaSim {
     }
   }
 
-  /** Puddle shimmer, frost rim – on the floor, before the fighters. */
+  /** Puddle shimmer, frost rim – on the floor (whatever its shape), before the fighters. */
   private drawFieldFloor(base: Pen): void {
+    const st = this.stage;
+    const top = Math.min(st.floorTop(0), st.floorTop(WIDTH / 2), st.floorTop(WIDTH));
     const nass = this.field("nass");
     if (nass > 0.01) {
-      for (let y = FLOOR_Y + 6; y < HEIGHT; y += 5) {
+      for (let y = top + 6; y < HEIGHT; y += 5) {
         const off = Math.round(Math.sin(this.time * 1.7 + y * 0.4) * 6);
-        base.rect(40 + off, y, WIDTH - 80, 1, "#3f8fc9", 0.18 * nass);
+        // in 16-px pieces, only where there is floor
+        for (let x = 40; x < WIDTH - 40; x += 16) if (y >= st.floorTop(x + 8) + 3) base.rect(x + off, y, 16, 1, "#3f8fc9", 0.18 * nass);
       }
     }
     const frost = this.field("frost");
@@ -90,8 +121,9 @@ export abstract class ArenaScene extends ArenaSim {
       // rime creeping in from the edges of the floor, sparse in the middle
       for (let i = 0; i < 420; i++) {
         const x = (i * 7919) % WIDTH;
-        const y = FLOOR_Y + ((i * 104729) % (HEIGHT - FLOOR_Y));
-        const edge = Math.min(x, WIDTH - x) / (WIDTH / 2);
+        const y = top + ((i * 104729) % (HEIGHT - top));
+        if (y < st.floorTop(x) + 1) continue;
+        const edge = st.floorEdge(x, y);
         if (edge > 0.25 + 0.75 * frost * ((i % 7) / 7)) continue;
         base.rect(x, y, 1 + (i % 3 === 0 ? 1 : 0), 1, "#dff4ff", 0.5 * frost * (1 - edge));
       }
