@@ -142,15 +142,15 @@ describe("referee precedents (Schiedssprüche)", () => {
     const { createGame, play } = await import("../src/engine/game.ts");
     const core = parsePack(CORE_PACK_RAW);
     assert.ok(core.ok);
-    const stored = add([core.pack], emptyLearnedPack(), { attacker: "salz", target: "ritter", valid: true, verb: "zersetzt", reason: "Salz lässt die Rüstung rosten." });
+    const stored = add([core.pack], emptyLearnedPack(), { attacker: "samurai", target: "ritter", valid: true, verb: "zerschneidet", reason: "Die Klinge findet die Lücke in der Rüstung." });
     assert.ok(stored);
     const onto = stored.onto;
     const g = play(onto, createGame(["A", "B"]), need(onto.formById("ritter")), null);
     assert.ok(g.ok);
-    const r = attempt(onto, g.value, need(onto.formById("salz")), "zersetzt");
+    const r = attempt(onto, g.value, need(onto.formById("samurai")), "zerschneidet");
     assert.ok(r.kind === "success", r.kind === "failure" ? r.failure.reason : r.kind);
     assert.equal(r.move.check?.ruling, true);
-    assert.ok(r.move.check.steps.some((s) => s.text.includes("Rüstung rosten")));
+    assert.ok(r.move.check.steps.some((s) => s.text.includes("Lücke in der Rüstung")));
   });
 
   it("uncertain failures are flagged; a negative ruling stops further asking", async () => {
@@ -162,14 +162,14 @@ describe("referee precedents (Schiedssprüche)", () => {
     const base = Ontology.compile([core.pack]);
     const g = play(base, createGame(["A", "B"]), need(base.formById("ritter")), null);
     assert.ok(g.ok);
-    const r = attempt(base, g.value, need(base.formById("salz")), null);
+    const r = attempt(base, g.value, need(base.formById("samurai")), null);
     assert.ok(r.kind === "failure");
     assert.ok(r.failure.uncertain !== undefined);
-    const stored = add([core.pack], emptyLearnedPack(), { attacker: "salz", target: "ritter", valid: false, verb: r.failure.closest?.verb ?? "zersetzt", reason: "Salz kratzt Stahl nicht." });
+    const stored = add([core.pack], emptyLearnedPack(), { attacker: "samurai", target: "ritter", valid: false, verb: r.failure.closest?.verb ?? "zerschneidet", reason: "Stahl hält die Klinge ab." });
     assert.ok(stored);
     const g2 = play(stored.onto, createGame(["A", "B"]), need(stored.onto.formById("ritter")), null);
     assert.ok(g2.ok);
-    const r2 = attempt(stored.onto, g2.value, need(stored.onto.formById("salz")), null);
+    const r2 = attempt(stored.onto, g2.value, need(stored.onto.formById("samurai")), null);
     assert.ok(r2.kind === "failure");
     assert.equal(r2.failure.uncertain, undefined);
   });
@@ -194,11 +194,13 @@ describe("referee precedents (Schiedssprüche)", () => {
     const onto = coreOntology();
     const g = play(onto, createGame(["A", "B"]), need(onto.formById("ritter")), null);
     assert.ok(g.ok);
-    const r = attempt(onto, g.value, need(onto.formById("salz")), null);
+    const r = attempt(onto, g.value, need(onto.formById("samurai")), null);
     assert.ok(r.kind === "failure");
     assert.equal(verdictFrom(onto, r.failure, { sieg: true, mechanismus: "zaubert_alles_weg", begruendung: "" }), undefined);
-    const ok = verdictFrom(onto, r.failure, { sieg: true, mechanismus: "zersetzt", begruendung: "Salz frisst Metall." });
-    assert.equal(ok?.ruling.verb, "zersetzt");
+    // a victory needs a mechanism the attacker actually has
+    assert.equal(verdictFrom(onto, r.failure, { sieg: true, mechanismus: "zersetzt", begruendung: "Säure frisst Metall." }), undefined);
+    const ok = verdictFrom(onto, r.failure, { sieg: true, mechanismus: "zerschneidet", begruendung: "Die Klinge findet die Fuge." });
+    assert.equal(ok?.ruling.verb, "zerschneidet");
   });
 });
 

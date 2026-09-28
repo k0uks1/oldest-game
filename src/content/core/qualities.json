@@ -1,0 +1,8 @@
+[
+  {"id": "hitze", "label": "Hitze", "kind": "kraft", "default": 2, "hint": "Wie heiß: Kerze 1, Feuer 2, Schmiedefeuer 3, Lava 4, Vulkan 5, Sonne 6."},
+  {"id": "hitzefest", "label": "Hitzefestigkeit", "kind": "schutz", "hint": "Welche Hitze es übersteht: Holz 0, Metall 3, Stein 5."},
+  {"id": "naesse", "label": "Wasserkraft", "kind": "kraft", "default": 2, "hint": "Wie viel Wasser: Regen 2, Fluss 3, Flut 4, Ozean 5."},
+  {"id": "haerte", "label": "Härte", "kind": "schutz", "hint": "Wie hart: Sand 0, Holz 1, Stein und Metall 3, Diamant 6."},
+  {"id": "kaelte", "label": "Kälte", "kind": "kraft", "default": 2, "hint": "Wie kalt: Frost 2, Gletscher 4, ewiges Eis 5."},
+  {"id": "kaeltefest", "label": "Kältefestigkeit", "kind": "schutz", "hint": "Welche Kälte es übersteht: Fell 1, Untote 3."}
+]

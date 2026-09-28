@@ -1358,7 +1358,7 @@ export class App {
         { class: "rules" },
         li(`Spieler 1 eröffnet mit einer kleinen Gestalt (höchstens Stufe ${String(c.maxOpeningScale)}) – kostenlos und mit ${String(c.openingEleganz)} Eleganz als Ausgleich für den ersten Zug.`),
         li("Abwechselnd wird jeder zu etwas, das die letzte Gestalt des Gegners besiegt – mit einem ", h("em", {}, "Mechanismus"), " (verbrennt, ertränkt, nennt den wahren Namen …)."),
-        li("Die Engine prüft deterministisch: Hat das Ziel eine passende Angriffsfläche? Blockiert etwas? Reicht die Kraft (Stufe + Hebel + Schwäche)?"),
+        li("Die Engine prüft deterministisch: Hat das Ziel eine passende Angriffsfläche? Blockiert etwas? Kommt man überhaupt heran (Nahkampf erreicht nichts, was fliegt)? Reicht die Intensität (eine Kerze schmilzt keinen Anker, ein Eimer Wasser trägt keinen Fels ab)? Reicht die Kraft (Stufe + Hebel + Schwäche)?"),
         li(`Jede Gestalt kostet `, h("strong", {}, "Wille"), ` (die leuchtende Linie). Größe ist teuer, Schwächen machen billiger. Wer mehr als eine Stufe über dem Ziel spielt, zahlt Overkill. Maximal +${String(c.maxScaleJump)} Stufen.`),
         li("Wer kleiner als das Ziel gewinnt, bekommt Wille zurück und viel ", h("strong", {}, "Eleganz ✦"), "."),
         li(`Einfallsreichtum: Wer zu etwas wird, das das Spiel noch nie gesehen hat, lehrt es dem Grimoire – und bekommt bei Erfolg +${String(c.discoveryEleganz)} Eleganz.`),

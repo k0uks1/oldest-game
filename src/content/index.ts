@@ -27,6 +27,8 @@ import basis2 from "./core/forms/basis2.json" with { type: "json" };
 import modifiers from "./core/modifiers.json" with { type: "json" };
 import tags from "./core/tags.json" with { type: "json" };
 import verbs from "./core/verbs.json" with { type: "json" };
+import qualities from "./core/qualities.json" with { type: "json" };
+import combos from "./core/combos.json" with { type: "json" };
 import sketches from "./core/sketches.json" with { type: "json" };
 
 /** Forms are split by theme to keep files reviewable; order = lookup priority for aliases. */
@@ -52,6 +54,8 @@ export const CORE_PACK_RAW: unknown = {
   modifiers,
   forms: withSketches(FORM_FILES.flat()),
   fields,
+  qualities,
+  combos,
 };
 
 export function loadPack(raw: unknown): ContentPack {

@@ -2,8 +2,23 @@ import { validPixelArt } from "../pixelart.ts";
 import { normalize } from "../text.ts";
 import { ARCHETYPES, PLANES, type Archetype, type Form, type Plane, type Scale } from "../types.ts";
 import { Trie, TrigramIndex } from "./indexes.ts";
-import type { ContentPack, FieldSpec, FormSpec, ModifierSpec, RulingSpec, TagSpec, VerbSpec } from "./pack.ts";
-import { difference, fromIterable, has, intersection, type TagSet } from "./tagset.ts";
+import type { ComboSpec, ContentPack, FieldSpec, FormSpec, ModifierSpec, QualitySpec, RulingSpec, TagSpec, VerbSpec } from "./pack.ts";
+import { difference, fromIterable, has, intersection, union, type TagSet } from "./tagset.ts";
+
+/** Intensity levels run 0..6. */
+export const MAX_LEVEL = 6;
+
+export function clampLevel(n: number): number {
+  return Math.max(0, Math.min(MAX_LEVEL, Math.round(n)));
+}
+
+interface CompiledCombo {
+  readonly spec: ComboSpec;
+  readonly when: readonly number[];
+  readonly unless: readonly number[];
+  readonly add: readonly string[];
+  readonly remove: readonly string[];
+}
 
 export interface CompiledVerb {
   readonly spec: VerbSpec;
@@ -22,6 +37,10 @@ export interface CompiledForm {
   readonly immune: ReadonlySet<string>;
   /** "Schreck" triggers from tags in the closure: which tag is startled, by which mechanisms / attacker tags. */
   readonly startle: readonly { readonly tag: number; readonly verbs: ReadonlySet<string>; readonly tags: TagSet }[];
+  /** Intensities set by tags, combos or the form itself (0..6); unset ones use the quality default. */
+  readonly qualities: ReadonlyMap<string, number>;
+  /** Combination rules that shaped this form (ids, in order applied). */
+  readonly combos: readonly string[];
 }
 
 export class OntologyError extends Error {
@@ -53,8 +72,15 @@ export class Ontology {
   readonly verbs: ReadonlyMap<string, CompiledVerb>;
   readonly modifiers: readonly ModifierSpec[];
   readonly fields: readonly FieldSpec[];
+  /** Intensity kinds (hitze, hitzefest, …) in pack order. */
+  readonly qualities: ReadonlyMap<string, QualitySpec>;
+  readonly combos: readonly ComboSpec[];
   readonly lexicon: readonly Form[];
   readonly warnings: readonly string[];
+
+  private readonly qualitiesByTag = new Map<number, Readonly<Record<string, number>>>();
+  private readonly qualityTags: TagSet;
+  private readonly compiledCombos: readonly CompiledCombo[];
 
   private readonly tagIndex = new Map<string, number>();
   private readonly parentIdx: number[][] = [];
@@ -199,6 +225,58 @@ export class Ontology {
     }
     this.fields = fields;
 
+    // ── Intensities ("Qualitäten") ──────────────────────────────────────
+    const qualities = new Map<string, QualitySpec>();
+    for (const p of packs) {
+      for (const q of p.qualities ?? []) {
+        if (qualities.has(q.id)) errors.push(`Qualität „${q.id}“ doppelt definiert (${p.id}).`);
+        else qualities.set(q.id, q);
+      }
+    }
+    this.qualities = qualities;
+    const levelsOk = (levels: Readonly<Record<string, number>> | undefined, where: string, delta = false): void => {
+      for (const [k, n] of Object.entries(levels ?? {})) {
+        if (!qualities.has(k)) errors.push(`${where}: unbekannte Qualität „${k}“.`);
+        else if (!Number.isInteger(n) || n < (delta ? -MAX_LEVEL : 0) || n > MAX_LEVEL) errors.push(`${where}: Stufe von „${k}“ muss ${delta ? "−6…6" : "0–6"} sein.`);
+      }
+    };
+    tags.forEach((t, i) => {
+      if (t.qualities === undefined) return;
+      levelsOk(t.qualities, `Tag ${t.id}.qualities`);
+      this.qualitiesByTag.set(i, t.qualities);
+    });
+    this.qualityTags = fromIterable(this.qualitiesByTag.keys());
+    for (const v of verbs.values()) {
+      for (const n of v.spec.needs ?? []) {
+        for (const q of [n.by, n.vs]) if (!qualities.has(q)) errors.push(`Mechanismus ${v.spec.id}.needs: unbekannte Qualität „${q}“.`);
+      }
+    }
+
+    // ── Combination rules ───────────────────────────────────────────────
+    const combos: ComboSpec[] = [];
+    const compiledCombos: CompiledCombo[] = [];
+    for (const p of packs) {
+      for (const c of p.combos ?? []) {
+        if (combos.some((x) => x.id === c.id)) {
+          errors.push(`Kombination „${c.id}“ doppelt definiert (${p.id}).`);
+          continue;
+        }
+        const where = `Kombination ${c.id}`;
+        if (c.if.length === 0) errors.push(`${where}: „if“ ist leer.`);
+        levelsOk(c.qualities, `${where}.qualities`, true);
+        combos.push(c);
+        compiledCombos.push({
+          spec: c,
+          when: c.if.map((t) => ref(t, where)).filter(isNum),
+          unless: (c.unless ?? []).map((t) => ref(t, where)).filter(isNum),
+          add: (c.add ?? []).filter((t) => ref(t, where) !== undefined),
+          remove: (c.remove ?? []).filter((t) => ref(t, where) !== undefined),
+        });
+      }
+    }
+    this.combos = combos;
+    this.compiledCombos = compiledCombos;
+
     // ── Forms ───────────────────────────────────────────────────────────
     const lexicon: Form[] = [];
     for (const p of packs) {
@@ -207,6 +285,7 @@ export class Ontology {
           errors.push(`Gestalt „${spec.id}“ doppelt definiert (${p.id}).`);
           continue;
         }
+        levelsOk(spec.qualities, `Gestalt ${spec.id}.qualities`);
         const form = this.formFromSpec(spec, errors, verbRef, ref);
         if (form === undefined) continue;
         this.formsById.set(form.id, form);
@@ -323,6 +402,7 @@ export class Ontology {
       immune: spec.immune ?? [],
       weak: spec.weak ?? [],
       origin: "lexikon",
+      ...(spec.qualities === undefined ? {} : { qualities: spec.qualities }),
       ...(spec.flavor === undefined ? {} : { flavor: spec.flavor }),
       ...spriteOf(spec),
     };
@@ -415,7 +495,7 @@ export class Ontology {
   compileForm(form: Form): CompiledForm {
     const cached = this.compiled.get(form);
     if (cached !== undefined) return cached;
-    const closure = this.expand(form.tags, form.not);
+    const { closure, applied } = this.applyCombos(this.expand(form.tags, form.not));
     const verbs = new Set<string>();
     for (const v of form.verbs) if (this.verbs.has(v)) verbs.add(v);
     for (const t of intersection(closure, this.grantTags)) for (const g of this.grantsByTag.get(t) ?? []) verbs.add(g);
@@ -426,9 +506,68 @@ export class Ontology {
       weak: fromIterable(form.weak.map((w) => this.tagIndex.get(w)).filter(isNum)),
       immune: new Set(form.immune),
       startle: intersection(closure, this.startleTags).map((tag) => ({ tag, ...(this.startleByTag.get(tag) ?? { verbs: new Set<string>(), tags: fromIterable([]) }) })),
+      qualities: this.resolveQualities(closure, applied, form.qualities),
+      combos: applied.map((c) => c.id),
     };
     this.compiled.set(form, compiled);
     return compiled;
+  }
+
+  /**
+   * Apply combination rules until nothing changes (each rule at most once, so this terminates
+   * after at most |combos| passes). Cost is O(combos · |if|·log|closure|) per form, memoised.
+   */
+  private applyCombos(start: TagSet): { closure: TagSet; applied: ComboSpec[] } {
+    let closure = start;
+    const applied: ComboSpec[] = [];
+    const done = new Set<CompiledCombo>();
+    for (let changed = true; changed; ) {
+      changed = false;
+      for (const c of this.compiledCombos) {
+        if (done.has(c)) continue;
+        if (!c.when.every((t) => has(closure, t)) || c.unless.some((t) => has(closure, t))) continue;
+        done.add(c);
+        applied.push(c.spec);
+        closure = union([closure, this.expand(c.add)]);
+        if (c.remove.length > 0) closure = difference(closure, this.descendantsOfAll(c.remove));
+        changed = true;
+      }
+    }
+    return { closure, applied };
+  }
+
+  private descendantsOfAll(ids: readonly string[]): TagSet {
+    return union(ids.map((id) => this.tagIndex.get(id)).filter(isNum).map((i) => this.descendantsOf(i)));
+  }
+
+  /**
+   * Intensity per quality: among the closure's tags that set it, the most specific wins
+   * (a tag is dropped when a descendant of it also sets the quality – `stahl` over `metall`);
+   * ties between unrelated tags take the maximum. Then combo deltas, then the form's own overrides.
+   */
+  private resolveQualities(closure: TagSet, applied: readonly ComboSpec[], overrides: Readonly<Record<string, number>> | undefined): ReadonlyMap<string, number> {
+    const carriers = intersection(closure, this.qualityTags);
+    const out = new Map<string, number>();
+    for (const [id, q] of this.qualities) {
+      const setters = carriers.filter((t) => this.qualitiesByTag.get(t)?.[id] !== undefined);
+      const specific = setters.filter((t) => !setters.some((d) => d !== t && has(this.ancestorsOf(d), t)));
+      const deltas = applied.filter((c) => c.qualities?.[id] !== undefined);
+      const own = overrides?.[id];
+      if (own !== undefined) {
+        out.set(id, clampLevel(own));
+        continue;
+      }
+      if (specific.length === 0 && deltas.length === 0) continue; // unset: `quality()` falls back to the default
+      let level = specific.length === 0 ? (q.default ?? 0) : Math.max(...specific.map((t) => this.qualitiesByTag.get(t)?.[id] ?? 0));
+      for (const c of deltas) level += c.qualities?.[id] ?? 0;
+      out.set(id, clampLevel(level));
+    }
+    return out;
+  }
+
+  /** Intensity of one quality: what tags, combos or the form set – else the quality's default (0 if unknown). */
+  quality(form: Form, id: string): number {
+    return this.compileForm(form).qualities.get(id) ?? this.qualities.get(id)?.default ?? 0;
   }
 
   /** Does the (expanded) form carry `tagId` – directly, by inheritance or implication? */
