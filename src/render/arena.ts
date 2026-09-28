@@ -2,7 +2,8 @@ import type { Ontology } from "../engine/ontology/ontology.ts";
 import { hash32, rng } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 import { paletteFor, type SpritePalette } from "./palette.ts";
-import { renderGlow, renderSprite, type PixelImage } from "./sprite.ts";
+import { artFor, artGlow, upscale } from "./art.ts";
+import { renderGlow, renderSprite, spriteSize, type PixelImage } from "./sprite.ts";
 import { ISO } from "./stage-iso.ts";
 import { FLOOR_Y, GROUND_Y, HEIGHT, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
 
@@ -487,14 +488,17 @@ export abstract class ArenaSim {
   }
 
   private sprite(form: Form): SpriteEntry {
-    const key = `${form.id}@${String(form.scale)}`;
+    const art = artFor(form);
+    // art may arrive later for a learned form – it gets its own cache slot
+    const key = `${form.id}@${String(form.scale)}${art === undefined ? "" : "#art"}`;
     const cached = this.spriteCache.get(key);
     if (cached !== undefined) return cached;
-    const pixels = renderSprite(this.onto, form);
     const palette = paletteFor(this.onto, form);
+    // generated art wins; smaller art is scaled up (nearest) to the form's sprite size
+    const pixels = art === undefined ? renderSprite(this.onto, form) : upscale(art, Math.floor(spriteSize(form.scale) / Math.max(art.width, art.height)));
     const entry: SpriteEntry = {
       image: toCanvas(pixels),
-      glow: toCanvas(renderGlow(this.onto, form)),
+      glow: toCanvas(art === undefined ? renderGlow(this.onto, form) : artGlow(pixels, palette.emissive)),
       silhouette: toCanvas(silhouetteOf(pixels, "#07050c")),
       rim: toCanvas(rimOf(pixels, palette.glow)),
       stone: toCanvas(stoneOf(pixels)),

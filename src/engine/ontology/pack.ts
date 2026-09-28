@@ -146,6 +146,8 @@ export interface FormSpec {
   readonly sketch?: string;
   /** Sprite assembled from library parts – see {@link FormLook}. */
   readonly look?: FormLook;
+  /** Generated pixel art, `w.h.palette.runs` (see render/art.ts). */
+  readonly art?: string;
   /** Live learning: who first summoned this form and when (ISO date). Purely informational. */
   readonly discoveredBy?: string;
   readonly discoveredAt?: string;
@@ -239,6 +241,15 @@ class ShapeChecker {
       return [];
     }
     return v;
+  }
+
+  /** Generated art: shape-checked here, fully decoded (and dropped if broken) by the renderer. */
+  art(o: Obj, key: string, where: string): string | undefined {
+    const v = o[key];
+    if (v === undefined) return undefined;
+    if (typeof v === "string" && v.length <= 48_000 && /^\d{1,3}\.\d{1,3}\.(?:[0-9a-f]{8})*\.[A-Za-z0-9+/]*={0,2}$/.test(v)) return v;
+    this.errors.push(`${where}: "${key}" ist kein gültiges Bild`);
+    return undefined;
   }
 
   /** Sprite blueprint: short ids and #rrggbb colours only. */
@@ -373,6 +384,7 @@ export function parsePack(input: unknown): PackResult {
         ...opt("sprite", c.list(o, "sprite", w)),
         ...opt("sketch", c.optStr(o, "sketch", w)),
         ...opt("look", c.look(o, "look", w)),
+        ...opt("art", c.art(o, "art", w)),
         ...opt("discoveredBy", c.optStr(o, "discoveredBy", w)),
         ...opt("discoveredAt", c.optStr(o, "discoveredAt", w)),
       };

@@ -54,6 +54,8 @@ export interface Form {
   readonly sketch?: string;
   /** How it looks, assembled from library parts (render/look.ts). Presentation only – rules never see it. */
   readonly look?: FormLook;
+  /** Generated pixel art (render/art.ts format) – wins over every drawn fallback. Presentation only. */
+  readonly art?: string;
 }
 
 /**

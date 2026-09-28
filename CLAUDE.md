@@ -15,6 +15,7 @@ npm test           # node:test via tsx (tests/*.test.ts)
 npm run build      # → dist/index.html (single self-contained file, opens from disk)
 npm run simulate   # balancing report; add `-- --games 2000` for bot self-play
 npm run sheet -- items   # sprite contact sheet PNG (items | emblems a+b,c | form ids)
+npm run art -- status    # generated art: status | ingest <dir> | generate [--limit N] (needs PIXELLAB_API_KEY)
 ```
 
 ## Architecture
@@ -98,6 +99,15 @@ the flag comes from validated live learning, never from Claude directly).
 it needs an escape route tag (`config.escapeRoutes`: fliegt / schwimmt / graebt), the target must not have a
 tag that follows along that route, at least one *physical* mechanism of the target must reach the evader, no
 non-physical one may, and the target must be ≤ `maxEscapeScale`. Echo applies; defeating is preferred.
+
+### Generated art ("Kunst", `render/art.ts`)
+
+Pixel art from PixelLab (pixflux, side view facing right, transparent, one fixed style recipe in
+`server/pixellab.ts`), generated once per form at `spriteSize(scale)` (32/64/128) and stored in a compact
+pure format (`w.h.palette.runs`): core forms in `content/core/art.json` (prompts in `art-prompts.json`),
+learned forms in `FormSpec.art` (shape-checked by `parsePack`, fully decoded by the renderer). Art wins over
+every drawn fallback; silhouette/rim/stone/glow are derived from its pixels. The PixelLab key lives only in
+the environment (`PIXELLAB_API_KEY`) – never in a build, the repo or the browser.
 
 ### Sprites from parts ("Bauplan", `render/look.ts`)
 
