@@ -297,3 +297,9 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | Idee | Was es tut | Wo |
 |---|---|---|
 | **„zählt nicht“ für alle** | Ein echter Fehlversuch („Es genügt nicht.“) kam schon immer bei allen an. Ein Zug, der gar nicht zählt (Echo, Arena gewachsen, zu wenig Wille, unverständlich), ging aber nur an den Spieler selbst – beim Gegner hing sogar „denkt nach …“. Jetzt sehen Gegner und Zuschauer „Ben versucht „…“ – zählt nicht, noch einmal.“ | `tried` in `protocol.ts`, `server/online.ts` |
+
+## Keine gequetschten Gestalten nach dem Neuverbinden (Nutzerfeedback: „wenn man neu connected, sind die Sprites gequetscht“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Sprite misst sich neu** | Beim Wiederverbinden erscheint die stehende Gestalt direkt sichtbar und materialisiert sich Zeile für Zeile. Pixi 8 hat die Größe dabei nur einmal übernommen, sodass sie als Streifen hängen blieb. Jetzt ist die Textur „dynamisch“ und meldet jede Änderung. | `pixi-arena.ts` |
