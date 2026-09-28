@@ -1,5 +1,5 @@
 import { ESCAPE } from "../engine/rules.ts";
-import { validPixelArt } from "../engine/pixelart.ts";
+import { SKETCH_EXAMPLES, SKETCH_GUIDE, sanitizeSketch } from "../render/svgsprite.ts";
 import type { Ontology } from "../engine/ontology/ontology.ts";
 import { parseForm, suggest } from "../engine/parse.ts";
 import { clampScale } from "../engine/rules.ts";
@@ -31,6 +31,8 @@ export interface LlmParseResult {
   readonly fromCache: boolean;
   /** New vocabulary Claude proposed (validated later by `learn`). */
   readonly delta: LearningDelta;
+  /** Sanitized SVG sketch for a brand-new thing (see `rasterizeSketch`), if Claude drew one. */
+  readonly sketch?: string;
 }
 
 const FAMILIES = ["gewalt", "element", "leben", "sinne", "geist", "magie", "kosmos"] as const;
@@ -87,15 +89,12 @@ const TOOL: ToolDef = {
           required: ["name", "parents"],
         },
       },
-      pixel_art: {
-        type: "array",
-        items: { type: "string" },
-        minItems: 16,
-        maxItems: 16,
+      skizze: {
+        type: "string",
         description:
-          "NUR bei base = null (wirklich neue Gestalt): ein 16×16-Pixelbild als 16 Zeilen à 16 Zeichen, Blick nach rechts. " +
-          "Zeichen: . leer, # Körper, + zweite Farbe (Stoff, Bauch, Glas), o Leuchten (Augen, Kern), * Glanzlicht, , dunkles Detail. " +
-          "Eine klare, zusammenhängende Silhouette, die man sofort erkennt (Löschdecke = gefaltetes Tuch, Flasche = Flaschenform).",
+          "NUR bei base = null UND einem Ding ohne Leben (Gegenstand, Bauwerk, Fahrzeug, Werkzeug, Naturgewalt, Begriff als Symbol): " +
+          SKETCH_GUIDE +
+          " Beispiele – Kühlschrank: " + SKETCH_EXAMPLES.kuehlschrank + " Regenschirm: " + SKETCH_EXAMPLES.regenschirm,
       },
       new_mechanism: {
         type: ["object", "null"],
@@ -165,8 +164,8 @@ REGELN FÜR DICH:
 - 1–3 Mechanismen, die zur Gestalt passen. Elemente bringen ihre Mechanismen selbst mit (Feuer verbrennt …).
 - intended_mechanism nur setzen, wenn der Spieler ausdrücklich beschreibt, WIE angegriffen wird.
   Beschreibt er Flucht oder Ausweichen („fliegt davon“, „taucht ab“, „gräbt sich ein“), setze "entkommt".
-- Bei einer wirklich NEUEN Gestalt (base = null) zeichne pixel_art: 16 Zeilen × 16 Zeichen, eine klare Silhouette.
-  Wähle trotzdem den ähnlichsten Archetyp (Rückfall, falls das Bild ungültig ist).
+- Bei einer wirklich NEUEN Gestalt (base = null), die NICHT lebt, zeichne eine skizze (kleines SVG).
+  Lebewesen bekommen keine Skizze – dafür gibt es fertige Figuren. Wähle immer den ähnlichsten Archetyp.
 - Keine Erklärungen, nur das Werkzeug aufrufen.`;
   systemCache.set(onto, prompt);
   return prompt;
@@ -264,7 +263,6 @@ export function formFromLlm(onto: Ontology, input: unknown, text: string): LlmPa
     weak: [],
     origin: "llm",
     ...(base?.flavor === undefined ? {} : { flavor: base.flavor }),
-    ...pixelArtOf(base, o["pixel_art"]),
   };
   // Weaknesses may name a tag Claude just proposed – keep those, they are validated after learning.
   const newTagFor = (k: string): string | undefined => delta.tags.find((t) => normalize(t.label) === normalize(k))?.id;
@@ -278,7 +276,8 @@ export function formFromLlm(onto: Ontology, input: unknown, text: string): LlmPa
   const form: Form = { ...draft, weak };
   if (onto.compileForm(form).verbs.length === 0 && delta.verbs.length === 0) return undefined;
   const iv = typeof o["intended_mechanism"] === "string" ? (resolveVerb(o["intended_mechanism"]) ?? null) : null;
-  return { form, intendedVerb: iv, base, unresolved, fromCache: false, delta };
+  const sketch = sketchOf(onto, base, form, o["skizze"]);
+  return { form, intendedVerb: iv, base, unresolved, fromCache: false, delta, ...(sketch === undefined ? {} : { sketch }) };
 }
 
 /** Turn Claude's vocabulary proposals into specs – only what resolves against existing tags survives. */
@@ -343,15 +342,17 @@ export async function parseWithClaude(onto: Ontology, settings: LlmSettings, tex
     `Gestalt des Spielers: „${text}“`,
     anchors.length > 0 ? `\nAnker aus dem Lexikon:\n${anchors.map((a) => anchorLine(onto, a)).join("\n")}` : "\nKeine passenden Anker.",
   ].join("\n");
-  const result = await callClaude(settings, { system: systemPrompt(onto), user, maxTokens: 800, tool: TOOL });
+  const result = await callClaude(settings, { system: systemPrompt(onto), user, maxTokens: 1000, tool: TOOL });
   const parsed = formFromLlm(onto, result.toolInput, text);
   if (parsed !== undefined) cacheSet(key, parsed);
   return parsed;
 }
 
-/** Custom pixel art only for brand-new forms – variants of known ones keep their family look. */
-function pixelArtOf(base: Form | null, raw: unknown): { sprite?: readonly string[] } {
-  if (base !== null) return {};
-  const sprite = validPixelArt(raw);
-  return sprite === undefined ? {} : { sprite };
+/**
+ * A sketch only for brand-new *things* – living forms keep the detailed built-in figures, and
+ * variants of known forms keep their family look. Rasterized later by the UI (needs a canvas).
+ */
+function sketchOf(onto: Ontology, base: Form | null, form: Form, raw: unknown): string | undefined {
+  if (base !== null || typeof raw !== "string" || onto.formHas(form, "lebendig")) return undefined;
+  return sanitizeSketch(raw);
 }

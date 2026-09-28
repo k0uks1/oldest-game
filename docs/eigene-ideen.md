@@ -174,3 +174,13 @@ Jeder PR erhöht `package.json` → `version`. Der Build schreibt die Version in
 ## Lesezeit (Nutzerfeedback: „man muss sich anstrengen, schnell zu lesen“)
 
 Erzählung und Warum-Zeile verschwinden nicht mehr nach einer festen Zeit. Sie bleiben stehen, bis der nächste Zug beginnt. Längere Hinweise im Banner, etwa eine Ablehnung mit Erklärung, bleiben so lange sichtbar, wie man zum Lesen braucht (etwa 15 Zeichen pro Sekunde). Kurze Ausrufe wie „Es reicht!“ blitzen weiterhin nur kurz auf.
+
+## Skizzen statt Pixelraster (Nutzerwunsch: bessere Sprites, möglichst kostenlos und ohne Wartezeit)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Claude skizziert in SVG** | Claude zeichnet ein Pixelraster Zeichen für Zeichen schlecht, einfache Formen in SVG aber gut. Für eine neue *Sache* liefert Claude deshalb im Klassifizierungsaufruf, der ohnehin stattfindet, eine kleine SVG-Skizze mit. Es gibt keinen zusätzlichen Dienst und keine GPU, die Kosten sind ein paar Tokens mehr. | `skizze` im Werkzeug `gestalt` |
+| **Rollenfarben** | Die Skizze nutzt fünf feste Füllfarben als *Rollen*: Körper, zweite Farbe, Leuchten, Glanz und dunkles Detail. Diese werden auf die Sprite-Zeichen abgebildet. Die echten Farben kommen wie bei jeder Gestalt aus den Tags, die Schattierung und Kontur aus dem normalen Sprite-Weg. So passen Skizzen zum restlichen Look. | `SKETCH_FILLS`, `pixelsToRows` |
+| **Automatischer Zuschnitt** | Die Skizze wird groß gerendert, auf das Gezeichnete zugeschnitten und stehend in 32×32 eingepasst. Zu kleine oder verrutschte Zeichnungen füllen so trotzdem den Rahmen. | `rasterizeSketch`, `opaqueBounds` |
+| **Nur für Dinge** | Ein Test mit Haiku an 20 Gestalten ergab: Gegenstände gelingen gut (Tisch, Leiter, Brille, Lupe, Leuchtturm), Lebewesen schlecht (der Drache wurde ein Streichholz). Lebewesen behalten deshalb die handgebauten Figuren. | `sketchOf` |
+| **Sicher** | Die SVG wird bereinigt (keine Skripte, Links, Bilder oder Stile) und nur als `<img>` gezeichnet, wo Browser sie abschotten. | `sanitizeSketch` |
