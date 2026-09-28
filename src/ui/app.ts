@@ -1013,6 +1013,10 @@ export class App {
         this.setBusy(false);
         this.flashBanner(m.reason, "bad");
         return;
+      case "tried":
+        this.setBusy(false);
+        this.flashBanner(`${this.players[m.seat]?.name ?? "Der Gegner"} versucht „${m.text}“ – zählt nicht, noch einmal.`, "info");
+        return;
       case "turn": {
         const narration = this.narrationFor(m.seq);
         this.onlineQueue = this.onlineQueue.then(async () => {

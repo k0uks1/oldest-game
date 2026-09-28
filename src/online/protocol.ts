@@ -81,6 +81,8 @@ export type ServerMsg =
   | { readonly t: "start"; readonly state: GameState }
   | { readonly t: "thinking"; readonly seat: PlayerId }
   | { readonly t: "rejected"; readonly reason: string }
+  /** To everyone else: the active player tried something that does not count (free retry). */
+  | { readonly t: "tried"; readonly seat: PlayerId; readonly text: string }
   | { readonly t: "turn"; readonly seq: number; readonly turn: Turn }
   | { readonly t: "narration"; readonly seq: number; readonly text: string }
   | { readonly t: "resigned"; readonly seat: PlayerId; readonly state: GameState }

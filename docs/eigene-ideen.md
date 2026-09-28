@@ -291,3 +291,9 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Ein Ofen ist kein Feuer** | Ofen, Kamin, Toaster, Schmied, Gewehr, Kanone haben Hitze, sind aber nicht selbst Feuer – Wasser „löscht“ keinen Ofen. | Content |
 | **Ehrlicher Schiedsrichter** | Claude sieht nur die Mechanismen, die der Angreifer wirklich hat; ein Urteil mit fremdem Mechanismus wird verworfen, und Urteile übergehen weder Reichweite noch Intensität. Ein Hut gegen einen Elefanten gilt nicht mehr als „strittig“ – nur wer mindestens so groß ist wie das Ziel und es gar nicht berühren kann, ist ein Fall für den Schiedsrichter. | `referee.ts`, `uncertainty()`, `checkRuling` |
 | **Seife ist fest** | Die letzte Form, gegen die der Bot aufgeben musste, lässt sich jetzt auch zerdrücken. Selbstspiel: 0 Aufgaben in 2000 Partien (vorher 4). | Content |
+
+## Auch Abgewiesenes sieht der Gegner (Nutzerfeedback: „der Gegner sieht gar nicht, dass ich etwas gespielt habe“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **„zählt nicht“ für alle** | Ein echter Fehlversuch („Es genügt nicht.“) kam schon immer bei allen an. Ein Zug, der gar nicht zählt (Echo, Arena gewachsen, zu wenig Wille, unverständlich), ging aber nur an den Spieler selbst – beim Gegner hing sogar „denkt nach …“. Jetzt sehen Gegner und Zuschauer „Ben versucht „…“ – zählt nicht, noch einmal.“ | `tried` in `protocol.ts`, `server/online.ts` |

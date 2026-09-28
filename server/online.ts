@@ -409,6 +409,8 @@ export class OnlineHub {
       this.learnedChanged();
       if (r.kind === "rejected") {
         c.peer.send({ t: "rejected", reason: r.reason });
+        // the others saw "thinking" – tell them it did not count, or they wait forever
+        this.broadcast(room, { t: "tried", seat: state.active, text: text.trim().slice(0, 40) }, c);
         return;
       }
       turn = r.turn;
