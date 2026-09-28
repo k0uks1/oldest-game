@@ -14,6 +14,7 @@ npm run check      # typecheck + lint + tests + build – run before every PR
 npm test           # node:test via tsx (tests/*.test.ts)
 npm run build      # → dist/index.html (single self-contained file, opens from disk)
 npm run simulate   # balancing report; add `-- --games 2000` for bot self-play
+npm run sheet -- items   # sprite contact sheet PNG (items | emblems a+b,c | form ids)
 ```
 
 ## Architecture
@@ -27,7 +28,8 @@ src/
     attempt.ts       player-facing move without foreknowledge: success / failure (costs Wille) / rejected
     cost.ts          Wille cost, overkill surcharge, underdog refund, eleganz
     parse.ts         mechanical parser (DEBUG ONLY in the game; used for anchors & tests)
-  content/core/*.json  the core content pack (tags, verbs, modifiers, forms; sketches.json = SVG sprites for things, id → svg)
+  content/core/*.json  the core content pack (tags, verbs, modifiers, forms, qualities, combos; sketches.json = SVG sprites for
+                     things, id → svg; symbols.json + items.json = the part library for `look` blueprints)
   llm/               Claude client, parser (text → Form), narrator, live learning + stores
   narrate/offline.ts template narration (debug / fallback)
   render/            sprite generation (pure) + arena in layers: ArenaSim (state + animation API, arena.ts)
@@ -60,7 +62,8 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
    `hash32`/`rng` from `engine/text.ts` for seeded randomness.
 5. **Live learning goes through `learn()`** (`src/llm/learning.ts`). Claude's proposals become a normal
    content pack ("gelernt") and must compile with the core, have a mechanism, a weakness and a counter.
-   New tags must have existing parents; learned mechanisms have leverage ≤ 2. Never write learned content
+   New tags must have existing parents; learned mechanisms have leverage ≤ 2; learned intensities are known
+   qualities 0–6, forces (`kraft`) at most scale + 2 (clamped in the parser *and* in `learn()`). Never write learned content
    anywhere without this validation (the local server re-validates on `PUT /api/learned`).
 6. **Scale:** content must work with tens of thousands of tags/forms. Avoid O(tags) or
    O(forms) work per check/lookup; use the ontology's indexes (`usersOf`, tries, trigram index).
@@ -95,6 +98,16 @@ the flag comes from validated live learning, never from Claude directly).
 it needs an escape route tag (`config.escapeRoutes`: fliegt / schwimmt / graebt), the target must not have a
 tag that follows along that route, at least one *physical* mechanism of the target must reach the evader, no
 non-physical one may, and the target must be ≤ `maxEscapeScale`. Echo applies; defeating is preferred.
+
+### Sprites from parts ("Bauplan", `render/look.ts`)
+
+`Form.look` (presentation only): `holds` (item for people/giants, drawn in the item's own colours via grid
+symbols `m`/`n`), `emblem` + `badge` (library symbols composed into one sketch – concepts get icons, not
+freehand drawings), `main`/`second` colours. Claude picks ids from closed enums (`aussehen` in the parser);
+a freehand `skizze` only when no part fits. Unknown ids are dropped (`knownLook`).
+
+> **Planned:** a fundamental engine rebuild (derived mechanisms/affordances, several axes instead of one scale,
+> context-aware modifiers). Collected absurd wins and directions: `docs/engine-neubau.md`. Add new cases there.
 
 ## UI principles
 

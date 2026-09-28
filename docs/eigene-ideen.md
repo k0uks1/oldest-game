@@ -303,3 +303,20 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | Idee | Was es tut | Wo |
 |---|---|---|
 | **Sprite misst sich neu** | Beim Wiederverbinden erscheint die stehende Gestalt direkt sichtbar und materialisiert sich Zeile für Zeile. Pixi 8 hat die Größe dabei nur einmal übernommen, sodass sie als Streifen hängen blieb. Jetzt ist die Textur „dynamisch“ und meldet jede Änderung. | `pixi-arena.ts` |
+
+## Bilder aus Bauteilen (Kiki: „Die Sprites brauchen Items … mehrere modifizierbare Bestandteile“; „Politische Korruption waren zwei lila Blöcke“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Gegenstände in der Hand** | 58 Gegenstände (Flinte, Harke, Brot, Schwert, Besen, Lupe, Waage, Handy …) mit Haltung (lang/kurz/klein) und eigenen Materialfarben – die Flinte bleibt Holz und Stahl, egal wer sie trägt. Rund 90 Menschen im Lexikon halten jetzt ihr Werkzeug. | `items.json`, `look.ts`, Symbole `m`/`n` |
+| **Begriffe als Embleme** | Abstraktes wird nicht mehr frei gezeichnet, sondern aus zwei Symbolen gebaut: Hauptsymbol plus Abzeichen in der Ecke (Korruption = Geldsack + Krone, Verrat = Maske + Dolch, Freundschaft = Handschlag + Herz). 53 neue Symbole, zusammen mit den 178 Skizzen eine Bibliothek aus 231 Teilen. | `symbols.json`, `sketchOf` |
+| **Claude wählt statt zu zeichnen** | Beim Einordnen wählt Claude `aussehen` aus geschlossenen Listen (haelt, emblem, abzeichen, Farben). Eine Freihand-Skizze gibt es nur noch für wirklich neue Dinge, für die kein Teil passt. | `parser.ts`, `lookOf` |
+| **Kontaktbogen** | `npm run sheet -- items` rendert alle Teile als PNG – so lässt sich die Grafik prüfen, ohne das Spiel zu starten. | `scripts/sheet.ts` |
+
+## Gelernte Intensität (Fortsetzung „Engine schlauer machen“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Claude schätzt Intensitäten** | Neue Gestalten bekommen beim Lernen eigene Stufen, wenn sie vom Üblichen abweichen: ein Schweißbrenner hat Hitze 4 und schmilzt den Anker, den die Fackel nicht schafft. | `qualitiesOf` in `parser.ts` |
+| **Kalibrierung über Anker** | Die Lexikon-Anker im Prompt zeigen ihre Intensitäten („Fackel · hitze 2“) – Claude ordnet relativ zu Bekanntem ein statt frei zu schätzen. | `anchorLine` |
+| **Deckel gegen Übertreibung** | Kräfte (Hitze, Wasserkraft, Kälte) höchstens Stufe + 2 – ein Streichholz brennt nie wie die Sonne, egal was der Spieler behauptet. Doppelt geprüft: im Parser und in `learn()`. | `cappedQualities` |

@@ -1,10 +1,11 @@
 import { ESCAPE } from "../engine/rules.ts";
+import { ITEM_IDS, knownLook, SYMBOL_IDS } from "../render/look.ts";
 import { SKETCH_EXAMPLES, SKETCH_GUIDE, sanitizeSketch } from "../render/svgsprite.ts";
-import type { Ontology } from "../engine/ontology/ontology.ts";
+import { MAX_LEVEL, type Ontology } from "../engine/ontology/ontology.ts";
 import { parseForm, suggest } from "../engine/parse.ts";
 import { clampScale } from "../engine/rules.ts";
 import { hash32, normalize } from "../engine/text.ts";
-import { ARCHETYPES, PLANES, type Archetype, type Form, type Plane } from "../engine/types.ts";
+import { ARCHETYPES, PLANES, type Archetype, type Form, type FormLook, type Plane } from "../engine/types.ts";
 import type { TagSpec, VerbSpec } from "../engine/ontology/pack.ts";
 import { callClaude, type LlmSettings, type ToolDef } from "./client.ts";
 import { EMPTY_DELTA, MAX_NEW_TAGS, slug, type LearningDelta } from "./learning.ts";
@@ -89,6 +90,22 @@ const TOOL: ToolDef = {
           required: ["name", "parents"],
         },
       },
+      intensitaet: {
+        type: "object",
+        additionalProperties: { type: "integer", minimum: 0, maximum: 6 },
+        description: "Nur wo die Gestalt deutlich vom Üblichen ihrer Eigenschaften abweicht: Qualität → Stufe 0–6 (IDs siehe INTENSITÄT).",
+      },
+      aussehen: {
+        type: "object",
+        description: "Bauplan fürs Bild aus fertigen Teilen – statt einer skizze. Nur IDs aus den Listen.",
+        properties: {
+          haelt: { type: ["string", "null"], enum: [...ITEM_IDS, null], description: "Nur Menschen/Riesen: typischer Gegenstand in der Hand (Jäger = flinte, Gärtnerin = harke, Bäcker = brot)." },
+          emblem: { type: ["string", "null"], enum: [...SYMBOL_IDS, null], description: "Hauptsymbol für Begriffe, Gefühle, Ideen – oder ein Ding, für das es schon ein Symbol gibt." },
+          abzeichen: { type: ["string", "null"], enum: [...SYMBOL_IDS, null], description: "Optional: kleines Zweitsymbol in der Ecke, das den Begriff schärft (Korruption = geldsack + krone)." },
+          farbe: { type: ["string", "null"], description: "Optional #rrggbb, nur wenn die Eigenschaften die Farbe nicht verraten." },
+          zweitfarbe: { type: ["string", "null"], description: "Optional #rrggbb." },
+        },
+      },
       skizze: {
         type: "string",
         description:
@@ -129,6 +146,7 @@ function systemPrompt(onto: Ontology): string {
     .slice(0, 400)
     .map((v) => `- ${v.spec.id}: ${v.spec.label} – ${v.spec.hint}`)
     .join("\n");
+  const qualities = [...onto.qualities.values()].map((q) => `- ${q.id} (${q.label}, ${q.kind === "kraft" ? "Kraft" : "Schutz"}): ${q.hint ?? ""}`).join("\n");
   const prompt = `Du bist der Klassifikator von „The Oldest Game“, einem Duell der Vorstellungskraft zwischen zwei Menschen
 (inspiriert von der Szene aus „Sandman“, in der Morpheus und ein Dämon abwechselnd zu etwas werden, das den anderen besiegt).
 
@@ -155,6 +173,12 @@ Nenne daher die spezifischste passende Eigenschaft.
 MECHANISMEN (antworte mit den IDs):
 ${verbs}
 
+INTENSITÄT (Stufe 0–6; Kräfte bringt ein Mechanismus mit, Festigkeiten schützen das Ziel):
+${qualities}
+Die Werte folgen meist aus den Eigenschaften (Feuer = hitze 2, Stein = haerte 3, Stahl = haerte 4). Setze intensitaet nur,
+wenn die Gestalt deutlich abweicht: Kerze = hitze 1, Schweißbrenner = hitze 4, Sonne = hitze 6, Pfütze = naesse 1,
+Ozean = naesse 5, Diamant = haerte 6, Eisbär = kaeltefest 4. Kräfte höchstens Stufe + 2.
+
 DAZULERNEN: Das Spiel lernt aus deinen Einordnungen. Wenn eine wesentliche Eigenschaft fehlt, schlage sie mit new_properties vor
 (immer unter bestehende Eigenschaften eingeordnet). Einen neuen Mechanismus schlägst du nur vor, wenn wirklich keiner passt.
 Erfinde nichts, was es schon gibt – nutze vorhandene Begriffe, wo immer sie passen.
@@ -164,7 +188,12 @@ REGELN FÜR DICH:
 - 1–3 Mechanismen, die zur Gestalt passen. Elemente bringen ihre Mechanismen selbst mit (Feuer verbrennt …).
 - intended_mechanism nur setzen, wenn der Spieler ausdrücklich beschreibt, WIE angegriffen wird.
   Beschreibt er Flucht oder Ausweichen („fliegt davon“, „taucht ab“, „gräbt sich ein“), setze "entkommt".
-- Bei einer wirklich NEUEN Gestalt (base = null), die NICHT lebt, zeichne eine skizze (kleines SVG).
+- Das Bild entsteht aus fertigen Teilen (aussehen). Begriffe, Gefühle, Ideen, Institutionen bekommen KEINE skizze,
+  sondern ein emblem und oft ein abzeichen: Korruption = geldsack + krone, Verrat = theatermaske + dolch,
+  Bürokratie = stempel + paragraf, Freundschaft = handschlag + herz, Zensur = verbotsschild + megafon.
+- Menschen mit typischem Werkzeug halten es: aussehen.haelt (Jäger = flinte, Köchin = pfanne, Richterin = waage).
+- Gibt es für ein Ding schon ein passendes Symbol (hammer, pfanne, krone …), nimm aussehen.emblem statt einer skizze.
+- Nur bei einem wirklich NEUEN Ding (base = null, lebt nicht, kein Symbol passt) zeichne eine skizze (kleines SVG).
   Lebewesen bekommen keine Skizze – dafür gibt es fertige Figuren. Wähle immer den ähnlichsten Archetyp.
 - Keine Erklärungen, nur das Werkzeug aufrufen.`;
   systemCache.set(onto, prompt);
@@ -184,9 +213,26 @@ export function anchorsFor(onto: Ontology, text: string, limit = 5): Form[] {
 }
 
 function anchorLine(onto: Ontology, f: Form): string {
-  const verbs = onto.compileForm(f).verbs.join(", ");
+  const c = onto.compileForm(f);
   const tags = f.tags.map((t) => onto.tagLabel(t)).join(", ");
-  return `- ${f.id}: ${f.name} · Stufe ${String(f.scale)} · ${f.plane} · Eigenschaften: ${tags} · Mechanismen: ${verbs}`;
+  const levels = [...c.qualities].map(([q, n]) => `${q} ${String(n)}`).join(", ");
+  return `- ${f.id}: ${f.name} · Stufe ${String(f.scale)} · ${f.plane} · Eigenschaften: ${tags} · Mechanismen: ${c.verbs.join(", ")}${levels === "" ? "" : ` · Intensität: ${levels}`}`;
+}
+
+/**
+ * Claude's `intensitaet` → known qualities, integers 0..6; a force (hitze, naesse, kaelte) at most
+ * scale + 2 – a match cannot burn like the sun, whatever the player claims.
+ */
+export function qualitiesOf(onto: Ontology, raw: unknown, scale: number): Record<string, number> | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const q = onto.qualities.get(k);
+    if (q === undefined || typeof v !== "number" || !Number.isFinite(v)) continue;
+    const cap = q.kind === "kraft" ? Math.min(MAX_LEVEL, scale + 2) : MAX_LEVEL;
+    out[k] = Math.max(0, Math.min(cap, Math.round(v)));
+  }
+  return Object.keys(out).length === 0 ? undefined : out;
 }
 
 const CACHE_PREFIX = "oldest-game:parse:";
@@ -276,8 +322,12 @@ export function formFromLlm(onto: Ontology, input: unknown, text: string): LlmPa
   const form: Form = { ...draft, weak };
   if (onto.compileForm(form).verbs.length === 0 && delta.verbs.length === 0) return undefined;
   const iv = typeof o["intended_mechanism"] === "string" ? (resolveVerb(o["intended_mechanism"]) ?? null) : null;
-  const sketch = sketchOf(onto, base, form, o["skizze"]);
-  return { form, intendedVerb: iv, base, unresolved, fromCache: false, delta, ...(sketch === undefined ? {} : { sketch }) };
+  const look = lookOf(o["aussehen"]) ?? base?.look;
+  const qualities = qualitiesOf(onto, o["intensitaet"], form.scale) ?? base?.qualities;
+  const looked: Form = { ...form, ...(look === undefined ? {} : { look }), ...(qualities === undefined ? {} : { qualities }) };
+  // an emblem is the better picture – a freehand sketch only where no part fits
+  const sketch = look?.emblem === undefined ? sketchOf(onto, base, looked, o["skizze"]) : undefined;
+  return { form: looked, intendedVerb: iv, base, unresolved, fromCache: false, delta, ...(sketch === undefined ? {} : { sketch }) };
 }
 
 /** Turn Claude's vocabulary proposals into specs – only what resolves against existing tags survives. */
@@ -346,6 +396,30 @@ export async function parseWithClaude(onto: Ontology, settings: LlmSettings, tex
   const parsed = formFromLlm(onto, result.toolInput, text);
   if (parsed !== undefined) cacheSet(key, parsed);
   return parsed;
+}
+
+/** Claude's `aussehen` → a look naming only parts the library has (undefined if nothing usable). */
+export function lookOf(raw: unknown): FormLook | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const o = raw as Record<string, unknown>;
+  const id = (k: string): string | undefined => (typeof o[k] === "string" ? o[k] : undefined);
+  const hex = (k: string): string | undefined => {
+    const v = o[k];
+    return typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : undefined;
+  };
+  const draft: FormLook = {
+    ...opt("holds", id("haelt")),
+    ...opt("emblem", id("emblem")),
+    ...opt("badge", id("abzeichen")),
+    ...opt("main", hex("farbe")),
+    ...opt("second", hex("zweitfarbe")),
+  };
+  const look = knownLook(draft);
+  return look.holds === undefined && look.emblem === undefined ? undefined : look;
+}
+
+function opt<K extends string, V>(key: K, value: V | undefined): Partial<Record<K, V>> {
+  return (value === undefined ? {} : { [key]: value }) as Partial<Record<K, V>>;
 }
 
 /**

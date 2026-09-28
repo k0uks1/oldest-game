@@ -97,19 +97,32 @@ export function rasterizeSketch(raw: string): string[] | undefined {
 }
 
 /**
+ * A composed part (a held item placed in a figure's frame) → 32×32 rows, *without* cropping:
+ * the position inside the frame is the point.
+ */
+export function rasterizeFrame(raw: string): string[] | undefined {
+  const svg = sanitizeSketch(raw);
+  if (svg === undefined) return undefined;
+  const big = SKETCH_SIZE * 4;
+  const px = rasterizeSvg(svg, big);
+  return px === undefined ? undefined : fitSketch(px, big, false);
+}
+
+/**
  * Pure: a large square RGBA rendering → 32×32
  * symbol rows. Crops to the drawing, fits it into the frame (centred, standing on the ground)
  * and averages the covered source pixels – identical results on client and server.
+ * With `crop = false` the whole frame is kept as it is.
  */
-export function fitSketch(data: Uint8ClampedArray, size: number): string[] | undefined {
-  const box = opaqueBounds(data, size);
+export function fitSketch(data: Uint8ClampedArray, size: number, crop = true): string[] | undefined {
+  const box = crop ? opaqueBounds(data, size) : { x: 0, y: 0, w: size, h: size };
   if (box === undefined) return undefined;
   const N = SKETCH_SIZE;
-  const k = (N - 2) / Math.max(box.w, box.h);
+  const k = (crop ? N - 2 : N) / Math.max(box.w, box.h);
   const w = box.w * k;
   const h = box.h * k;
   const ox = (N - w) / 2;
-  const oy = N - 1 - h;
+  const oy = crop ? N - 1 - h : 0;
   const out = new Uint8ClampedArray(N * N * 4);
   for (let dy = 0; dy < N; dy++) {
     for (let dx = 0; dx < N; dx++) {

@@ -1,6 +1,7 @@
 import type { Ontology } from "../engine/ontology/ontology.ts";
 import { hash32 } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
+import { heldItem, sketchOf } from "./look.ts";
 import { tintOf } from "./svgsprite.ts";
 
 /** Four-step ramp: shadow, base, light, highlight. */
@@ -13,6 +14,8 @@ export interface SpritePalette {
   readonly outline: string;
   /** The whole body emits light (fire, light, holy, lightning, stars) – feeds the bloom layer. */
   readonly emissive: boolean;
+  /** A held item's own colours (grid symbols `m` and `n`). */
+  readonly item?: { readonly main: Ramp; readonly second: Ramp };
 }
 
 interface Swatch {
@@ -90,7 +93,8 @@ export function rampOf(hex: string): Ramp {
 export function paletteFor(onto: Ontology, form: Form): SpritePalette {
   const matches = SWATCHES.filter(([tag]) => onto.formHas(form, tag)).map(([, s]) => s);
   const fallback = PLANE_DEFAULT[form.plane];
-  const tint = form.sketch === undefined ? {} : tintOf(form.sketch);
+  const sketch = sketchOf(form);
+  const tint = { ...(sketch === undefined ? {} : tintOf(sketch)), ...(form.look?.main === undefined ? {} : { main: form.look.main }), ...(form.look?.second === undefined ? {} : { second: form.look.second }) };
   const main: Swatch = tint.main === undefined ? (matches[0] ?? fallback) : { ramp: rampOf(tint.main), glow: (matches[0] ?? fallback).glow };
   const secondRamp: Ramp =
     (tint.second === undefined ? undefined : rampOf(tint.second)) ??
@@ -100,7 +104,8 @@ export function paletteFor(onto: Ontology, form: Form): SpritePalette {
     ["feuer", "licht", "heilig", "blitz"].some((t) => onto.formHas(form, t)) ||
     form.archetype === "star" ||
     form.archetype === "flame";
-  return { main: main.ramp, second: secondRamp, glow: main.glow, outline: OUTLINE, emissive };
+  const held = heldItem(form);
+  return { main: main.ramp, second: secondRamp, glow: main.glow, outline: OUTLINE, emissive, ...(held === undefined ? {} : { item: { main: rampOf(held.main), second: rampOf(held.second) } }) };
 }
 
 export function hexToRgb(hex: string): [number, number, number] {

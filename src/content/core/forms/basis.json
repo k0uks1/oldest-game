@@ -1,8 +1,8 @@
 [
   {"id": "mann", "name": "Mann", "archetype": "humanoid", "scale": 3, "plane": "leben", "tags": ["mensch", "stolz"], "verbs": ["zerschlaegt"], "weak": ["stolz"], "aliases": ["kerl", "typ", "herr"]},
   {"id": "frau", "name": "Frau", "archetype": "humanoid", "scale": 3, "plane": "leben", "tags": ["mensch", "weise"], "verbs": ["entlarvt", "zerschlaegt"], "weak": ["mensch"], "aliases": ["dame"]},
-  {"id": "soldat", "name": "Soldat", "archetype": "humanoid", "scale": 3, "plane": "materie", "tags": ["mensch", "gehorcht", "eisen"], "verbs": ["durchbohrt", "zerschlaegt"], "weak": ["gehorcht"]},
-  {"id": "prinz", "name": "Prinz", "archetype": "humanoid", "scale": 3, "plane": "leben", "tags": ["mensch", "stolz"], "verbs": ["verfuehrt", "befiehlt"], "weak": ["stolz"]},
+  {"id": "soldat", "name": "Soldat", "archetype": "humanoid", "scale": 3, "plane": "materie", "tags": ["mensch", "gehorcht", "eisen"], "verbs": ["durchbohrt", "zerschlaegt"], "weak": ["gehorcht"], "look": {"holds": "flinte"}},
+  {"id": "prinz", "name": "Prinz", "archetype": "humanoid", "scale": 3, "plane": "leben", "tags": ["mensch", "stolz"], "verbs": ["verfuehrt", "befiehlt"], "weak": ["stolz"], "look": {"holds": "schwert"}},
   {"id": "roboter", "name": "Roboter", "archetype": "humanoid", "scale": 3, "plane": "materie", "tags": ["maschine", "stahl", "gehorcht", "elektrisch"], "verbs": ["zerschlaegt", "zermalmt"], "weak": ["elektrisch"], "aliases": ["robot"]},
   {"id": "herz", "name": "Herz", "archetype": "heart", "scale": 1, "plane": "leben", "tags": ["fleisch", "fuehlt", "blutet"], "verbs": ["verfuehrt", "befreundet"], "weak": ["fuehlt"]},
   {"id": "hand", "name": "Hand", "archetype": "humanoid", "scale": 1, "plane": "leben", "tags": ["fleisch", "blutet"], "verbs": ["fesselt", "zerschlaegt"], "weak": ["fleisch"], "aliases": ["faust"]},
