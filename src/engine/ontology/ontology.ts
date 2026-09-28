@@ -405,6 +405,7 @@ export class Ontology {
       ...(spec.qualities === undefined ? {} : { qualities: spec.qualities }),
       ...(spec.look === undefined ? {} : { look: spec.look }),
       ...(spec.art === undefined ? {} : { art: spec.art }),
+      ...(spec.artPrompt === undefined ? {} : { artPrompt: spec.artPrompt }),
       ...(spec.flavor === undefined ? {} : { flavor: spec.flavor }),
       ...spriteOf(spec),
     };

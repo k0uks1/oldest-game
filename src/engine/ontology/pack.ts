@@ -148,6 +148,8 @@ export interface FormSpec {
   readonly look?: FormLook;
   /** Generated pixel art, `w.h.palette.runs` (see render/art.ts). */
   readonly art?: string;
+  /** English picture description the art is (to be) generated from. */
+  readonly artPrompt?: string;
   /** Live learning: who first summoned this form and when (ISO date). Purely informational. */
   readonly discoveredBy?: string;
   readonly discoveredAt?: string;
@@ -241,6 +243,15 @@ class ShapeChecker {
       return [];
     }
     return v;
+  }
+
+  /** A short single-line picture description. */
+  artPrompt(o: Obj, key: string, where: string): string | undefined {
+    const v = o[key];
+    if (v === undefined) return undefined;
+    if (typeof v === "string" && v.length <= 240 && !/[\p{Cc}]/u.test(v)) return v;
+    this.errors.push(`${where}: "${key}" muss eine kurze Bildbeschreibung sein`);
+    return undefined;
   }
 
   /** Generated art: shape-checked here, fully decoded (and dropped if broken) by the renderer. */
@@ -385,6 +396,7 @@ export function parsePack(input: unknown): PackResult {
         ...opt("sketch", c.optStr(o, "sketch", w)),
         ...opt("look", c.look(o, "look", w)),
         ...opt("art", c.art(o, "art", w)),
+        ...opt("artPrompt", c.artPrompt(o, "artPrompt", w)),
         ...opt("discoveredBy", c.optStr(o, "discoveredBy", w)),
         ...opt("discoveredAt", c.optStr(o, "discoveredAt", w)),
       };

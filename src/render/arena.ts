@@ -472,9 +472,20 @@ export abstract class ArenaSim {
     this.rings.length = 0;
   }
 
-  /** Swap in a grown ontology (live learning). Cached sprites stay valid – they depend on form ids. */
+  /**
+   * Swap in a grown ontology (live learning). Cached sprites stay valid – they depend on form ids.
+   * A form on stage whose generated art just arrived swaps to it with a flash.
+   */
   setOntology(onto: Ontology): void {
     this.onto = onto;
+    for (const side of [0, 1] as const) {
+      const f = this.fighters[side];
+      if (f === null || f.form.art !== undefined) continue;
+      const fresh = onto.formById(f.form.id);
+      if (fresh?.art === undefined) continue;
+      this.fighters[side] = { ...f, form: fresh, sprite: this.sprite(fresh), flash: 0.8 };
+      this.rings.push({ x: SIDE_X[side], y: this.gy(side), r: 4, life: 0, max: 0.7, color: this.sprite(fresh).palette.glow });
+    }
   }
 
   /** The rune circle charges while Claude is thinking. */

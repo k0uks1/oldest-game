@@ -330,3 +330,11 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Eigenes, reines Bildformat** | Palette + Lauflängen statt PNG: 1–3 KB pro Bild, synchron dekodierbar im Browser, auf dem Server und in der Einzeldatei – kein Canvas, kein Netzwerk. | `render/art.ts` |
 | **Alle Effekte bleiben** | Materialisieren, Silhouette, Leuchtkontur, Versteinern und Glühen werden aus den Pixeln des Bildes abgeleitet; Flammen und Augen leuchten von selbst. | `arena.ts`, `artGlow` |
 | **Fallback bleibt** | Ohne Bild greift wie bisher Bauplan, Skizze oder Figur. | `artFor` |
+
+## Neue Gestalten bekommen ihr Bild live
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Claude beschreibt, der Server malt** | Beim Einordnen schreibt Claude eine kurze englische Bildbeschreibung (geschützte Figuren beschrieben, nie beim Namen). Der Server generiert daraus einmal das Bild und verteilt es an alle Räume. | `bild` im Parser, `ArtService` |
+| **Einblenden statt Warten** | Der Zug wartet nicht auf das Bild. Trifft es ein, während die Gestalt noch steht, blendet die Arena mit einem Lichtblitz auf das neue Bild um. | `arena.setOntology` |
+| **Budget mit Gedächtnis** | Monatsdeckel (`ART_MONTHLY_LIMIT`), der Zähler liegt neben dem gelernten Pack und übersteht Neustarts. Ein Versuch pro Gestalt. Leer, kein Key oder Dienst weg: Es bleibt still beim gezeichneten Bild. | `art-usage.json` |
