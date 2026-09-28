@@ -1,5 +1,7 @@
 import { attempt, type AttemptOutcome } from "../engine/attempt.ts";
 import { APP_VERSION } from "../version.ts";
+import { validPixelArt } from "../engine/pixelart.ts";
+import { rasterizeSketch } from "../render/svgsprite.ts";
 import { arenaMinScale, createGame, currentTarget, pass, roundNumber } from "../engine/game.ts";
 import { activeFields } from "../engine/fields.ts";
 import { parseForm } from "../engine/parse.ts";
@@ -445,7 +447,10 @@ export class App {
         return;
       }
       const discoverer = this.state.players[this.state.active].name;
-      const l = learn(this.basePacks, this.learned, text, r.form, r.delta, { by: discoverer, at: new Date().toISOString().slice(0, 10) });
+      // Claude's SVG sketch → 32×32 sprite (invalid or missing: the archetype stays the fallback)
+      const rows = r.sketch === undefined ? undefined : validPixelArt(await rasterizeSketch(r.sketch));
+      const drawn = rows === undefined ? r.form : { ...r.form, sprite: rows };
+      const l = learn(this.basePacks, this.learned, text, drawn, r.delta, { by: discoverer, at: new Date().toISOString().slice(0, 10) });
       if (!l.ok) {
         this.flashBanner(l.reason, "bad");
         return;
