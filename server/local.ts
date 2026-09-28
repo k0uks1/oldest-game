@@ -23,8 +23,10 @@ import { reconcileLearned } from "../src/llm/learning.ts";
 import { narrateEpilogueWithClaude } from "../src/llm/narrator.ts";
 import { narrateEnd } from "../src/narrate/offline.ts";
 import { applyPackDelta, packDelta, WS_PATH, type ServerMsg } from "../src/online/protocol.ts";
+import { ArtService, withArt } from "./art-service.ts";
 import { handleLearned, readLearnedFile, writeLearnedFile } from "./learned.ts";
 import { OnlineHub, type HubLimits } from "./online.ts";
+import { generatePixelArt } from "./pixellab.ts";
 import { DEFAULT_PROXY_MODEL, handleProxy, type ProxyEnv } from "./proxy.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -74,6 +76,18 @@ async function toRequest(req: IncomingMessage, port: number): Promise<Request> {
 
 export const LEARNED_FILE = join(root, "learned/pack.json");
 
+/** Image service for live art (optional). The key stays in this process. */
+export interface ArtEnv {
+  readonly key: string;
+  readonly monthlyLimit: number;
+}
+
+export function artEnvFrom(vars: Record<string, string | undefined>): ArtEnv | undefined {
+  const key = vars["PIXELLAB_API_KEY"] ?? "";
+  if (key === "") return undefined;
+  return { key, monthlyLimit: Math.max(0, Number(vars["ART_MONTHLY_LIMIT"] ?? 1500) || 0) };
+}
+
 export interface ServerOptions {
   readonly port: number;
   /** Default 127.0.0.1. Anything else makes this a public server (see header). */
@@ -85,6 +99,8 @@ export interface ServerOptions {
   readonly trustProxy?: boolean;
   readonly limits?: Partial<HubLimits>;
   readonly quiet?: boolean;
+  /** Live art for learned forms; omitted = drawn sprites only. */
+  readonly art?: ArtEnv;
 }
 
 export interface RunningServer {
@@ -136,7 +152,7 @@ export function startServer(opts: ServerOptions): RunningServer {
     llm: () => llm,
     debug: () => !claude(),
     saveLearned: () => {
-      theHub.learnedChanged();
+      learnedChanged();
     },
     today: () => new Date().toISOString().slice(0, 10),
   });
@@ -156,6 +172,27 @@ export function startServer(opts: ServerOptions): RunningServer {
     log,
   });
 
+  const artEnv = opts.art;
+  const art =
+    artEnv === undefined
+      ? undefined
+      : new ArtService({
+          generate: (prompt, size) => generatePixelArt(artEnv.key, prompt, size),
+          monthlyLimit: artEnv.monthlyLimit,
+          usageFile: join(dirname(file), "art-usage.json"),
+          onArt: (id, img) => {
+            resolver.setLearned(withArt(resolver.learned, id, img));
+            theHub.learnedChanged();
+          },
+          log,
+        });
+  /** Persist + broadcast what the resolver learned, then look for forms that still need art. */
+  const learnedChanged = (): void => {
+    theHub.learnedChanged();
+    art?.scan(resolver.learned);
+  };
+  art?.scan(resolver.learned);
+
   const learnedEndpoint = {
     base,
     get: () => resolver.learned,
@@ -164,7 +201,7 @@ export function startServer(opts: ServerOptions): RunningServer {
     put: (pack: ContentPack): ContentPack => {
       const merged = applyPackDelta(resolver.learned, packDelta(resolver.learned, pack));
       resolver.setLearned(reconcileLearned(base, merged) ?? resolver.learned);
-      theHub.learnedChanged();
+      learnedChanged();
       return resolver.learned;
     },
     writable: !isPublic,
@@ -268,7 +305,9 @@ export function startServer(opts: ServerOptions): RunningServer {
     server.listen(opts.port, host, () => {
       const addr = server.address();
       const port = typeof addr === "object" && addr !== null ? addr.port : opts.port;
-      const key = opts.env.apiKey === "" ? "⚠ kein ANTHROPIC_API_KEY (.env) – Räume nutzen den mechanischen Parser" : `Claude: ${opts.env.model}`;
+      const key =
+        (opts.env.apiKey === "" ? "⚠ kein ANTHROPIC_API_KEY (.env) – Räume nutzen den mechanischen Parser" : `Claude: ${opts.env.model}`) +
+        (artEnv === undefined ? "" : `   Bilder: PixelLab (≤ ${String(artEnv.monthlyLimit)}/Monat)`);
       log(`▶ http://${isPublic ? host : "localhost"}:${String(port)}   ${key}${isPublic ? "   (öffentlich: nur Räume)" : ""}${opts.env.accessCode === undefined ? "" : "   Zugangscode aktiv"}`);
       resolve(port);
     });
@@ -304,11 +343,13 @@ if (import.meta.url === `file://${process.argv[1] ?? ""}`) {
   }
   const vars = { ...readDotEnv(join(root, ".env")), ...process.env };
   const html = readFileSync(file, "utf8");
+  const artEnv = artEnvFrom(vars);
   const running = startServer({
     port: Number(vars["PORT"] ?? 5173),
     host: vars["HOST"] ?? "127.0.0.1",
     html: () => html,
     env: envFrom(vars),
+    ...(artEnv === undefined ? {} : { art: artEnv }),
     trustProxy: vars["TRUST_PROXY"] === "1",
     ...(vars["LEARNED_FILE"] === undefined ? {} : { learnedFile: vars["LEARNED_FILE"] }),
     limits: {

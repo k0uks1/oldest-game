@@ -108,6 +108,10 @@ pure format (`w.h.palette.runs`): core forms in `content/core/art.json` (prompts
 learned forms in `FormSpec.art` (shape-checked by `parsePack`, fully decoded by the renderer). Art wins over
 every drawn fallback; silhouette/rim/stone/glow are derived from its pixels. The PixelLab key lives only in
 the environment (`PIXELLAB_API_KEY`) – never in a build, the repo or the browser.
+Live art: Claude writes an English `bild` description while classifying (stored as `FormSpec.artPrompt`);
+the server's `ArtService` (`server/art-service.ts`) generates art for learned forms that lack it – once per
+form, monthly budget `ART_MONTHLY_LIMIT` (usage persisted next to the learned pack) – and broadcasts it as a
+normal learned delta; the arena swaps a form already on stage.
 
 ### Sprites from parts ("Bauplan", `render/look.ts`)
 

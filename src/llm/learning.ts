@@ -129,6 +129,7 @@ export function learn(
     ...(form.sketch === undefined ? {} : { sketch: form.sketch }),
     ...(form.look === undefined ? {} : { look: form.look }),
     ...(form.art === undefined ? {} : { art: form.art }),
+    ...(form.artPrompt === undefined ? {} : { artPrompt: form.artPrompt }),
     ...(qualities === undefined ? {} : { qualities }),
     ...(discovery === undefined ? {} : { discoveredBy: discovery.by.slice(0, 40), discoveredAt: discovery.at.slice(0, 24) }),
   });

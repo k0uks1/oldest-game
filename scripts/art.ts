@@ -3,7 +3,7 @@
  *
  *   npm run art -- status                      how many forms have art / prompts
  *   npm run art -- ingest <dir>                import <id>.png files into content/core/art.json
- *   npm run art -- generate [--limit N] [--ids a,b] [--force]
+ *   npm run art -- generate [--limit N] [--ids a,b] [--force] [--parallel N]
  *                                              generate missing art via PixelLab (PIXELLAB_API_KEY)
  *
  * Prompts come from content/core/art-prompts.json (id → English description). Every image uses the
@@ -88,7 +88,8 @@ if (cmd === "status") {
       }
     }
   };
-  await Promise.all([worker(), worker(), worker()]);
+  const parallel = Math.max(1, Math.min(8, Number(flag("parallel") ?? "3")));
+  await Promise.all(Array.from({ length: parallel }, worker));
   console.log(`fertig: ${String(done)} neu, ${String(Object.keys(art).length)} insgesamt`);
 } else {
   console.log("Befehle: status | ingest <dir> | generate [--limit N] [--ids a,b] [--force]");

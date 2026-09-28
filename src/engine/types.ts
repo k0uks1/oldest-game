@@ -56,6 +56,8 @@ export interface Form {
   readonly look?: FormLook;
   /** Generated pixel art (render/art.ts format) – wins over every drawn fallback. Presentation only. */
   readonly art?: string;
+  /** English picture description for the image service (a server generates `art` from it later). */
+  readonly artPrompt?: string;
 }
 
 /**

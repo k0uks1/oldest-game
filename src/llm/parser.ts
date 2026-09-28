@@ -95,6 +95,10 @@ const TOOL: ToolDef = {
         additionalProperties: { type: "integer", minimum: 0, maximum: 6 },
         description: "Nur wo die Gestalt deutlich vom Üblichen ihrer Eigenschaften abweicht: Qualität → Stufe 0–6 (IDs siehe INTENSITÄT).",
       },
+      bild: {
+        type: "string",
+        description: "Kurze englische Bildbeschreibung für einen Pixel-Art-Generator: was man sieht (max. 20 Wörter). Keine Namen geschützter Figuren – beschreibe sie.",
+      },
       aussehen: {
         type: "object",
         description: "Bauplan fürs Bild aus fertigen Teilen – statt einer skizze. Nur IDs aus den Listen.",
@@ -188,6 +192,8 @@ REGELN FÜR DICH:
 - 1–3 Mechanismen, die zur Gestalt passen. Elemente bringen ihre Mechanismen selbst mit (Feuer verbrennt …).
 - intended_mechanism nur setzen, wenn der Spieler ausdrücklich beschreibt, WIE angegriffen wird.
   Beschreibt er Flucht oder Ausweichen („fliegt davon“, „taucht ab“, „gräbt sich ein“), setze "entkommt".
+- bild: immer ausfüllen – eine kurze englische Beschreibung dessen, was man sieht („a hunter in green cloak holding a
+  rifle“, „a fat money bag with a golden crown“). Filmfiguren, Marken, Spielfiguren nie beim Namen nennen, sondern beschreiben.
 - Das Bild entsteht aus fertigen Teilen (aussehen). Begriffe, Gefühle, Ideen, Institutionen bekommen KEINE skizze,
   sondern ein emblem und oft ein abzeichen: Korruption = geldsack + krone, Verrat = theatermaske + dolch,
   Bürokratie = stempel + paragraf, Freundschaft = handschlag + herz, Zensur = verbotsschild + megafon.
@@ -324,7 +330,13 @@ export function formFromLlm(onto: Ontology, input: unknown, text: string): LlmPa
   const iv = typeof o["intended_mechanism"] === "string" ? (resolveVerb(o["intended_mechanism"]) ?? null) : null;
   const look = lookOf(o["aussehen"]) ?? base?.look;
   const qualities = qualitiesOf(onto, o["intensitaet"], form.scale) ?? base?.qualities;
-  const looked: Form = { ...form, ...(look === undefined ? {} : { look }), ...(qualities === undefined ? {} : { qualities }) };
+  const artPrompt = artPromptOf(o["bild"]);
+  const looked: Form = {
+    ...form,
+    ...(look === undefined ? {} : { look }),
+    ...(qualities === undefined ? {} : { qualities }),
+    ...(artPrompt === undefined ? {} : { artPrompt }),
+  };
   // an emblem is the better picture – a freehand sketch only where no part fits
   const sketch = look?.emblem === undefined ? sketchOf(onto, base, looked, o["skizze"]) : undefined;
   return { form: looked, intendedVerb: iv, base, unresolved, fromCache: false, delta, ...(sketch === undefined ? {} : { sketch }) };
@@ -396,6 +408,13 @@ export async function parseWithClaude(onto: Ontology, settings: LlmSettings, tex
   const parsed = formFromLlm(onto, result.toolInput, text);
   if (parsed !== undefined) cacheSet(key, parsed);
   return parsed;
+}
+
+/** Claude's picture description: one printable line, at most 200 characters. */
+export function artPromptOf(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const clean = raw.replace(/[\p{C}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+  return clean === "" ? undefined : clean;
 }
 
 /** Claude's `aussehen` → a look naming only parts the library has (undefined if nothing usable). */
