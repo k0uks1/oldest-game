@@ -6,7 +6,7 @@ import { parseForm, suggest } from "../engine/parse.ts";
 import { clampScale } from "../engine/rules.ts";
 import { hash32, normalize } from "../engine/text.ts";
 import { ARCHETYPES, PLANES, type Archetype, type Form, type FormLook, type Plane } from "../engine/types.ts";
-import type { TagSpec, VerbSpec } from "../engine/ontology/pack.ts";
+import type { RequiresSpec, TagSpec, VerbSpec } from "../engine/ontology/pack.ts";
 import { callClaude, type LlmSettings, type ToolDef } from "./client.ts";
 import { EMPTY_DELTA, MAX_NEW_TAGS, slug, type LearningDelta } from "./learning.ts";
 
@@ -148,7 +148,7 @@ function systemPrompt(onto: Ontology): string {
   const vocab = [...groups.entries()].map(([g, labels]) => `- ${g}: ${labels.join(", ")}`).join("\n");
   const verbs = [...onto.verbs.values()]
     .slice(0, 400)
-    .map((v) => `- ${v.spec.id}: ${v.spec.label} – ${v.spec.hint}`)
+    .map((v) => `- ${v.spec.id}: ${v.spec.label} – ${v.spec.hint}${requirementNote(v.spec.requires)}`)
     .join("\n");
   const qualities = [...onto.qualities.values()].map((q) => `- ${q.id} (${q.label}, ${q.kind === "kraft" ? "Kraft" : "Schutz"}): ${q.hint ?? ""}`).join("\n");
   const prompt = `Du bist der Klassifikator von „The Oldest Game“, einem Duell der Vorstellungskraft zwischen zwei Menschen
@@ -190,6 +190,10 @@ Erfinde nichts, was es schon gibt – nutze vorhandene Begriffe, wo immer sie pa
 REGELN FÜR DICH:
 - Jede Gestalt braucht Angriffsfläche und mindestens eine plausible Schwäche.
 - 1–3 Mechanismen, die zur Gestalt passen. Elemente bringen ihre Mechanismen selbst mit (Feuer verbrennt …).
+- FÄHIGKEITEN: Ein Mechanismus wirkt nur, wenn die Gestalt kann, was er braucht („braucht:“ hinter dem Mechanismus).
+  Ein Radio zersetzt nichts, eine Atombombe weckt niemanden, ein Hut täuscht nicht. Nenne deshalb die Fähigkeit als
+  Eigenschaft mit (Schwert: scharf, spitz · Python: bindend · Wecker: laut · Seife: reinigend · Bananenschale: tückisch).
+  Fähigkeits-Eigenschaften bringen ihren Mechanismus selbst mit. Was die Gestalt nicht kann, lässt die Engine weg.
 - intended_mechanism nur setzen, wenn der Spieler ausdrücklich beschreibt, WIE angegriffen wird.
   Beschreibt er Flucht oder Ausweichen („fliegt davon“, „taucht ab“, „gräbt sich ein“), setze "entkommt".
 - bild: immer ausfüllen – eine kurze englische Beschreibung dessen, was man sieht („a hunter in green cloak holding a
@@ -262,11 +266,40 @@ function cacheSet(key: string, r: LlmParseResult): void {
   }
 }
 
+/** "· braucht: scharf" – what a mechanism asks of its user, in tag ids Claude can answer with. */
+function requirementNote(r: RequiresSpec | undefined): string {
+  if (r === undefined) return "";
+  const any = [...(r.any ?? []), ...Object.entries(r.qualities ?? {}).map(([q, n]) => `${q} ≥ ${String(n)}`)];
+  const parts = [
+    any.length === 0 ? "" : `braucht: ${any.join(" | ")}`,
+    (r.all ?? []).length === 0 ? "" : `muss: ${(r.all ?? []).join(" + ")}`,
+    (r.none ?? []).length === 0 ? "" : `nicht: ${(r.none ?? []).join(", ")}`,
+  ].filter((p) => p !== "");
+  return parts.length === 0 ? "" : ` · ${parts.join(" · ")}`;
+}
+
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
 /** Turn the model's raw tool input into a validated Form (pure – unit-testable). */
 export function formFromLlm(onto: Ontology, input: unknown, text: string): LlmParseResult | undefined {
-  if (typeof input !== "object" || input === null) return undefined;
+  return shapeFromLlm(onto, input, text).result;
+}
+
+/** A proposed mechanism the form cannot perform, and why ("bräuchte Säure"). */
+export interface Unable {
+  readonly verb: string;
+  readonly why: string;
+}
+
+interface Shaped {
+  readonly result?: LlmParseResult;
+  /** Proposed mechanisms dropped for lack of ability – the retry tells Claude about them. */
+  readonly unable: readonly Unable[];
+}
+
+function shapeFromLlm(onto: Ontology, input: unknown, text: string): Shaped {
+  const none: Shaped = { unable: [] };
+  if (typeof input !== "object" || input === null) return none;
   const o = input as Record<string, unknown>;
   const unresolved: string[] = [];
   const resolveTags = (keys: readonly string[]): string[] => {
@@ -295,7 +328,7 @@ export function formFromLlm(onto: Ontology, input: unknown, text: string): LlmPa
   const tags = new Set<string>(base?.tags ?? []);
   for (const t of removed) tags.delete(t);
   for (const t of added) tags.add(t);
-  if (tags.size === 0) return undefined;
+  if (tags.size === 0) return none;
 
   const archetype = ARCHETYPES.includes(o["archetype"] as Archetype) ? (o["archetype"] as Archetype) : (base?.archetype ?? "orb");
   const plane = PLANES.includes(o["plane"] as Plane) ? (o["plane"] as Plane) : (base?.plane ?? "materie");
@@ -325,11 +358,16 @@ export function formFromLlm(onto: Ontology, input: unknown, text: string): LlmPa
     ...[...new Set([...(base?.weak ?? []), ...knownWeak])].filter((w) => onto.formHas(draft, w)),
     ...proposedWeak.filter((w) => tags.has(w)),
   ];
-  const form: Form = { ...draft, weak };
-  if (onto.compileForm(form).verbs.length === 0 && delta.verbs.length === 0) return undefined;
+  const qualities = qualitiesOf(onto, o["intensitaet"], draft.scale) ?? base?.qualities;
+  const shaped: Form = { ...draft, weak, ...(qualities === undefined ? {} : { qualities }) };
+  // "Affordanz": a mechanism the form cannot perform is dropped, whoever proposed it (a radio does not corrode)
+  const able = new Set(onto.compileForm(shaped).verbs);
+  const keep = (v: string): boolean => able.has(v) || delta.verbs.some((d) => d.id === v);
+  const unable = draft.verbs.filter((v) => !keep(v) && v !== ESCAPE).map((verb): Unable => ({ verb, why: onto.lacks(shaped, verb) ?? "passt nicht" }));
+  const form: Form = { ...draft, weak, verbs: draft.verbs.filter(keep) };
+  if (able.size === 0 && delta.verbs.length === 0) return { unable };
   const iv = typeof o["intended_mechanism"] === "string" ? (resolveVerb(o["intended_mechanism"]) ?? null) : null;
   const look = lookOf(o["aussehen"]) ?? base?.look;
-  const qualities = qualitiesOf(onto, o["intensitaet"], form.scale) ?? base?.qualities;
   const artPrompt = artPromptOf(o["bild"]);
   const looked: Form = {
     ...form,
@@ -339,7 +377,17 @@ export function formFromLlm(onto: Ontology, input: unknown, text: string): LlmPa
   };
   // an emblem is the better picture – a freehand sketch only where no part fits
   const sketch = look?.emblem === undefined ? sketchOf(onto, base, looked, o["skizze"]) : undefined;
-  return { form: looked, intendedVerb: iv, base, unresolved, fromCache: false, delta, ...(sketch === undefined ? {} : { sketch }) };
+  return { result: { form: looked, intendedVerb: iv, base, unresolved, fromCache: false, delta, ...(sketch === undefined ? {} : { sketch }) }, unable };
+}
+
+/** The one follow-up when every proposed mechanism was beyond the form. */
+export function abilityCorrection(onto: Ontology, name: string, unable: readonly Unable[]): string {
+  const list = unable.map((u) => `${onto.verbs.get(u.verb)?.spec.label ?? u.verb} (${u.why})`).join(", ");
+  return (
+    `KORREKTUR: Deine Einordnung gab „${name}“ nur Mechanismen, die sie so nicht kann: ${list}. ` +
+    `Hat die Gestalt die nötige Fähigkeit wirklich, nenne sie als Eigenschaft. Sonst wähle Mechanismen, die sie kann ` +
+    `(notfalls einen neuen). Erfinde keine Fähigkeit, nur damit ein Mechanismus passt.`
+  );
 }
 
 /** Turn Claude's vocabulary proposals into specs – only what resolves against existing tags survives. */
@@ -405,7 +453,14 @@ export async function parseWithClaude(onto: Ontology, settings: LlmSettings, tex
     anchors.length > 0 ? `\nAnker aus dem Lexikon:\n${anchors.map((a) => anchorLine(onto, a)).join("\n")}` : "\nKeine passenden Anker.",
   ].join("\n");
   const result = await callClaude(settings, { system: systemPrompt(onto), user, maxTokens: 1000, tool: TOOL });
-  const parsed = formFromLlm(onto, result.toolInput, text);
+  let shaped = shapeFromLlm(onto, result.toolInput, text);
+  if (shaped.result === undefined && shaped.unable.length > 0) {
+    const input = result.toolInput as { name?: unknown } | undefined;
+    const name = typeof input?.name === "string" ? input.name : text;
+    const again = await callClaude(settings, { system: systemPrompt(onto), user: `${user}\n\n${abilityCorrection(onto, name, shaped.unable)}`, maxTokens: 1000, tool: TOOL });
+    shaped = shapeFromLlm(onto, again.toolInput, text);
+  }
+  const parsed = shaped.result;
   if (parsed !== undefined) cacheSet(key, parsed);
   return parsed;
 }

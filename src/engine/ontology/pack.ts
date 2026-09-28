@@ -40,6 +40,19 @@ export interface QualitySpec {
   readonly hint?: string;
 }
 
+/**
+ * Attacker requirements of a mechanism, checked against the attacker's closure: at least one of
+ * `any`, all of `all`, none of `none`; `qualities` count only where they are actually set (by a tag,
+ * a combo or the form) – never through a quality's default.
+ */
+export interface RequiresSpec {
+  readonly any?: readonly string[];
+  readonly all?: readonly string[];
+  readonly none?: readonly string[];
+  /** Set intensity at least this (e.g. hitze 2: something hot, not just anything). `any` OR these. */
+  readonly qualities?: Readonly<Record<string, number>>;
+}
+
 /** A mechanism requirement: the attacker's `by` must reach the target's `vs` (e.g. hitze vs hitzefest). */
 export interface NeedSpec {
   readonly by: string;
@@ -82,6 +95,11 @@ export interface VerbSpec {
   readonly outcome?: VictoryKind;
   /** Intensity requirements; all must hold. Surplus ≥ 2 on each adds +1 power. */
   readonly needs?: readonly NeedSpec[];
+  /**
+   * "Affordanz": what the *attacker* must be to use this at all – whoever it was assigned to.
+   * A radio cannot corrode, a hat cannot deceive. See {@link RequiresSpec}.
+   */
+  readonly requires?: RequiresSpec;
   /** Default `fern`. */
   readonly reach?: Reach;
   readonly aliases?: readonly string[];
@@ -245,6 +263,22 @@ class ShapeChecker {
     return v;
   }
 
+  requires(o: Obj, key: string, where: string): RequiresSpec | undefined {
+    const v = o[key];
+    if (v === undefined) return undefined;
+    if (!isObj(v)) {
+      this.errors.push(`${where}: "${key}" muss ein Objekt sein`);
+      return undefined;
+    }
+    const w = `${where}.${key}`;
+    return {
+      ...opt("any", this.list(v, "any", w)),
+      ...opt("all", this.list(v, "all", w)),
+      ...opt("none", this.list(v, "none", w)),
+      ...opt("qualities", this.levels(v, "qualities", w)),
+    };
+  }
+
   /** A short single-line picture description. */
   artPrompt(o: Obj, key: string, where: string): string | undefined {
     const v = o[key];
@@ -358,6 +392,7 @@ export function parsePack(input: unknown): PackResult {
         ...opt("outcome", victoryKind(c.optStr(o, "outcome", w), w, c.errors)),
         ...opt("needs", o["needs"] === undefined ? undefined : c.array(o, "needs", w).map((n, j) => ({ by: c.str(n, "by", `${w}.needs[${j}]`), vs: c.str(n, "vs", `${w}.needs[${j}]`) }))),
         ...opt("reach", reach(c.optStr(o, "reach", w), w, c.errors)),
+        ...opt("requires", c.requires(o, "requires", w)),
         ...opt("aliases", c.list(o, "aliases", w)),
       };
     }),

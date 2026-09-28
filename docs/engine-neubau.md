@@ -11,9 +11,9 @@ Dieses Dokument sammelt Fälle und Ursachen, bis der Neubau beginnt. **Nichts am
 
 | Fall | Ursache (Stand heute) | Status |
 |---|---|---|
-| Alter Kaugummi zerschneidet etwas | Mechanismen werden der Gestalt *zugeteilt* (von Claude oder im Content), statt aus ihren Eigenschaften zu folgen. Nichts verlangt, dass wer schneidet, scharf und härter als das Ziel ist. | offen |
-| Atombombe „weckt“ (den Träumer) | Claude hat der eingeordneten Gestalt den Mechanismus zugeteilt – nichts prüft, ob eine Bombe *wecken* kann. | offen (Affordanzen) |
-| Radio „zersetzt“ einen Marder | dito – zugeteilte statt abgeleitete Fähigkeit | offen (Affordanzen) |
+| Alter Kaugummi zerschneidet etwas | Mechanismen werden der Gestalt *zugeteilt* (von Claude oder im Content), statt aus ihren Eigenschaften zu folgen. Nichts verlangt, dass wer schneidet, scharf und härter als das Ziel ist. | behoben v0.48 (Affordanz: `zerschneidet` braucht `scharf`; „härter als das Ziel“ folgt mit den Achsen) |
+| Atombombe „weckt“ (den Träumer) | Claude hat der eingeordneten Gestalt den Mechanismus zugeteilt – nichts prüft, ob eine Bombe *wecken* kann. | behoben v0.48 („bräuchte Licht / laut / anregend …“) |
+| Radio „zersetzt“ einen Marder | dito – zugeteilte statt abgeleitete Fähigkeit | behoben v0.48 („bräuchte Säure / Fäulnis“) |
 | „alter“ Kaugummi wird magisch | „alt“ läuft über den Modifikator `uralt` (fügt `magisch`, `erinnert` hinzu). Wörter haben keinen Kontext: alt heißt bei Dingen „abgenutzt“, nicht „mythisch“. | offen |
 | Hut besiegt Elefant | Der Schiedsrichter durfte fremde Mechanismen vergeben. | behoben v0.41 |
 | Fackel schmilzt Anker | Keine Intensität, „schmilzt“ war binär. | behoben v0.41 (nur für 6 Mechanismen) |
@@ -67,14 +67,20 @@ auf dem Server, im Menü unter „Quatsch-Meldungen“ zum Kopieren).
 | Stand | gültige Siege | verdächtig | weich schneidet | Begriff prügelt | Ding denkt | Zwerg-Gewalt |
 |---|---|---|---|---|---|---|
 | v0.46 (vor dem Neubau) | 547 682 | 14 977 (2,7 %) | 1 827 | 3 972 | 4 637 | 4 907 |
+| v0.48 (Affordanzen) | 549 594 | 9 861 (1,8 %) | 1 914 | 392 | 3 214 | 4 341 |
+
+Was nach Schritt 3 übrig bleibt: **Zwerg-Gewalt** und **weich schneidet** sind Stärke- bzw. Härtefragen
+(Klebeband *kann* binden, aber keinen Ritter; ein Stuhl *kann* zuschlagen, aber keinen Nagel zertrümmern) → Achsen (Schritt 4).
+**Begriff prügelt** sind nur noch Explosion, Antimaterie, Dunkle Materie und Singularität – physikalische Ereignisse,
+die als `koerperlos` markiert sind; die Heuristik ist hier gröber als der Fall.
 
 ## Fahrplan
 
 | Schritt | Inhalt | Warum in dieser Reihenfolge |
 |---|---|---|
 | 1 | **Prüfstand** + „Das war Quatsch!“-Knopf | Ohne Messung kein Fortschritt; eure Testrunden liefern ab sofort Fälle. |
-| 2 | **„ist / enthält / erzeugt“** im Tag-Modell | Grundlage für Affordanzen (wer *erzeugt* Feuer, kann verbrennen). |
-| 3 | **Affordanzen** – Mechanismen werden abgeleitet | Der größte Hebel gegen „Kaugummi schneidet“. Claude ordnet danach nur noch Eigenschaften ein. |
+| 2 | **„ist / enthält / erzeugt“** im Tag-Modell | Grundlage für Affordanzen (wer *erzeugt* Feuer, kann verbrennen). **Teilweise über Schritt 3:** „erzeugt“ = gesetzte Intensität (`requires.qualities`: Ofen mit Hitze 3 verbrennt, ohne Feuer zu sein). |
+| 3 ✓ v0.48 | **Affordanzen** – Mechanismen werden abgeleitet | Der größte Hebel gegen „Kaugummi schneidet“. Claude ordnet danach nur noch Eigenschaften ein. |
 | 4 | **Achsen statt einer Stufe** (Größe, Masse, Härte, Energie, Geist …) | Baut auf den Affordanzen auf: jeder Mechanismus vergleicht seine Achsen. |
 | 5 | **Modifikatoren als Operatoren** mit Kontext | Verschieben Achsen und Intensitäten statt blind Tags anzuhängen. |
 | 6 | Migration gelernter Packs, Balancing, Aufräumen | Zum Schluss, gegen Prüfstand und Simulation. |

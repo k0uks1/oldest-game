@@ -3,11 +3,22 @@ import { describe, it } from "node:test";
 import { coreOntology } from "../src/content/index.ts";
 import { scanText } from "../scripts/secret-scan.ts";
 import { callClaude, DEFAULT_SETTINGS, estimateCostUsd, persistable } from "../src/llm/client.ts";
-import { anchorsFor, formFromLlm } from "../src/llm/parser.ts";
+import { abilityCorrection, anchorsFor, formFromLlm } from "../src/llm/parser.ts";
 
 const onto = coreOntology();
 
 describe("formFromLlm – mapping model output onto the ontology", () => {
+  it("drops mechanisms the form cannot perform – a radio does not corrode", () => {
+    const input = { name: "Radio", base: null, scale: 1, plane: "materie", archetype: "box", properties: ["maschine", "elektrisch"], mechanisms: ["zersetzt", "uebertoent"], intended_mechanism: null };
+    assert.equal(formFromLlm(onto, input, "ein Radio"), undefined, "nothing it can do: not laut, no acid – Claude is asked again");
+    const loud = formFromLlm(onto, { ...input, properties: ["maschine", "elektrisch", "laut"] }, "ein Radio");
+    assert.ok(loud);
+    assert.deepEqual(onto.compileForm(loud.form).verbs, ["uebertoent"]);
+    assert.deepEqual(loud.form.verbs, ["uebertoent"], "the corroding is gone from the form itself");
+    const text = abilityCorrection(onto, "Radio", [{ verb: "zersetzt", why: "bräuchte Säure" }]);
+    assert.match(text, /zersetzt \(bräuchte Säure\)/);
+  });
+
   it("resolves free keywords to canonical tags and verbs", () => {
     const r = formFromLlm(
       onto,
@@ -17,7 +28,7 @@ describe("formFromLlm – mapping model output onto the ontology", () => {
         scale: 2,
         plane: "leben",
         archetype: "serpent",
-        properties: ["Tier", "Eisen", "gierig", "Quantenschaum"],
+        properties: ["Tier", "Eisen", "gierig", "Quantenschaum", "korrosiv", "Fäulnis"],
         mechanisms: ["rostet", "lässt verrotten"],
         weaknesses: ["gierig"],
         intended_mechanism: "rostet",

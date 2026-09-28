@@ -357,3 +357,15 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Die Beschwörung** | Während gemalt wird, lädt sich der Runenkreis auf, ein Pentagramm zeichnet sich Strich für Strich hinein und dreht sich, an seinen Spitzen flackern Runen, Funken steigen auf. Ist das Bild da: ein heller Blitz, die Gestalt erscheint. Die gezeichneten Sprites sieht man nur noch ohne Server oder wenn nach 75 s kein Bild kam. | `drawPentagram`, `startConjuring` |
 | **Doppelte Schärfe** | Bilder kommen in doppelter Auflösung; die Arena rendert Kämpfer in doppelter Dichte – gleich groß, doppelt so viele Details. Kulisse und alte Sprites sehen aus wie immer. | `ART_DENSITY`, `pixi-arena.ts` |
 | **Nach dem Wiederverbinden** | Bilder werden bei jedem (Wieder-)Beitritt neu erfragt – Zuschauer sehen nach einem Verbindungsabbruch nicht mehr die gezeichneten Ersatzbilder. | `welcome`, `resummon` |
+
+## Affordanzen: Fähigkeiten folgen aus Eigenschaften (Engine-Neubau Schritt 3; Nutzerwunsch: „Radio zersetzt Marder ergibt keinen Sinn“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Jeder Mechanismus sagt, was er braucht** | Alle 80 Mechanismen haben `requires`: zerschneiden braucht etwas Scharfes, zersetzen Säure, wecken Lärm, Licht, Geist oder einen Weckreiz, verbrennen Feuer *oder* gesetzte Hitze ≥ 2 (der Ofen brennt, ohne Feuer zu sein). Wer es nicht kann, dem nützt die Zuweisung nichts – egal ob von Claude, aus dem Content oder gelernt. | `verbs.json`, `ontology.affords` |
+| **Fähigkeiten als Eigenschaften** | 42 Fähigkeits-Tags (scharf, spitz, Klauen, Maul, wuchtig, stürmisch, bindend, laut, lockend, giftig, reinigend, tückisch, nervtötend …) bringen ihren Mechanismus selbst mit. Claude ordnet eine Gestalt also über das ein, was sie *ist* und *kann*, statt ihr Verben anzuheften. | `tags.json` (Gruppe `faehigkeit`) |
+| **Scherz ernst genommen** | Tückisch (Bananenschale, Butter), nervtötend (Kaugummi am Schuh, Drucker), bloßstellend (Tomatenwurf), unheimlich (Legostein, barfuß, nachts) – Witzgestalten bekommen echte, prüfbare Fähigkeiten statt Beliebigkeit. | `tags.json` |
+| **„Warum?“ sagt, was fehlt** | „Radio kann nicht „zersetzt“ – bräuchte Säure / Fäulnis.“ | `ontology.lacks`, `rules.ts` |
+| **Claude bekommt eine zweite Chance** | Im Vokabular steht hinter jedem Mechanismus „braucht: …“. Gibt Claude trotzdem nur Unmögliches an, fragt der Parser einmal nach: Fähigkeit nennen, wenn die Gestalt sie wirklich hat – sonst andere Mechanismen. Erfinden, nur damit es passt, ist ausdrücklich verboten. | `parser.ts` (`abilityCorrection`) |
+| **Migration mit Augenmaß** | Alle 1.228 Gestalten per Skript und Tabelle je Mechanismus umgestellt: wo die Fähigkeit stimmt, wurde sie ergänzt (Ritter spitz, Python bindend), wo nicht, flog der Mechanismus raus (Hut täuscht, Kopf zerschlägt, Löffel verschlingt, Stille übertönt). Prüfstand: 2,7 % → 1,8 % verdächtige Siege, „Begriff prügelt“ 3 972 → 392; Balance laut 2000 Selbstspielen unverändert. | `src/content/core/forms/*.json` |
+

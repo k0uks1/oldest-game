@@ -79,7 +79,10 @@ export function checkCounter(
   if (verb === undefined) return fail(`Unbekannter Mechanismus „${verbId}“.`);
   const a = onto.compileForm(attacker);
   const t = onto.compileForm(target);
-  if (!a.verbs.includes(verbId)) return fail(`${attacker.name} beherrscht „${verb.spec.label}“ nicht.`);
+  if (!a.verbs.includes(verbId)) {
+    const why = onto.lacks(attacker, verbId);
+    return fail(why === undefined ? `${attacker.name} beherrscht „${verb.spec.label}“ nicht.` : `${attacker.name} kann nicht „${verb.spec.label}“ – ${why}.`);
+  }
   steps.push({ ok: true, text: `${attacker.name} ${verb.spec.label} …` });
 
   // 1. target must offer a surface: some verb target is in the target's closure
