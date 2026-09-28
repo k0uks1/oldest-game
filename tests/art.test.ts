@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { deflateSync } from "node:zlib";
 import { coreOntology } from "../src/content/index.ts";
 import artJson from "../src/content/core/art.json" with { type: "json" };
+import promptsJson from "../src/content/core/art-prompts.json" with { type: "json" };
 import { parsePack } from "../src/engine/ontology/pack.ts";
 import { ART_MAX_SIDE, artFor, artGlow, decodeArt, encodeArt, upscale } from "../src/render/art.ts";
 import type { PixelImage } from "../src/render/sprite.ts";
@@ -104,6 +105,13 @@ describe("core art", () => {
       assert.ok(onto.formById(id), `art for unknown form ${id}`);
       assert.ok(decodeArt(raw), `art for ${id} does not decode`);
     }
+  });
+
+  it("every lexicon form has an image prompt (new forms need one too)", () => {
+    const prompts = promptsJson as Record<string, string>;
+    const missing = onto.lexicon.filter((f) => (prompts[f.id] ?? "").trim() === "").map((f) => f.id);
+    assert.deepEqual(missing, []);
+    for (const id of Object.keys(prompts)) assert.ok(onto.formById(id), `prompt for unknown form ${id}`);
   });
 
   it("a form's own art wins over the atlas", () => {
