@@ -27,7 +27,7 @@ src/
     attempt.ts       player-facing move without foreknowledge: success / failure (costs Wille) / rejected
     cost.ts          Wille cost, overkill surcharge, underdog refund, eleganz
     parse.ts         mechanical parser (DEBUG ONLY in the game; used for anchors & tests)
-  content/core/*.json  the core content pack (tags, verbs, modifiers, forms)
+  content/core/*.json  the core content pack (tags, verbs, modifiers, forms; sketches.json = SVG sprites for things, id → svg)
   llm/               Claude client, parser (text → Form), narrator, live learning + stores
   narrate/offline.ts template narration (debug / fallback)
   render/            sprite generation (pure) + canvas arena (DOM, bloom, cosmos dissolve, ambience)

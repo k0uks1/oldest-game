@@ -205,3 +205,11 @@ Erzählung und Warum-Zeile verschwinden nicht mehr nach einer festen Zeit. Sie b
 | **Hot-Seat verliert nichts** | Lädt der lokale Hot-Seat sein Pack hoch, während ein Raum etwas gelernt hat, wird zusammengeführt statt überschrieben. | `learnedEndpoint.put` in `server/local.ts` |
 | **Räume ohne Key** | Ohne `ANTHROPIC_API_KEY` spielen die Räume mit dem mechanischen Parser. Damit lässt sich Online-Spiel mit zwei Tabs kostenlos testen. | `debug: () => !claude()` |
 | **Kostendeckel** | Höchstens `CLAUDE_MOVES_PER_HOUR` Züge mit Claude pro Stunde über alle Räume, dazu Grenzen pro Verbindung, IP und Raum, 8-KB-Nachrichten, Herzschlag gegen tote Verbindungen und Aufräumen verlassener Räume. | `HubLimits`, `server/online.ts` |
+
+## Skizzen für Alltagsdinge (Nutzerwunsch: bessere Sprites, kostenlos und schnell)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **178 handgezeichnete Skizzen** | Tisch, Stuhl, Brot, Käse und Kuchen teilten sich bisher eine Kisten-Maske, Hammer, Messer und Gewehr eine Waffen-Maske. Jetzt hat jedes dieser Dinge eine eigene SVG-Skizze (Möbel, Werkzeug, Geschirr, Essen, Gebäude, Fahrzeuge, Kleidung, Pflanzen, Geräte). Ich habe sie beim Entwickeln gezeichnet; sie kosten also keine API-Aufrufe. Sie laufen durch denselben Rasterizer wie Claudes Live-Skizzen, und die Tags schattieren sie wie alles andere. Lebewesen behalten ihre Figuren. | `src/content/core/sketches.json` |
+| **Farbhinweise** | Die Farbe kommt aus den Tags, und die kennen nicht jede Farbe: Eine Tomate ist eine `pflanze` und wurde deshalb grün. Eine Skizze darf am `<svg>` `data-main`/`data-second` (nur Hex) angeben; daraus wird die Farbrampe gebildet. Das ist reine Darstellung, die Regeln sehen es nie. Auch Claude darf das bei Live-Skizzen, und gelernte Dinge behalten den Hinweis. | `tintOf`, `rampOf`, `paletteFor` |
+| **Faul gerastert** | Eine Skizze wird erst beim ersten Auftritt gerastert (etwa 1 ms) und danach aus dem Cache gezeichnet. Das Spiel startet dadurch nicht langsamer. | `sketchRows` in `sprite.ts` |

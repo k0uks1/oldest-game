@@ -87,6 +87,8 @@ export interface FormSpec {
   readonly flavor?: string;
   /** Custom 16×16 pixel art (rows of . # + o * ,) – validated by the ontology compiler. */
   readonly sprite?: readonly string[];
+  /** SVG sketch in the sketch colour roles (core content: `content/core/sketches.json`). */
+  readonly sketch?: string;
   /** Live learning: who first summoned this form and when (ISO date). Purely informational. */
   readonly discoveredBy?: string;
   readonly discoveredAt?: string;
@@ -270,6 +272,7 @@ export function parsePack(input: unknown): PackResult {
         ...opt("aliases", c.list(o, "aliases", w)),
         ...opt("flavor", c.optStr(o, "flavor", w)),
         ...opt("sprite", c.list(o, "sprite", w)),
+        ...opt("sketch", c.optStr(o, "sketch", w)),
         ...opt("discoveredBy", c.optStr(o, "discoveredBy", w)),
         ...opt("discoveredAt", c.optStr(o, "discoveredAt", w)),
       };

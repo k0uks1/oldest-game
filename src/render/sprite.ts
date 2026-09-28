@@ -3,6 +3,7 @@ import { hash32, rng } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 import { ATTIRE, FIGURES, VARIANTS, type VariantWhen } from "./figures.ts";
 import { MASKS } from "./masks.ts";
+import { rasterizeSketch } from "./svgsprite.ts";
 import { hexToRgb, paletteFor, type SpritePalette } from "./palette.ts";
 
 export interface PixelImage {
@@ -106,12 +107,25 @@ export function spriteSize(scale: number): number {
  */
 export function buildGrid(onto: Ontology, form: Form): Grid {
   // Claude-drawn pixel art wins – it was made for exactly this form.
-  const figure = form.sprite === undefined ? (variantFor(onto, form) ?? FIGURES[form.archetype]) : undefined;
-  let grid =
-    form.sprite !== undefined ? toGrid(form.sprite) : figure === undefined ? toGrid(MASKS[form.archetype]) : dress(onto, form, toGrid(figure));
+  const drawn = form.sprite ?? sketchRows(form.sketch);
+  const figure = drawn === undefined ? (variantFor(onto, form) ?? FIGURES[form.archetype]) : undefined;
+  let grid = drawn !== undefined ? toGrid(drawn) : figure === undefined ? toGrid(MASKS[form.archetype]) : dress(onto, form, toGrid(figure));
   const target = spriteSize(form.scale);
   while (grid.length < target) grid = epx(grid);
   return grid;
+}
+
+const sketchCache = new Map<string, readonly string[] | null>();
+
+/** A sketch rasterized once per session (the same SVG always gives the same rows). */
+function sketchRows(svg: string | undefined): readonly string[] | undefined {
+  if (svg === undefined) return undefined;
+  let rows = sketchCache.get(svg);
+  if (rows === undefined) {
+    rows = rasterizeSketch(svg) ?? null;
+    sketchCache.set(svg, rows);
+  }
+  return rows ?? undefined;
 }
 
 /** The first shape variant of the form's archetype whose condition holds. */

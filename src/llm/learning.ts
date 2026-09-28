@@ -108,6 +108,8 @@ export function learn(
     aliases,
     ...(form.flavor === undefined ? {} : { flavor: form.flavor }),
     ...(form.sprite === undefined ? {} : { sprite: form.sprite }),
+    // kept for its colour hints (the rows above are what gets drawn)
+    ...(form.sketch === undefined ? {} : { sketch: form.sketch }),
     ...(discovery === undefined ? {} : { discoveredBy: discovery.by.slice(0, 40), discoveredAt: discovery.at.slice(0, 24) }),
   });
 

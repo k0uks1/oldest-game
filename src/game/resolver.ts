@@ -98,7 +98,7 @@ export class Resolver {
     }
     // Claude's SVG sketch → 32×32 sprite (invalid or missing: the archetype stays the fallback).
     const rows = r.sketch === undefined ? undefined : validPixelArt(rasterizeSketch(r.sketch));
-    const drawn = rows === undefined ? r.form : { ...r.form, sprite: rows };
+    const drawn = rows === undefined || r.sketch === undefined ? r.form : { ...r.form, sprite: rows, sketch: r.sketch };
     const discoverer = state.players[state.active].name;
     const l = learn(this.basePacks, this.learned, text, drawn, r.delta, { by: discoverer, at: this.host.today() });
     if (!l.ok) return { ok: false, reason: l.reason };

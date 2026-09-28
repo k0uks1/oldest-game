@@ -27,9 +27,20 @@ import basis2 from "./core/forms/basis2.json" with { type: "json" };
 import modifiers from "./core/modifiers.json" with { type: "json" };
 import tags from "./core/tags.json" with { type: "json" };
 import verbs from "./core/verbs.json" with { type: "json" };
+import sketches from "./core/sketches.json" with { type: "json" };
 
 /** Forms are split by theme to keep files reviewable; order = lookup priority for aliases. */
 const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte, alltag, maerchen, film, werbung, alltag2, zukunft, tierreich, goetter, grundelemente, selbstspiel1, selbstspiel2, werkzeug, spiele, basis, basis2];
+
+/** Hand-drawn SVG sketches for everyday things live in one file (id → svg), merged in here. */
+function withSketches(forms: readonly unknown[]): unknown[] {
+  const byId = sketches as Readonly<Record<string, string>>;
+  return forms.map((f) => {
+    if (typeof f !== "object" || f === null || !("id" in f) || typeof f.id !== "string") return f;
+    const sketch = byId[f.id];
+    return sketch === undefined ? f : { ...f, sketch };
+  });
+}
 
 /** The built-in content pack ("Grundspiel"). */
 export const CORE_PACK_RAW: unknown = {
@@ -39,7 +50,7 @@ export const CORE_PACK_RAW: unknown = {
   tags,
   verbs,
   modifiers,
-  forms: FORM_FILES.flat(),
+  forms: withSketches(FORM_FILES.flat()),
   fields,
 };
 

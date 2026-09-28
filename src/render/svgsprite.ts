@@ -31,12 +31,27 @@ export function sanitizeSketch(raw: string): string | undefined {
   svg = svg
     .replace(/<(script|style|foreignObject|image|use|a)\b[\s\S]*?(<\/\1>|\/>)/gi, "")
     .replace(/\s(on\w+|href|xlink:href|style)\s*=\s*("[^"]*"|'[^']*')/gi, "");
-  // pin the drawing size; keep the model's viewBox (default 0 0 32 32)
+  // pin the drawing size; keep the model's viewBox (default 0 0 32 32) and colour hints
   svg = svg.replace(/<svg\b[^>]*>/i, (tag) => {
     const vb = /viewBox\s*=\s*("[^"]*"|'[^']*')/i.exec(tag)?.[1] ?? `"0 0 ${String(SKETCH_SIZE)} ${String(SKETCH_SIZE)}"`;
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox=${vb} width="${String(SKETCH_SIZE)}" height="${String(SKETCH_SIZE)}">`;
+    const t = tintOf(tag);
+    const hints = `${t.main === undefined ? "" : ` data-main="${t.main}"`}${t.second === undefined ? "" : ` data-second="${t.second}"`}`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox=${vb} width="${String(SKETCH_SIZE)}" height="${String(SKETCH_SIZE)}"${hints}>`;
   });
   return svg.length > 12_000 ? undefined : svg;
+}
+
+/**
+ * Optional colour hints on the root element (`data-main="#c83028"`, `data-second`): the real
+ * colour of a thing whose tags say nothing about it (a tomato is a `pflanze`, but red).
+ * Pure presentation – rules never see it.
+ */
+export function tintOf(svg: string): { readonly main?: string; readonly second?: string } {
+  const root = /<svg\b[^>]*>/i.exec(svg)?.[0] ?? "";
+  const hex = (key: string): string | undefined => new RegExp(`${key}\\s*=\\s*["'](#[0-9a-fA-F]{6})["']`).exec(root)?.[1]?.toLowerCase();
+  const main = hex("data-main");
+  const second = hex("data-second");
+  return { ...(main === undefined ? {} : { main }), ...(second === undefined ? {} : { second }) };
 }
 
 function nearestSymbol(r: number, g: number, b: number): string {
@@ -154,6 +169,7 @@ export const SKETCH_GUIDE = [
   "(rect, circle, ellipse, polygon, path). Kein Text, keine Verläufe, keine Linien dünner als 2 Einheiten, kein Hintergrund.",
   `Nutze als fill NUR diese Farben: ${SKETCH_FILLS.map((f) => `${f.hex} = ${f.role}`).join("; ")}.`,
   "Die echten Farben setzt das Spiel selbst ein – du wählst nur die Rolle jeder Fläche.",
+  'Nur wenn die Eigenschaften die Farbe nicht verraten (eine Tomate ist rot, obwohl sie eine Pflanze ist): gib am <svg> data-main="#rrggbb" (Hauptfarbe) und optional data-second="#rrggbb" an.',
 ].join(" ");
 
 /** Two worked examples for the prompt (drawn to the rules above). */
