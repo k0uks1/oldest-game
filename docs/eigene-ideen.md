@@ -338,3 +338,11 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Claude beschreibt, der Server malt** | Beim Einordnen schreibt Claude eine kurze englische Bildbeschreibung (geschützte Figuren beschrieben, nie beim Namen). Der Server generiert daraus einmal das Bild und verteilt es an alle Räume. | `bild` im Parser, `ArtService` |
 | **Einblenden statt Warten** | Der Zug wartet nicht auf das Bild. Trifft es ein, während die Gestalt noch steht, blendet die Arena mit einem Lichtblitz auf das neue Bild um. | `arena.setOntology` |
 | **Budget mit Gedächtnis** | Monatsdeckel (`ART_MONTHLY_LIMIT`), der Zähler liegt neben dem gelernten Pack und übersteht Neustarts. Ein Versuch pro Gestalt. Leer, kein Key oder Dienst weg: Es bleibt still beim gezeichneten Bild. | `art-usage.json` |
+
+## Prüfstand für den Engine-Neubau (Schritt 1 von 6)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Audit-Bot** | Geht alle 547 682 gültigen Siege im Lexikon durch und markiert verdächtige nach Regeln, die nicht aus der Engine stammen: Weiches schneidet, Begriffe prügeln, Dinge ohne Geist täuschen, Winzlinge mit roher Gewalt. Ausgangswert: 2,7 % verdächtig. Jeder Neubau-Schritt muss die Zahl senken. | `npm run audit` |
+| **Konkrete Fälle als Tests** | Was schon stimmt, ist Test (Fackel schmilzt keinen Anker …). Was noch absurd ist, steht als `todo` („Klebeband fesselt Ritter“) und wird zum echten Test, sobald der Neubau es behebt. | `tests/plausibility.test.ts` |
+| **„Quatsch?“-Knopf** | Hinter der Warum-Zeile, dezent. Ein Klick meldet den Sieg: an den Server (`reports.jsonl`) und in eine Liste im Menü, die man mit einem Knopf kopieren kann. So liefert jede Testrunde Fälle. | `reports.ts`, `report` im Protokoll |

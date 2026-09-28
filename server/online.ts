@@ -22,6 +22,7 @@ import {
   parseClientMsg,
   ROOM_ALPHABET,
   ROOM_CODE_LENGTH,
+  type AbsurdReport,
   type ChronicleEntry,
   type ClientMsg,
   type ErrorCode,
@@ -82,6 +83,8 @@ export interface HubOptions {
   readonly persist?: (pack: ContentPack) => void;
   readonly now?: () => number;
   readonly log?: (line: string) => void;
+  /** Store a reported absurd win (room code added). */
+  readonly report?: (r: AbsurdReport & { readonly room: string }) => void;
 }
 
 interface Seat {
@@ -227,6 +230,9 @@ export class OnlineHub {
         return;
       case "rematch":
         this.rematch(c);
+        return;
+      case "report":
+        if (c.room !== null) this.opts.report?.({ attacker: msg.attacker, target: msg.target, verb: msg.verb, room: c.room.code });
         return;
     }
   }

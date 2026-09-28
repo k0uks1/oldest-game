@@ -15,6 +15,7 @@ npm test           # node:test via tsx (tests/*.test.ts)
 npm run build      # → dist/index.html (single self-contained file, opens from disk)
 npm run simulate   # balancing report; add `-- --games 2000` for bot self-play
 npm run sheet -- items   # sprite contact sheet PNG (items | emblems a+b,c | form ids)
+npm run audit            # Prüfstand: suspicious wins in the lexicon (the engine-rebuild yardstick)
 npm run art -- status    # generated art: status | ingest <dir> | generate [--limit N] (needs PIXELLAB_API_KEY)
 ```
 

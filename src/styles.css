@@ -359,6 +359,30 @@ canvas.arena {
 .w-tag {
   color: var(--ember);
 }
+.w-quatsch {
+  padding: 0 6px;
+  border: 1px dashed var(--muted, #8a7e9a);
+  border-radius: 3px;
+  background: none;
+  color: var(--muted, #8a7e9a);
+  font: inherit;
+  font-size: 0.8em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.w-quatsch:hover {
+  color: var(--bad, #ff7a6a);
+  border-color: currentColor;
+}
+.w-badge.quiet {
+  color: var(--muted, #8a7e9a);
+}
+pre.reports {
+  max-height: 40vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 0.85em;
+}
 .w-badge {
   display: inline-block;
   padding: 0 6px;

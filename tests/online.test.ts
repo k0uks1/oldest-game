@@ -11,7 +11,7 @@ import { Resolver } from "../src/game/resolver.ts";
 import { DEFAULT_SETTINGS } from "../src/llm/client.ts";
 import { emptyLearnedPack } from "../src/llm/learning.ts";
 import { narrateEnd } from "../src/narrate/offline.ts";
-import { applyPackDelta, normalizeRoom, packDelta, parseClientMsg, type ServerMsg } from "../src/online/protocol.ts";
+import { applyPackDelta, normalizeRoom, packDelta, parseClientMsg, type AbsurdReport, type ServerMsg } from "../src/online/protocol.ts";
 import { startServer } from "../server/local.ts";
 import { OnlineHub, type HubLimits } from "../server/online.ts";
 
@@ -34,7 +34,9 @@ class FakePeer {
   }
 }
 
-function setup(opts: { accessCode?: string; limits?: Partial<HubLimits>; now?: () => number; claude?: boolean } = {}): { hub: OnlineHub; resolver: Resolver } {
+function setup(
+  opts: { accessCode?: string; limits?: Partial<HubLimits>; now?: () => number; claude?: boolean; report?: (r: AbsurdReport & { room: string }) => void } = {},
+): { hub: OnlineHub; resolver: Resolver } {
   const resolver = new Resolver(Ontology.compile([core]), [core], emptyLearnedPack(), {
     llm: () => DEFAULT_SETTINGS,
     debug: () => true,
@@ -47,6 +49,7 @@ function setup(opts: { accessCode?: string; limits?: Partial<HubLimits>; now?: (
     claude: () => opts.claude === true,
     epilogue: (s) => Promise.resolve(narrateEnd(s)),
     ...(opts.now === undefined ? {} : { now: opts.now }),
+    ...(opts.report === undefined ? {} : { report: opts.report }),
   });
   return { hub, resolver };
 }
@@ -353,5 +356,17 @@ describe("online server (real WebSocket)", () => {
     } finally {
       await srv.close();
     }
+  });
+});
+
+describe("Quatsch-Meldungen", () => {
+  it("a player in a room can report an absurd win; junk is refused", () => {
+    const got: (AbsurdReport & { room: string })[] = [];
+    const { hub } = setup({ report: (r) => got.push(r) });
+    const { ca, code } = openRoom(hub);
+    ca.receive(JSON.stringify({ t: "report", attacker: "Klebeband", target: "Ritter", verb: "fesselt" }));
+    ca.receive(JSON.stringify({ t: "report", attacker: "", target: "Ritter", verb: "fesselt" }));
+    assert.deepEqual(got, [{ attacker: "Klebeband", target: "Ritter", verb: "fesselt", room: code }]);
+    assert.equal(parseClientMsg(JSON.stringify({ t: "report", attacker: "x".repeat(500), target: "y", verb: "z" }))?.t, "report");
   });
 });
