@@ -8,6 +8,7 @@
  * Narration is separate (`narrate`) because it is slow and the arena animates meanwhile.
  */
 import { attempt, type AttemptOutcome } from "../engine/attempt.ts";
+import { currentTarget } from "../engine/game.ts";
 import { Ontology } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
 import { parseForm } from "../engine/parse.ts";
@@ -15,7 +16,8 @@ import { validPixelArt } from "../engine/pixelart.ts";
 import { reaches } from "../engine/rules.ts";
 import type { Form, GameState, PlayerId } from "../engine/types.ts";
 import { isClaudeReady, type LlmSettings } from "../llm/client.ts";
-import { addRuling, findLearned, learn } from "../llm/learning.ts";
+import { addRuling, amend, findLearned, learn } from "../llm/learning.ts";
+import { judgeWithClaude } from "../llm/judge.ts";
 import { loreWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
 import { parseWithClaude } from "../llm/parser.ts";
 import { refereeWithClaude } from "../llm/referee.ts";
@@ -49,6 +51,18 @@ export interface ResolverHost {
   /** Persist the learned pack (fire and forget; failures are reported, not fatal). */
   readonly saveLearned: (pack: ContentPack) => void;
   readonly today: () => string;
+}
+
+/** Learned from a player's words (not hand-written content). */
+function invented(f: Form): boolean {
+  return f.id.startsWith("g:");
+}
+
+/** The same state with the form on stage replaced by its better-understood version (same id). */
+function withTarget(state: GameState, target: Form): GameState {
+  const last = state.history.at(-1);
+  if (last?.form.id !== target.id || last.form === target) return state;
+  return { ...state, history: [...state.history.slice(0, -1), { ...last, form: target }] };
 }
 
 function sameShape(a: Form, b: Form): boolean {
@@ -123,12 +137,17 @@ export class Resolver {
     return this.play(state, c.form, c.verb, c.novelty);
   }
 
-  /** Engine attempt (+ referee on doubt) for an already classified form. */
+  /** Engine attempt (+ judge for two invented forms, referee on doubt) for an already classified form. */
   async play(state: GameState, form: Form, intendedVerb: string | null, novelty: Novelty): Promise<Resolution> {
     const actor = state.active;
     const isDiscovery = novelty?.kind === "discovery";
     let outcome = attempt(this.onto, state, form, intendedVerb, isDiscovery);
     let verdict: string | null = null;
+    const judged = await this.judge(state, form, intendedVerb, isDiscovery, outcome);
+    if (judged !== undefined) {
+      if (judged.outcome.kind === "rejected") return { kind: "rejected", reason: judged.outcome.reason };
+      return { kind: "turn", turn: { actor, form: judged.form, outcome: judged.outcome, novelty, verdict: judged.verdict, state: judged.outcome.state, index: judged.outcome.state.history.length - 1 } };
+    }
     // The engine is unsure → ask the referee once; the ruling becomes a precedent for this pair.
     if (outcome.kind === "failure" && outcome.failure.uncertain !== undefined && this.useClaude()) {
       const v = await refereeWithClaude(this.onto, this.host.llm(), outcome.failure);
@@ -143,6 +162,61 @@ export class Resolver {
     }
     if (outcome.kind === "rejected") return { kind: "rejected", reason: outcome.reason };
     return { kind: "turn", turn: { actor, form, outcome, novelty, verdict, state: outcome.state, index: outcome.state.history.length - 1 } };
+  }
+
+  /**
+   * "Urteil": two forms nobody wrote rules for (both learned from the players' words) – Claude
+   * judges the pair and names what was missing; the forms learn it (`amend`), the engine checks
+   * again, and only a remaining disagreement becomes a precedent. Once per pair.
+   */
+  private async judge(
+    state: GameState,
+    form: Form,
+    intendedVerb: string | null,
+    isDiscovery: boolean,
+    first: AttemptOutcome,
+  ): Promise<{ form: Form; outcome: AttemptOutcome; verdict: string } | undefined> {
+    const target = currentTarget(state);
+    if (target === null || first.kind === "rejected" || !invented(form) || !invented(target) || !this.useClaude()) return undefined;
+    if (this.onto.rulingFor(form.id, target.id) !== undefined) return undefined;
+    const engine = first.kind === "success" ? `Sieg (${this.onto.verbs.get(first.move.verb ?? "")?.spec.label ?? "?"})` : `kein Sieg – ${first.failure.reason}`;
+    const j = await judgeWithClaude(this.onto, this.host.llm(), form, target, engine);
+    if (j === undefined) return undefined;
+    const addVerb = j.win && j.verb !== undefined ? [j.verb] : [];
+    const amended = amend(
+      this.basePacks,
+      this.learned,
+      [
+        { id: form.id, tags: j.attacker.tags, verbs: addVerb, ...(j.attacker.qualities === undefined ? {} : { qualities: j.attacker.qualities }) },
+        { id: target.id, tags: j.target.tags, ...(j.target.qualities === undefined ? {} : { qualities: j.target.qualities }) },
+      ],
+      j.delta,
+    );
+    let onto = amended?.onto ?? this.onto;
+    let pack = amended?.pack ?? this.learned;
+    const f2 = onto.formById(form.id) ?? form;
+    const t2 = onto.formById(target.id) ?? target;
+    const state2 = withTarget(state, t2);
+    const verb: string | null = j.win ? (j.verb ?? intendedVerb) : intendedVerb;
+    let outcome = attempt(onto, state2, f2, verb, isDiscovery);
+    // the engine, now knowing more, still disagrees: the judgement becomes a precedent for this pair
+    if ((outcome.kind === "success") !== j.win && outcome.kind !== "rejected") {
+      const rulingVerb = j.verb ?? (outcome.kind === "failure" ? outcome.failure.closest?.verb : (outcome.move.verb ?? undefined));
+      const stored = rulingVerb === undefined ? undefined : addRuling(this.basePacks, pack, { attacker: f2.id, target: t2.id, valid: j.win, verb: rulingVerb, reason: j.reason });
+      if (stored !== undefined) {
+        onto = stored.onto;
+        pack = stored.pack;
+        outcome = attempt(onto, state2, f2, j.win ? (rulingVerb ?? null) : intendedVerb, isDiscovery);
+      }
+    }
+    if (pack !== this.learned) {
+      this.onto = onto;
+      this.learned = pack;
+      this.host.saveLearned(pack);
+    }
+    const learnedNow = [...j.attacker.tags, ...j.target.tags].map((t) => onto.tagLabel(t));
+    const extra = amended === undefined || learnedNow.length === 0 ? "" : ` · gelernt: ${[...new Set(learnedNow)].join(", ")}`;
+    return { form: f2, outcome, verdict: `⚖ Urteil: ${j.reason}${extra}` };
   }
 
   /** The form's legend for its card: its own, or a fresh one from Claude (undefined offline). */

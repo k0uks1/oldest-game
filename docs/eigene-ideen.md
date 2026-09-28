@@ -400,3 +400,12 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Merkmale mit Folgen** | vielarmig (haut und hält: wuchtig + bindend), klebrig, stinkend (reizt), betrunken (Mut aus der Flasche: nicht zu ängstigen), lächerlich (macht niemandem Angst, lässt sich aber vorführen). | `tags.json`, `verbs.json` |
 | **Trocken erzählt** | Ist eine Gestalt albern oder heiter, darf die Chronik komisch sein – todernst erzählt, die Pointe kommt aus den Eigenheiten der Gestalt. | `narrator.ts` |
 
+## Das Urteil (Nutzerwunsch: „wenn zwei komplett erfundene Formen kämpfen, voll auf Claude vertrauen – und es neue Eigenschaften zurückgeben lassen, damit das Urteil Sinn ergibt“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Claude urteilt, die Engine lernt** | Treffen zwei Gestalten aufeinander, die beide aus Spielerworten gelernt wurden, entscheidet Claude – und muss nennen, was an Eigenschaften, Intensitäten oder Mechanismen fehlte („die Seifenblase platzt leicht“, „lässt platzen, braucht etwas Spitzes“). | `llm/judge.ts` |
+| **Begründung als Wissen** | Das Fehlende wird den beiden Gestalten beigebracht (`amend`, geprüft wie jedes Lernen), neue Begriffe landen im Grimoire. Die Engine prüft danach selbst – meist kommt sie nun zum selben Schluss, und künftig entscheidet sie ohne Claude. | `learning.ts` (`amend`) |
+| **Präzedenz nur, wo nötig** | Widerspricht die Engine trotzdem, wird das Urteil als Präzedenzfall für genau dieses Paar gespeichert – Reichweite und Größen-Deckel gelten weiter. Jedes Paar wird nur einmal verhandelt. | `resolver.ts` (`judge`) |
+| **Sichtbar** | Die Warum-Zeile zeigt „⚖ Urteil: …“ und was gelernt wurde; die Gestalt auf der Bühne ist danach die besser verstandene. | `verdict` |
+
