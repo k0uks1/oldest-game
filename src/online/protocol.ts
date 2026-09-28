@@ -34,7 +34,15 @@ export type ClientMsg =
   /** Ask for the full learned pack again (after a delta did not apply). */
   | { readonly t: "sync" }
   /** "Das war Quatsch!" – a win that makes no sense (collected for the engine rebuild). */
-  | ({ readonly t: "report" } & AbsurdReport);
+  | ({ readonly t: "report" } & AbsurdReport)
+  /** Ask for the generated pictures of these forms (answered with `art`, pending ones follow later). */
+  | { readonly t: "art"; readonly ids: readonly string[] };
+
+/** One form's generated picture: ready (with the art string), still being made, or none to be had. */
+export type ArtItem = { readonly id: string; readonly state: "ready"; readonly art: string } | { readonly id: string; readonly state: "pending" | "none" };
+
+/** Most form ids per `art` request. */
+export const MAX_ART_IDS = 24;
 
 /** A reported absurd win: who beat whom with what (names as shown in the game). */
 export interface AbsurdReport {
@@ -94,6 +102,8 @@ export type ServerMsg =
       readonly players: readonly [SeatInfo | null, SeatInfo | null];
       /** How many spectators are in the room. */
       readonly watchers: number;
+      /** The server delivers generated pictures (ask with `art`). */
+      readonly art: boolean;
       /** null while waiting for the second player. */
       readonly state: GameState | null;
       readonly chronicle: readonly ChronicleEntry[];
@@ -112,6 +122,7 @@ export type ServerMsg =
   | { readonly t: "epilogue"; readonly text: string }
   | { readonly t: "learned"; readonly delta: PackDelta }
   | { readonly t: "learnedFull"; readonly pack: ContentPack }
+  | { readonly t: "art"; readonly items: readonly ArtItem[] }
   | { readonly t: "error"; readonly code: ErrorCode; readonly message: string };
 
 // ── validation (the server never trusts a frame) ──────────────────────────
@@ -176,6 +187,12 @@ export function parseClientMsg(raw: string): ClientMsg | undefined {
     case "report": {
       const r = parseReport(m);
       return r === undefined ? undefined : { t: "report", ...r };
+    }
+    case "art": {
+      const ids = m["ids"];
+      if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_ART_IDS) return undefined;
+      const clean = ids.map((x) => str(x, 80)).filter((x): x is string => x !== undefined && x !== "");
+      return clean.length === ids.length ? { t: "art", ids: [...new Set(clean)] } : undefined;
     }
     default:
       return undefined;

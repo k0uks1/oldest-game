@@ -144,6 +144,8 @@ export interface ServerInfo {
   readonly accessCode: boolean;
   /** Online rooms over WebSocket. */
   readonly online: boolean;
+  /** Generated pictures on demand (`/api/art`, `art` messages). */
+  readonly art: boolean;
 }
 
 /** Ask the game server what it offers; null when the page was opened from disk or has no server. */
@@ -159,6 +161,7 @@ export async function fetchHealth(fetchImpl: typeof fetch = fetch): Promise<Serv
       model: typeof j.model === "string" ? j.model : DEFAULT_MODEL,
       accessCode: j.accessCode === true,
       online: j.online === true,
+      art: j.art === true,
     };
   } catch {
     return null;

@@ -8,7 +8,7 @@
  *   renderers              pens, fighters and compositing (canvas-arena.ts, pixi-arena.ts)
  */
 import { ArenaSim, GROUND_Y, SIDE_X, type Side } from "./arena.ts";
-import type { Pen } from "./pen.ts";
+import type { Pen, Pt } from "./pen.ts";
 import { HEIGHT, TORCH_X, TORCH_Y, WIDTH } from "./stage.ts";
 
 /** Bat frames (9×4): dark silhouettes; `o` = glowing eye. */
@@ -247,18 +247,61 @@ export abstract class ArenaScene extends ArenaSim {
     }
   }
 
-  /** The rune circle on the floor – it charges while Claude is thinking. */
+  /** The rune circle on the floor – it charges while Claude is thinking and flares while a picture is conjured. */
   private drawRune(base: Pen, glow: Pen): void {
-    const pulse = 0.22 + Math.sin(this.time * 1.5) * 0.06 + this.thinking * 0.5;
-    const spin = this.time * (0.3 + this.thinking * 2.5);
-    const color = this.thinking > 0.2 ? "#c8a0ff" : "#8a62b0";
+    const c = this.conjure;
+    const pulse = Math.min(1, 0.22 + Math.sin(this.time * 1.5) * 0.06 + this.thinking * 0.5 + c * 0.55 + this.conjureBurst * 0.6);
+    const spin = this.time * (0.3 + this.thinking * 2.5 + c * 1.2);
+    const color = this.conjureBurst > 0.05 ? "#fff0d0" : c > 0.2 ? "#dcb8ff" : this.thinking > 0.2 ? "#c8a0ff" : "#8a62b0";
     const { cx, cy, outer, inner, orbit } = this.stage.rune;
+    if (c > 0.05 || this.conjureBurst > 0) glow.light(cx, cy, outer[0] * 1.3, outer[1] * 1.3, "#b070ff", 0.18 * c + 0.4 * this.conjureBurst);
     for (const [pen, a] of [[base, pulse], [glow, pulse * 0.8]] as const) {
       pen.ring(cx, cy, outer[0], outer[1], color, a);
       pen.ring(cx, cy, inner[0], inner[1], color, a);
       for (let i = 0; i < 12; i++) {
         const ang = spin + (i / 12) * Math.PI * 2;
         pen.rect(Math.round(cx + Math.cos(ang) * orbit[0]), Math.round(cy + Math.sin(ang) * orbit[1]), 2, 1, color, a);
+      }
+    }
+    if (c > 0.02 || this.conjureBurst > 0) this.drawPentagram(base, glow, Math.max(c, this.conjureBurst));
+  }
+
+  /**
+   * "Beschwörung": a five-pointed star traces itself into the inner ring, then turns slowly;
+   * a rune flickers at every point. Drawn on the floor ellipse, so it lies flat in the room.
+   */
+  private drawPentagram(base: Pen, glow: Pen, strength: number): void {
+    const { cx, cy, inner } = this.stage.rune;
+    const turn = this.reducedMotion ? 0 : this.time * 0.35;
+    const points = Array.from({ length: 5 }, (_, k): Pt => {
+      const ang = turn + (k / 5) * Math.PI * 2 - Math.PI / 2;
+      return [cx + Math.cos(ang) * inner[0] * 0.92, cy + Math.sin(ang) * inner[1] * 0.92];
+    });
+    // star order 0 → 2 → 4 → 1 → 3 → 0, traced in over ~1.4 s
+    const centre: Pt = [cx, cy];
+    const order = [0, 2, 4, 1, 3, 0].map((i): Pt => points[i] ?? centre);
+    const traced = this.reducedMotion ? 1 : Math.min(1, this.conjureAge / 1.4 + (this.conjureBurst > 0 ? 1 : 0));
+    const path = partialPath(order, traced);
+    const burst = this.conjureBurst;
+    const color = burst > 0.05 ? "#fff4dc" : "#e0c0ff";
+    const shimmer = 0.75 + Math.sin(this.time * 6) * 0.15;
+    for (const [pen, a] of [[base, 0.85 * strength * shimmer], [glow, strength * shimmer]] as const) {
+      pen.line(path.map(([x, y]): Pt => [Math.round(x) + 0.5, Math.round(y) + 0.5]), color, a);
+    }
+    // runes at the points – each its own glyph, flickering out of phase
+    for (const [k, [px, py]] of points.entries()) {
+      if (traced < (k + 1) / 5) continue;
+      const glyph = RUNES[k % RUNES.length] ?? [];
+      const flicker = 0.55 + 0.45 * Math.abs(Math.sin(this.time * 3.1 + k * 1.7));
+      const a = Math.min(1, strength * flicker + burst);
+      const gx = Math.round(px) - 2;
+      const gy = Math.round(py) - 6;
+      for (const [j, row] of glyph.entries()) {
+        for (const [i, ch] of Array.from(row).entries()) {
+          if (ch !== "#") continue;
+          base.rect(gx + i, gy + j, 1, 1, burst > 0.05 ? "#fff4dc" : "#f0dcff", a);
+          glow.rect(gx + i, gy + j, 1, 1, "#d8a8ff", a);
+        }
       }
     }
   }
@@ -278,4 +321,37 @@ export abstract class ArenaScene extends ArenaSim {
       pen.rect(cx - 1, cy - 1, 3, 3, "#ffd86a", a);
     }
   }
+}
+
+/** Five small runes for the pentagram's points (5×5, "#" = lit). */
+const RUNES: readonly (readonly string[])[] = [
+  ["..#..", ".###.", "..#..", ".#.#.", "#...#"],
+  ["#...#", ".#.#.", "..#..", "..#..", "..#.."],
+  ["###..", "#..#.", "###..", "#.#..", "#..#."],
+  ["..#..", ".#.#.", "#...#", ".#.#.", "..#.."],
+  ["#.#.#", "#.#.#", ".###.", "..#..", "..#.."],
+];
+
+/** The first `t` (0..1) of a polyline, by length. */
+function partialPath(points: readonly Pt[], t: number): Pt[] {
+  if (t >= 1 || points.length < 2) return [...points];
+  const segs = points.slice(1).map((p, i) => {
+    const q = points[i] ?? p;
+    return Math.hypot(p[0] - q[0], p[1] - q[1]);
+  });
+  let left = segs.reduce((a, b) => a + b, 0) * Math.max(0, t);
+  const out: Pt[] = [points[0] ?? [0, 0]];
+  for (const [i, len] of segs.entries()) {
+    const a = points[i] ?? [0, 0];
+    const b = points[i + 1] ?? a;
+    if (left >= len) {
+      out.push(b);
+      left -= len;
+      continue;
+    }
+    const f = len === 0 ? 0 : left / len;
+    out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
+    break;
+  }
+  return out;
 }

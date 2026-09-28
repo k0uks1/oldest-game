@@ -11,3 +11,6 @@ coverage/
 # self-play duels (agents) – state and discovery log
 selfplay/
 sheet.png
+
+# server data: learned pack, picture store, reports
+learned/

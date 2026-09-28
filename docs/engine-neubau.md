@@ -12,6 +12,8 @@ Dieses Dokument sammelt Fälle und Ursachen, bis der Neubau beginnt. **Nichts am
 | Fall | Ursache (Stand heute) | Status |
 |---|---|---|
 | Alter Kaugummi zerschneidet etwas | Mechanismen werden der Gestalt *zugeteilt* (von Claude oder im Content), statt aus ihren Eigenschaften zu folgen. Nichts verlangt, dass wer schneidet, scharf und härter als das Ziel ist. | offen |
+| Atombombe „weckt“ (den Träumer) | Claude hat der eingeordneten Gestalt den Mechanismus zugeteilt – nichts prüft, ob eine Bombe *wecken* kann. | offen (Affordanzen) |
+| Radio „zersetzt“ einen Marder | dito – zugeteilte statt abgeleitete Fähigkeit | offen (Affordanzen) |
 | „alter“ Kaugummi wird magisch | „alt“ läuft über den Modifikator `uralt` (fügt `magisch`, `erinnert` hinzu). Wörter haben keinen Kontext: alt heißt bei Dingen „abgenutzt“, nicht „mythisch“. | offen |
 | Hut besiegt Elefant | Der Schiedsrichter durfte fremde Mechanismen vergeben. | behoben v0.41 |
 | Fackel schmilzt Anker | Keine Intensität, „schmilzt“ war binär. | behoben v0.41 (nur für 6 Mechanismen) |

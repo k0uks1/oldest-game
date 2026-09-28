@@ -9,13 +9,12 @@
  *
  * Pixel art has few colours and large empty areas, so a 64×64 sprite is typically 1–3 KB.
  */
-import coreArt from "../content/core/art.json" with { type: "json" };
 import type { Form } from "../engine/types.ts";
 import type { PixelImage } from "./sprite.ts";
 
 /** Hard limits – art may come from learned packs (untrusted JSON). */
-export const ART_MAX_SIDE = 128;
-export const ART_MAX_LENGTH = 48_000;
+export const ART_MAX_SIDE = 256;
+export const ART_MAX_LENGTH = 160_000;
 const MAX_COLOURS = 255;
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -126,6 +125,21 @@ export function decodeArt(art: string): PixelImage | undefined {
   return p === w * h ? { width: w, height: h, data } : undefined;
 }
 
+/** Nearest-neighbour resample to any size (pixel art stays crisp; same size = unchanged). */
+export function resample(img: PixelImage, width: number, height: number): PixelImage {
+  if (width === img.width && height === img.height) return img;
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    const sy = Math.min(img.height - 1, Math.floor(((y + 0.5) * img.height) / height));
+    for (let x = 0; x < width; x++) {
+      const sx = Math.min(img.width - 1, Math.floor(((x + 0.5) * img.width) / width));
+      const s = (sy * img.width + sx) * 4;
+      data.set(img.data.subarray(s, s + 4), (y * width + x) * 4);
+    }
+  }
+  return { width, height, data };
+}
+
 /** Nearest-neighbour upscale by an integer factor (small art in a big sprite slot). */
 export function upscale(img: PixelImage, factor: number): PixelImage {
   if (factor <= 1) return img;
@@ -168,14 +182,17 @@ export function artGlow(img: PixelImage, emissive: boolean): PixelImage {
 
 // ── Where art comes from ───────────────────────────────────────────────────
 
+/**
+ * Generated pictures carry this many pixels per sprite pixel: a 64 px sprite slot shows a 128 px
+ * picture at half size – same size on screen, twice the detail (the arena renders at this density).
+ */
+export const ART_DENSITY = 2;
 
-const CORE_ART: Readonly<Record<string, string>> = coreArt;
 const decoded = new Map<string, PixelImage | null>();
+/** Pictures received at runtime (from the game server), by form id. */
+const received = new Map<string, string>();
 
-/** The form's own art (learned) or the core atlas entry for its id – decoded once. */
-export function artFor(form: Form): PixelImage | undefined {
-  const raw = form.art ?? CORE_ART[form.id];
-  if (raw === undefined) return undefined;
+function decodeOnce(raw: string): PixelImage | undefined {
   let img = decoded.get(raw);
   if (img === undefined) {
     img = decodeArt(raw) ?? null;
@@ -184,7 +201,19 @@ export function artFor(form: Form): PixelImage | undefined {
   return img ?? undefined;
 }
 
-/** How many forms of the core lexicon have generated art. */
-export function coreArtCount(): number {
-  return Object.keys(CORE_ART).length;
+/** Remember a picture the server sent for a form. Returns false if it does not decode. */
+export function registerArt(formId: string, art: string): boolean {
+  if (decodeOnce(art) === undefined) return false;
+  received.set(formId, art);
+  return true;
+}
+
+export function hasArt(form: Pick<Form, "id" | "art">): boolean {
+  return received.has(form.id) || form.art !== undefined;
+}
+
+/** A form's picture: received from the server, else one stored in its (learned) spec. */
+export function artFor(form: Pick<Form, "id" | "art">): PixelImage | undefined {
+  const raw = received.get(form.id) ?? form.art;
+  return raw === undefined ? undefined : decodeOnce(raw);
 }

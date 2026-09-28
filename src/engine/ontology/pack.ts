@@ -258,7 +258,7 @@ class ShapeChecker {
   art(o: Obj, key: string, where: string): string | undefined {
     const v = o[key];
     if (v === undefined) return undefined;
-    if (typeof v === "string" && v.length <= 48_000 && /^\d{1,3}\.\d{1,3}\.(?:[0-9a-f]{8})*\.[A-Za-z0-9+/]*={0,2}$/.test(v)) return v;
+    if (typeof v === "string" && v.length <= 160_000 && /^\d{1,3}\.\d{1,3}\.(?:[0-9a-f]{8})*\.[A-Za-z0-9+/]*={0,2}$/.test(v)) return v;
     this.errors.push(`${where}: "${key}" ist kein gültiges Bild`);
     return undefined;
   }

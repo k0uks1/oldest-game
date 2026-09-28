@@ -346,3 +346,14 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Audit-Bot** | Geht alle 547 682 gültigen Siege im Lexikon durch und markiert verdächtige nach Regeln, die nicht aus der Engine stammen: Weiches schneidet, Begriffe prügeln, Dinge ohne Geist täuschen, Winzlinge mit roher Gewalt. Ausgangswert: 2,7 % verdächtig. Jeder Neubau-Schritt muss die Zahl senken. | `npm run audit` |
 | **Konkrete Fälle als Tests** | Was schon stimmt, ist Test (Fackel schmilzt keinen Anker …). Was noch absurd ist, steht als `todo` („Klebeband fesselt Ritter“) und wird zum echten Test, sobald der Neubau es behebt. | `tests/plausibility.test.ts` |
 | **„Quatsch?“-Knopf** | Hinter der Warum-Zeile, dezent. Ein Klick meldet den Sieg: an den Server (`reports.jsonl`) und in eine Liste im Menü, die man mit einem Knopf kopieren kann. So liefert jede Testrunde Fälle. | `reports.ts`, `report` im Protokoll |
+
+## Bilder auf Abruf und die Beschwörung (Nutzerwunsch: „nicht alles vorgenerieren – just in time“, „statt unserer gemalten Sprites soll der Runenkreis beschwören“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Nichts vorgenerieren** | Der Server malt eine Gestalt erst, wenn sie zum ersten Mal auftritt, und hebt das Bild für immer auf. Bezahlt wird nur, was gespielt wird. | `server/art-service.ts` |
+| **Schlüssel ist die Beschreibung** | Gespeichert wird nach Bildbeschreibung, nicht nach Gestalt: der Jäger im roten Mantel und der Jäger mit Harke sind zwei Bilder, gleiche Beschreibungen teilen sich eins. | `artKey` |
+| **Schon beim Auflösen losmalen** | Sobald der Server einen Zug auflöst, beginnt er zu malen – wenn die Clients fragen, läuft es schon. Gleiche Anfragen werden zusammengelegt. | `online.ts` (move) |
+| **Die Beschwörung** | Während gemalt wird, lädt sich der Runenkreis auf, ein Pentagramm zeichnet sich Strich für Strich hinein und dreht sich, an seinen Spitzen flackern Runen, Funken steigen auf. Ist das Bild da: ein heller Blitz, die Gestalt erscheint. Die gezeichneten Sprites sieht man nur noch ohne Server oder wenn nach 75 s kein Bild kam. | `drawPentagram`, `startConjuring` |
+| **Doppelte Schärfe** | Bilder kommen in doppelter Auflösung; die Arena rendert Kämpfer in doppelter Dichte – gleich groß, doppelt so viele Details. Kulisse und alte Sprites sehen aus wie immer. | `ART_DENSITY`, `pixi-arena.ts` |
+| **Nach dem Wiederverbinden** | Bilder werden bei jedem (Wieder-)Beitritt neu erfragt – Zuschauer sehen nach einem Verbindungsabbruch nicht mehr die gezeichneten Ersatzbilder. | `welcome`, `resummon` |
