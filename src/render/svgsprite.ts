@@ -3,9 +3,11 @@
  * this turns the sketch into a 32×32 grid in the sprite symbol language, which the normal sprite
  * pipeline then colours by tags, shades, outlines and upscales – so it looks like every other form.
  *
- * The SVG is only ever drawn as an <img> (no scripts, no external loads – browsers sandbox SVG
- * images), after stripping anything that is not plain drawing markup.
+ * The SVG is never handed to a browser: it is sanitized and drawn by our own rasterizer
+ * (`svgraster.ts`), which only understands plain shapes.
  */
+
+import { rasterizeSvg } from "./svgraster.ts";
 
 export const SKETCH_SIZE = 32;
 
@@ -66,31 +68,21 @@ export function pixelsToRows(data: Uint8ClampedArray, size = SKETCH_SIZE): strin
   return rows;
 }
 
-/** Browser only: draw the sanitized sketch and read it back as 32×32 symbol rows. */
-export async function rasterizeSketch(raw: string): Promise<string[] | undefined> {
+/**
+ * Sketch → 32×32 symbol rows. Pure (own rasterizer, no canvas), so browser and server turn the
+ * same SVG into the very same sprite. Renders large first, then `fitSketch` crops and fits it:
+ * models often draw too small or off-centre, and a sprite should always fill its space.
+ */
+export function rasterizeSketch(raw: string): string[] | undefined {
   const svg = sanitizeSketch(raw);
-  if (svg === undefined || typeof document === "undefined") return undefined;
-  // Render large first, then crop to the drawing and fit it into the frame: models often
-  // draw too small or off-centre, and a sprite should always fill its space.
+  if (svg === undefined) return undefined;
   const big = SKETCH_SIZE * 4;
-  const img = new Image(big, big);
-  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.replace(/width="\d+" height="\d+"/, `width="${String(big)}" height="${String(big)}"`))}`;
-  try {
-    await img.decode();
-  } catch {
-    return undefined;
-  }
-  const src = document.createElement("canvas");
-  src.width = big;
-  src.height = big;
-  const sctx = src.getContext("2d", { willReadFrequently: true });
-  if (sctx === null) return undefined;
-  sctx.drawImage(img, 0, 0, big, big);
-  return fitSketch(sctx.getImageData(0, 0, big, big).data, big);
+  const px = rasterizeSvg(svg, big);
+  return px === undefined ? undefined : fitSketch(px, big);
 }
 
 /**
- * Pure: a large square RGBA rendering (browser canvas or the server's SVG renderer) → 32×32
+ * Pure: a large square RGBA rendering → 32×32
  * symbol rows. Crops to the drawing, fits it into the frame (centred, standing on the ground)
  * and averages the covered source pixels – identical results on client and server.
  */

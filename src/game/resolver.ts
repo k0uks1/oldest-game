@@ -19,6 +19,7 @@ import { addRuling, findLearned, learn } from "../llm/learning.ts";
 import { narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
 import { parseWithClaude } from "../llm/parser.ts";
 import { refereeWithClaude } from "../llm/referee.ts";
+import { rasterizeSketch } from "../render/svgsprite.ts";
 import { narrateFailure, narrateMove } from "../narrate/offline.ts";
 
 export type Novelty = { readonly kind: "discovery"; readonly extra: readonly string[] } | { readonly kind: "remembered"; readonly by: string | null } | null;
@@ -45,8 +46,6 @@ export interface ResolverHost {
   readonly llm: () => LlmSettings;
   /** Debug: mechanical parser and template narration, no Claude calls. */
   readonly debug: () => boolean;
-  /** SVG sketch → 32×32 symbol rows (browser canvas or server renderer). */
-  readonly rasterize: (svg: string) => Promise<readonly string[] | undefined>;
   /** Persist the learned pack (fire and forget; failures are reported, not fatal). */
   readonly saveLearned: (pack: ContentPack) => void;
   readonly today: () => string;
@@ -98,8 +97,7 @@ export class Resolver {
       return { ok: true, form: r.base, verb: r.intendedVerb, novelty: null };
     }
     // Claude's SVG sketch → 32×32 sprite (invalid or missing: the archetype stays the fallback).
-    // Awaited *before* learning, so learning itself runs without an await in between (no lost updates).
-    const rows = r.sketch === undefined ? undefined : validPixelArt(await this.host.rasterize(r.sketch));
+    const rows = r.sketch === undefined ? undefined : validPixelArt(rasterizeSketch(r.sketch));
     const drawn = rows === undefined ? r.form : { ...r.form, sprite: rows };
     const discoverer = state.players[state.active].name;
     const l = learn(this.basePacks, this.learned, text, drawn, r.delta, { by: discoverer, at: this.host.today() });

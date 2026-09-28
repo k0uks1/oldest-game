@@ -17,6 +17,7 @@ interface Style {
   readonly fill: Rgb | null;
   readonly stroke: Rgb | null;
   readonly strokeWidth: number;
+  readonly cap: "butt" | "round" | "square";
   readonly m: Mat;
   readonly hidden: boolean;
 }
@@ -81,7 +82,7 @@ export function parseColor(v: string | undefined): Rgb | null | undefined {
   if (s === "none" || s === "transparent") return null;
   const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(s)?.[1];
   if (hex !== undefined) {
-    const full = hex.length === 3 ? [...hex].map((c) => c + c).join("") : hex;
+    const full = hex.length === 3 ? hex.replace(/./g, "$&$&") : hex;
     const n = Number.parseInt(full, 16);
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
@@ -108,11 +109,13 @@ function inherit(parent: Style, a: Map<string, string>): Style {
   const fill = parseColor(a.get("fill"));
   const stroke = parseColor(a.get("stroke"));
   const sw = a.get("stroke-width");
+  const cap = a.get("stroke-linecap");
   const opacity = Math.min(Number(a.get("opacity") ?? 1), Number(a.get("fill-opacity") ?? 1));
   return {
     fill: fill === undefined ? parent.fill : fill,
     stroke: stroke === undefined ? parent.stroke : stroke,
     strokeWidth: sw === undefined ? parent.strokeWidth : (nums(sw)[0] ?? 1),
+    cap: cap === "round" || cap === "square" || cap === "butt" ? cap : parent.cap,
     m: mul(parent.m, parseTransform(a.get("transform"))),
     hidden: parent.hidden || opacity < 0.5 || a.get("display") === "none" || a.get("visibility") === "hidden",
   };
@@ -327,27 +330,42 @@ function fillPolys(img: Uint8ClampedArray, size: number, polys: readonly (readon
   }
 }
 
-/** A thick polyline as polygons: one quad per segment plus round joins/caps. */
-function strokePolys(pts: readonly Pt[], w: number, closedPath: boolean): Pt[][] {
+/**
+ * A thick polyline as polygons: one quad per segment, round joins (close enough to SVG's
+ * default miter at sprite size) and the requested caps on open ends (SVG default: butt).
+ */
+function strokePolys(pts: readonly Pt[], w: number, closedPath: boolean, cap: Style["cap"]): Pt[][] {
   const out: Pt[][] = [];
   const h = Math.max(0.5, w / 2);
-  const seq = closedPath && pts.length > 2 ? [...pts, pts[0] as Pt] : pts;
-  for (let k = 0; k + 1 < seq.length; k++) {
+  const first = pts[0];
+  const seq = closedPath && pts.length > 2 && first !== undefined ? [...pts, first] : pts;
+  const last = seq.length - 2;
+  for (let k = 0; k <= last; k++) {
     const a = seq[k];
     const b = seq[k + 1];
     if (a === undefined || b === undefined) continue;
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
     if (len === 0) continue;
-    const nx = (-(b[1] - a[1]) / len) * h;
-    const ny = ((b[0] - a[0]) / len) * h;
+    const ux = (b[0] - a[0]) / len;
+    const uy = (b[1] - a[1]) / len;
+    // square caps extend the open ends by half the width
+    const ea = !closedPath && k === 0 && cap === "square" ? h : 0;
+    const eb = !closedPath && k === last && cap === "square" ? h : 0;
+    const [ax, ay] = [a[0] - ux * ea, a[1] - uy * ea];
+    const [bx, by] = [b[0] + ux * eb, b[1] + uy * eb];
+    const nx = -uy * h;
+    const ny = ux * h;
     out.push([
-      [a[0] + nx, a[1] + ny],
-      [b[0] + nx, b[1] + ny],
-      [b[0] - nx, b[1] - ny],
-      [a[0] - nx, a[1] - ny],
+      [ax + nx, ay + ny],
+      [bx + nx, by + ny],
+      [bx - nx, by - ny],
+      [ax - nx, ay - ny],
     ]);
   }
-  for (const p of seq) out.push(ellipsePts(p[0], p[1], h, h, 12));
+  seq.forEach((p, k) => {
+    const end = !closedPath && (k === 0 || k === seq.length - 1);
+    if (!end || cap === "round") out.push(ellipsePts(p[0], p[1], h, h, 12));
+  });
   return out;
 }
 
@@ -365,7 +383,7 @@ export function rasterizeSvg(svg: string, size: number): Uint8ClampedArray | und
   const k = size / Math.max(vw, vh);
   const base: Mat = [k, 0, 0, k, -vx * k + (size - vw * k) / 2, -vy * k + (size - vh * k) / 2];
   const img = new Uint8ClampedArray(size * size * 4);
-  const stack: Style[] = [inherit({ fill: [0, 0, 0], stroke: null, strokeWidth: 1, m: base, hidden: false }, ra)];
+  const stack: Style[] = [inherit({ fill: [0, 0, 0], stroke: null, strokeWidth: 1, cap: "butt", m: base, hidden: false }, ra)];
   let drew = false;
   const body = svg.slice(svg.indexOf(root) + root.length);
   for (const [tag = "", close = "", name = ""] of body.matchAll(/<(\/?)([a-zA-Z]+)\b[^>]*?>/g)) {
@@ -416,7 +434,8 @@ export function rasterizeSvg(svg: string, size: number): Uint8ClampedArray | und
     }
     if (st.stroke !== null && st.strokeWidth > 0) {
       tp.forEach((p, j) => {
-        if (st.stroke !== null) fillPolys(img, size, strokePolys(p, st.strokeWidth * scale, closed[j] === true), st.stroke);
+        // each piece on its own: overlapping quads and caps of opposite winding must not cancel
+        if (st.stroke !== null) for (const piece of strokePolys(p, st.strokeWidth * scale, closed[j] === true, st.cap)) fillPolys(img, size, [piece], st.stroke);
       });
       drew = true;
     }

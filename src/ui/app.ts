@@ -1,5 +1,4 @@
 import { APP_VERSION } from "../version.ts";
-import { rasterizeSketch } from "../render/svgsprite.ts";
 import { arenaMinScale, createGame, currentTarget, pass, roundNumber } from "../engine/game.ts";
 import { activeFields } from "../engine/fields.ts";
 import { ESCAPE, reaches } from "../engine/rules.ts";
@@ -17,7 +16,7 @@ import {
 import { browserStore, serverStore, type LearnedStore } from "../llm/learned-store.ts";
 import { emptyLearnedPack, reconcileLearned } from "../llm/learning.ts";
 import { brief, narrateEpilogueWithClaude } from "../llm/narrator.ts";
-import { Ontology } from "../engine/ontology/ontology.ts";
+import type { Ontology } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
 import { narrateEnd } from "../narrate/offline.ts";
 import { Resolver, type Novelty, type PlayedOutcome, type Turn } from "../game/resolver.ts";
@@ -137,8 +136,6 @@ export class App {
   private store: LearnedStore = browserStore();
   /** Text → resolved turn; owns the "Gelernt" pack (grows while playing). */
   private readonly resolver: Resolver;
-  /** Set while playing online – the server resolves turns, this client only shows them. */
-  private online: OnlineLink | null = null;
 
   /** The "Gelernt" pack. */
   private get learned(): ContentPack {
@@ -157,7 +154,6 @@ export class App {
     this.resolver = new Resolver(onto, basePacks, emptyLearnedPack(), {
       llm: () => this.llm,
       debug: () => this.debug,
-      rasterize: rasterizeSketch,
       saveLearned: (pack) => {
         void this.store.save(pack).catch(() => {
           this.flashBanner("Gelerntes konnte nicht gespeichert werden.", "bad");
@@ -422,10 +418,6 @@ export class App {
     const text = this.els.input.value.trim();
     if (text === "" || this.busy || this.state.phase === "finished") return;
     this.unlockAudio();
-    if (this.online !== null) {
-      this.sendOnlineMove(text);
-      return;
-    }
     if (!this.debug && !isClaudeReady(this.llm)) {
       this.showSettings("Claude ist nicht verbunden. Starte das Spiel mit `npm start` (Key in .env) oder trage einen API-Key ein.");
       return;
