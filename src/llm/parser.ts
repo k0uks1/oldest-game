@@ -38,6 +38,58 @@ export interface LlmParseResult {
 
 const FAMILIES = ["gewalt", "element", "leben", "sinne", "geist", "magie", "kosmos"] as const;
 
+/** The open property format (new properties, intensities, a mechanism) – shared by classifier and judge. */
+export const PROPOSAL_PROPERTIES = {
+  new_properties: {
+    type: "array",
+    maxItems: MAX_NEW_TAGS,
+    description:
+      "NUR wenn eine für diese Gestalt wesentliche Eigenschaft im Vokabular wirklich fehlt – ein Stoff, eine Fähigkeit oder ein Merkmal. Jede neue Eigenschaft MUSS unter bestehende eingeordnet werden (parents) – so erbt sie deren Regeln und Fähigkeiten.",
+    items: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Kurzer deutscher Name, z. B. „Käse“, „Zwiebel-Atem“, „achtarmig“" },
+        art: { type: "string", enum: ["ist", "kann", "merkmal"], description: "ist = Stoff/Art (Käse ist fest), kann = Fähigkeit (Zwiebel-Atem kann reizen), merkmal = Zustand/Eigenheit (betrunken, achtarmig)." },
+        parents: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 3, description: "Bestehende Eigenschaften, deren Unterart sie ist (z. B. fest, Pflanze, Tier; bei Fähigkeiten eine Fähigkeit: reizend, wuchtig …)." },
+        implies: { type: "array", items: { type: "string" }, maxItems: 4, description: "Bestehende Eigenschaften, die sie mit sich bringt (z. B. brennbar)." },
+        verleiht: { type: "array", items: { type: "string" }, maxItems: 2, description: "Nur bei art = kann: Mechanismus-IDs (oder das Verb eines new_mechanism), die jede Gestalt mit dieser Fähigkeit bekommt." },
+        intensitaet: { type: "object", additionalProperties: { type: "integer", minimum: 0, maximum: 6 }, description: "Stufen, die jeder Träger hat (Qualitäts-ID oder Name einer new_qualities), z. B. {\"Gestank\": 3}." },
+      },
+      required: ["name", "art", "parents"],
+    },
+  },
+  new_qualities: {
+    type: "array",
+    maxItems: MAX_NEW_QUALITIES,
+    description:
+      "NUR wenn eine abgestufte Größe fehlt, auf die es im Kampf ankommt (z. B. Gestank, Klebkraft). kraft = was ein Angriff mitbringt, schutz = was dagegen hilft. Stufen 0–6.",
+    items: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Kurzer deutscher Name, z. B. „Gestank“ oder „Geruchsfestigkeit“" },
+        art: { type: "string", enum: ["kraft", "schutz"] },
+        hint: { type: "string", description: "Ein Satz mit Beispielstufen: „Socke 2, Müllhalde 4, Stinktier 5“." },
+      },
+      required: ["name", "art", "hint"],
+    },
+  },
+  new_mechanism: {
+    type: ["object", "null"],
+    description: "NUR wenn keiner der Mechanismen auch nur annähernd passt. Wird vorsichtig mit kleinem Hebel übernommen.",
+    properties: {
+      label: { type: "string", description: "Verb im Präsens, z. B. „verschleimt“" },
+      family: { type: "string", enum: [...FAMILIES] },
+      targets: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 4, description: "Bestehende Eigenschaften, auf die er wirkt." },
+      blocked_by: { type: "array", items: { type: "string" }, maxItems: 4 },
+      braucht: { type: "array", items: { type: "string" }, maxItems: 4, description: "Was der Angreifer sein/können muss (Eigenschaften oder neue Fähigkeiten). Ohne das kann niemand den Mechanismus nutzen." },
+      kraft: { type: ["string", "null"], description: "Optional: Kraft-Qualität, deren Stufe zählt (bestehend oder aus new_qualities)." },
+      gegen: { type: ["string", "null"], description: "Optional: Schutz-Qualität des Ziels, die die Kraft übertreffen muss – oder dieselbe Kraft für einen Wettstreit (wer mehr davon hat, gewinnt)." },
+      hint: { type: "string", description: "Ein Satz, wie er wirkt." },
+    },
+    required: ["label", "family", "targets", "hint"],
+  },
+} as const;
+
 const TOOL: ToolDef = {
   name: "gestalt",
   description: "Ordnet eine vom Spieler beschriebene Gestalt in das Vokabular des Spiels ein.",
@@ -88,39 +140,7 @@ const TOOL: ToolDef = {
         type: ["string", "null"],
         description: "Mechanismus-ID, falls der Spieler beschreibt WIE die Gestalt angreift, sonst null. \"entkommt\", wenn die Gestalt ausweichen/fliehen will statt anzugreifen.",
       },
-      new_properties: {
-        type: "array",
-        maxItems: MAX_NEW_TAGS,
-        description:
-          "NUR wenn eine für diese Gestalt wesentliche Eigenschaft im Vokabular wirklich fehlt – ein Stoff, eine Fähigkeit oder ein Merkmal. Jede neue Eigenschaft MUSS unter bestehende eingeordnet werden (parents) – so erbt sie deren Regeln und Fähigkeiten.",
-        items: {
-          type: "object",
-          properties: {
-            name: { type: "string", description: "Kurzer deutscher Name, z. B. „Käse“, „Zwiebel-Atem“, „achtarmig“" },
-            art: { type: "string", enum: ["ist", "kann", "merkmal"], description: "ist = Stoff/Art (Käse ist fest), kann = Fähigkeit (Zwiebel-Atem kann reizen), merkmal = Zustand/Eigenheit (betrunken, achtarmig)." },
-            parents: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 3, description: "Bestehende Eigenschaften, deren Unterart sie ist (z. B. fest, Pflanze, Tier; bei Fähigkeiten eine Fähigkeit: reizend, wuchtig …)." },
-            implies: { type: "array", items: { type: "string" }, maxItems: 4, description: "Bestehende Eigenschaften, die sie mit sich bringt (z. B. brennbar)." },
-            verleiht: { type: "array", items: { type: "string" }, maxItems: 2, description: "Nur bei art = kann: Mechanismus-IDs (oder das Verb eines new_mechanism), die jede Gestalt mit dieser Fähigkeit bekommt." },
-            intensitaet: { type: "object", additionalProperties: { type: "integer", minimum: 0, maximum: 6 }, description: "Stufen, die jeder Träger hat (Qualitäts-ID oder Name einer new_qualities), z. B. {\"Gestank\": 3}." },
-          },
-          required: ["name", "art", "parents"],
-        },
-      },
-      new_qualities: {
-        type: "array",
-        maxItems: MAX_NEW_QUALITIES,
-        description:
-          "NUR wenn eine abgestufte Größe fehlt, auf die es im Kampf ankommt (z. B. Gestank, Klebkraft). kraft = was ein Angriff mitbringt, schutz = was dagegen hilft. Stufen 0–6.",
-        items: {
-          type: "object",
-          properties: {
-            name: { type: "string", description: "Kurzer deutscher Name, z. B. „Gestank“ oder „Geruchsfestigkeit“" },
-            art: { type: "string", enum: ["kraft", "schutz"] },
-            hint: { type: "string", description: "Ein Satz mit Beispielstufen: „Socke 2, Müllhalde 4, Stinktier 5“." },
-          },
-          required: ["name", "art", "hint"],
-        },
-      },
+      ...PROPOSAL_PROPERTIES,
       intensitaet: {
         type: "object",
         additionalProperties: { type: "integer", minimum: 0, maximum: 6 },
@@ -147,21 +167,6 @@ const TOOL: ToolDef = {
           "NUR bei base = null UND einem Ding ohne Leben (Gegenstand, Bauwerk, Fahrzeug, Werkzeug, Naturgewalt, Begriff als Symbol): " +
           SKETCH_GUIDE +
           " Beispiele – Kühlschrank: " + SKETCH_EXAMPLES.kuehlschrank + " Regenschirm: " + SKETCH_EXAMPLES.regenschirm,
-      },
-      new_mechanism: {
-        type: ["object", "null"],
-        description: "NUR wenn keiner der Mechanismen auch nur annähernd passt. Wird vorsichtig mit kleinem Hebel übernommen.",
-        properties: {
-          label: { type: "string", description: "Verb im Präsens, z. B. „verschleimt“" },
-          family: { type: "string", enum: [...FAMILIES] },
-          targets: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 4, description: "Bestehende Eigenschaften, auf die er wirkt." },
-          blocked_by: { type: "array", items: { type: "string" }, maxItems: 4 },
-          braucht: { type: "array", items: { type: "string" }, maxItems: 4, description: "Was der Angreifer sein/können muss (Eigenschaften oder neue Fähigkeiten). Ohne das kann niemand den Mechanismus nutzen." },
-          kraft: { type: ["string", "null"], description: "Optional: Kraft-Qualität, deren Stufe zählt (bestehend oder aus new_qualities)." },
-          gegen: { type: ["string", "null"], description: "Optional: Schutz-Qualität des Ziels, die die Kraft übertreffen muss." },
-          hint: { type: "string", description: "Ein Satz, wie er wirkt." },
-        },
-        required: ["label", "family", "targets", "hint"],
       },
     },
     required: ["name", "base", "scale", "plane", "archetype", "properties", "mechanisms", "intended_mechanism"],
@@ -227,6 +232,12 @@ Beispiel „ungeladener Gast mit Zwiebel-Atem“: base mensch, new_properties [{
 [„reizend“], intensitaet {„Gestank“: 3}}], new_qualities [{name „Gestank“, art „kraft“, hint „Socke 2, Müllhalde 4“}].
 Erfinde nichts, was es schon gibt – nutze vorhandene Begriffe, wo immer sie passen.
 
+SCHERZGESTALTEN nimmst du halb ernst: Die Pointe IST die Einordnung. Übersetze den Witz in echte Eigenschaften,
+Fähigkeiten und Merkmale, damit die Engine ihn verstehen kann – ton „albern“. Beispiel „der achtarmige Alkoholiker orgelt sich
+acht-armig einen rein“: mensch + vielarmig + betrunken, new_qualities „Trinkfestigkeit“ (kraft), intensitaet 6 und ein
+new_mechanism „säuft unter den Tisch“ (targets: wer trinkt, kraft = gegen = Trinkfestigkeit → Wettstreit). So besiegt er den
+armen Schlucker – aber keinen Felsen. Wortspiele wörtlich nehmen („Schlucker“ trinkt), Übertreibung als Stufe/Intensität.
+
 REGELN FÜR DICH:
 - Jede Gestalt braucht Angriffsfläche und mindestens eine plausible Schwäche.
 - 1–3 Mechanismen, die zur Gestalt passen. Elemente bringen ihre Mechanismen selbst mit (Feuer verbrennt …).
@@ -277,7 +288,9 @@ export function qualitiesOf(onto: Ontology, raw: unknown, scale: number, propose
   if (typeof raw !== "object" || raw === null) return undefined;
   const out: Record<string, number> = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    const q = onto.qualities.get(k) ?? proposed.find((p) => p.id === k || normalize(p.label) === normalize(k));
+    const q =
+      onto.qualities.get(k) ??
+      [...onto.qualities.values(), ...proposed].find((p) => p.id === k || normalize(p.label) === normalize(k));
     if (q === undefined || typeof v !== "number" || !Number.isFinite(v)) continue;
     const cap = q.kind === "kraft" ? Math.min(MAX_LEVEL, scale + 2) : MAX_LEVEL;
     out[q.id] = Math.max(0, Math.min(cap, Math.round(v)));
@@ -486,7 +499,7 @@ function withoutGrant(t: TagSpec, verb: string): TagSpec {
  * protection; a new mechanism names what its user needs (`braucht`, `kraft` vs `gegen`).
  * `learn()` re-validates all of it – this only shapes.
  */
-function proposeDelta(onto: Ontology, o: Record<string, unknown>, unresolved: string[]): LearningDelta {
+export function proposeDelta(onto: Ontology, o: Record<string, unknown>, unresolved: string[]): LearningDelta {
   // ── intensities ───────────────────────────────────────────────────
   const qualities: QualitySpec[] = [];
   const knownQuality = (k: string): QualitySpec | undefined =>
@@ -555,7 +568,8 @@ function proposeDelta(onto: Ontology, o: Record<string, unknown>, unresolved: st
     const force = knownQuality(clip(m["kraft"], 30));
     const guard = knownQuality(clip(m["gegen"], 30));
     const kraft = force?.kind === "kraft" ? force.id : undefined;
-    const gegen = guard?.kind === "schutz" ? guard.id : undefined;
+    // a protection – or the same force: a contest (who drinks more, who is louder)
+    const gegen = guard !== undefined && (guard.kind === "schutz" || guard.id === kraft) ? guard.id : undefined;
     if (targets.length > 0) {
       verbs.push({
         id: mId,

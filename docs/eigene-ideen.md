@@ -391,3 +391,12 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Einmal schreiben, für alle** | Online schreibt der Server jede Legende nur einmal und hebt sie auf (`lore.json`), mit Stundenbudget. Der Browser merkt sich, was er schon gelesen hat. Ohne Claude steht dort der bekannte Spruch der Gestalt. | `server/lore-store.ts`, `ui/lore-client.ts` |
 | **Bild kommt nach** | Hat eine Gestalt noch kein generiertes Bild, zeigt die Karte das gezeichnete und tauscht es, sobald der Server fertig gemalt hat. | `cardFor` |
 
+## Scherzgestalten, halb ernst genommen (Nutzerwunsch: „der Achtarmige Alkoholiker orgelt sich acht-armig einen rein“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Die Pointe ist die Einordnung** | Claude übersetzt den Witz in echte Eigenschaften, Fähigkeiten und Merkmale, statt ihn wegzuglätten – Wortspiele wörtlich („Schlucker“ trinkt), Übertreibung als Intensität. Ton „albern“. | Prompt `SCHERZGESTALTEN` |
+| **Wettstreit** | Ein Mechanismus, der eine Kraft gegen *dieselbe* Kraft misst, ist ein Wettstreit: Wer mehr hat, gewinnt, Gleichstand reicht nicht. Der achtarmige Alkoholiker säuft den armen Schlucker unter den Tisch (Trinkfestigkeit 5 gegen 1) – aber keinen Felsen (trinkt nicht) und keinen ebenbürtigen Zecher. | `rules.ts` (`intensity`) |
+| **Merkmale mit Folgen** | vielarmig (haut und hält: wuchtig + bindend), klebrig, stinkend (reizt), betrunken (Mut aus der Flasche: nicht zu ängstigen), lächerlich (macht niemandem Angst, lässt sich aber vorführen). | `tags.json`, `verbs.json` |
+| **Trocken erzählt** | Ist eine Gestalt albern oder heiter, darf die Chronik komisch sein – todernst erzählt, die Pointe kommt aus den Eigenheiten der Gestalt. | `narrator.ts` |
+

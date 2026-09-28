@@ -221,6 +221,8 @@ export function inRange(onto: Ontology, attacker: Form, target: Form, verbId: st
  * Intensität: every requirement of the mechanism (`needs`) compares a force of the attacker
  * with a resistance of the target – Hitze gegen Hitzefestigkeit, Nässe gegen Härte. A shortfall
  * fails; a clear surplus (≥ 2 on every requirement) adds +1 power ("Übermacht").
+ * A requirement against the *same* quality is a contest ("Wettstreit": the drunkard drinks the
+ * poor sod under the table) – a tie is not enough, the attacker must have more.
  */
 export function intensity(onto: Ontology, attacker: Form, target: Form, verbId: string): { ok: boolean; text: string; bonus: number } {
   const needs = onto.verbs.get(verbId)?.spec.needs ?? [];
@@ -231,8 +233,11 @@ export function intensity(onto: Ontology, attacker: Form, target: Form, verbId: 
   for (const n of needs) {
     const by = onto.quality(attacker, n.by);
     const vs = onto.quality(target, n.vs);
-    const text = `${label(n.by)} ${String(by)} (${attacker.name}) gegen ${label(n.vs)} ${String(vs)} (${target.name})`;
-    if (by < vs) return { ok: false, text: `${text} – reicht nicht.`, bonus: 0 };
+    const contest = n.by === n.vs;
+    const text = contest
+      ? `Wettstreit in ${label(n.by)}: ${String(by)} (${attacker.name}) gegen ${String(vs)} (${target.name})`
+      : `${label(n.by)} ${String(by)} (${attacker.name}) gegen ${label(n.vs)} ${String(vs)} (${target.name})`;
+    if (contest ? by <= vs : by < vs) return { ok: false, text: `${text} – ${contest && by === vs ? "Gleichstand reicht nicht" : "reicht nicht"}.`, bonus: 0 };
     if (by - vs < 2) surplus = false;
     parts.push(text);
   }
