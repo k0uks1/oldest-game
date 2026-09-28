@@ -133,20 +133,41 @@ export function isClaudeReady(s: LlmSettings): boolean {
   return s.proxyUrl !== "" || s.apiKey !== "";
 }
 
-/**
- * Detect the local game server's proxy (`npm start`). Returns the endpoint or "" when
- * the page was opened from disk or the server has no key configured.
- */
-export async function detectLocalProxy(fetchImpl: typeof fetch = fetch): Promise<{ url: string; model: string } | null> {
+/** What the game server offers (GET /api/health). */
+export interface ServerInfo {
+  /** The browser may use `/api/claude` (local server only). */
+  readonly proxy: boolean;
+  /** The server has an API key. */
+  readonly configured: boolean;
+  readonly model: string;
+  /** Online rooms need an access code. */
+  readonly accessCode: boolean;
+  /** Online rooms over WebSocket. */
+  readonly online: boolean;
+}
+
+/** Ask the game server what it offers; null when the page was opened from disk or has no server. */
+export async function fetchHealth(fetchImpl: typeof fetch = fetch): Promise<ServerInfo | null> {
   if (typeof location === "undefined" || !location.protocol.startsWith("http")) return null;
   try {
     const res = await fetchImpl("/api/health", { cache: "no-store" });
     if (!res.ok) return null;
-    const j = (await res.json()) as { proxy?: boolean; configured?: boolean; model?: string };
-    return j.proxy === true && j.configured === true ? { url: "/api/claude", model: j.model ?? DEFAULT_MODEL } : null;
+    const j = (await res.json()) as Partial<Record<keyof ServerInfo, unknown>>;
+    return {
+      proxy: j.proxy === true,
+      configured: j.configured === true,
+      model: typeof j.model === "string" ? j.model : DEFAULT_MODEL,
+      accessCode: j.accessCode === true,
+      online: j.online === true,
+    };
   } catch {
     return null;
   }
+}
+
+/** The local server's Claude proxy (`npm start`), or null. */
+export function localProxyOf(info: ServerInfo | null): { url: string; model: string } | null {
+  return info?.proxy === true && info.configured ? { url: "/api/claude", model: info.model } : null;
 }
 
 export async function callClaude(settings: LlmSettings, opts: CallOptions, fetchImpl: typeof fetch = fetch): Promise<CallResult> {

@@ -1,0 +1,5 @@
+# HTTPS in front of the game (WebSockets are proxied automatically).
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy game:8080
+}

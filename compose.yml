@@ -1,0 +1,35 @@
+# docker compose up -d   → the game on port 8080 (or behind Caddy with HTTPS, see .env.example)
+services:
+  game:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      LEARNED_FILE: /data/pack.json
+    ports:
+      - "${GAME_PORT:-8080}:8080"
+    volumes:
+      - learned:/data
+
+  # Only with COMPOSE_PROFILES=https (and DOMAIN) in .env: automatic Let's Encrypt certificate.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on: [game]
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  learned:
+  caddy_data:
+  caddy_config:

@@ -97,7 +97,16 @@ describe("learned pack persistence (local server)", () => {
     const os = await import("node:os");
     const path = await import("node:path");
     const server = await import("../server/learned.ts");
-    const handleLearned = (req: Request, f: string) => server.handleLearned(req, f);
+    const handleLearned = (req: Request, f: string) =>
+      server.handleLearned(req, {
+        base: [core],
+        get: () => server.readLearnedFile([core], f),
+        put: (pack) => {
+          server.writeLearnedFile(f, pack);
+          return pack;
+        },
+        writable: true,
+      });
     const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "og-learned-")), "pack.json");
     const r = formFromLlm(onto, kaese, "stinkender Käse");
     assert.ok(r);
@@ -109,6 +118,9 @@ describe("learned pack persistence (local server)", () => {
     assert.equal(readLearnedPack(await get.json()).forms.length, 1);
     const bad = await handleLearned(new Request("http://x/api/learned", { method: "PUT", body: JSON.stringify({ ...l.value.pack, forms: [{ id: "x", name: "x", archetype: "orb", scale: 3, plane: "materie", tags: ["gibtsnicht"] }] }) }), file);
     assert.equal(bad.status, 400, "invalid packs are never written");
+    const locked = await server.handleLearned(new Request("http://x/api/learned", { method: "PUT", body: "{}" }), { base: [core], get: emptyLearnedPack, put: (p) => p, writable: false });
+    assert.equal(locked.status, 403, "public servers take no uploads");
+    assert.ok(!fs.existsSync(`${file}.tmp`), "atomic write leaves no temp file");
   });
 });
 

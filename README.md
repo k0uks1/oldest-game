@@ -2,7 +2,7 @@
 
 > *„Ich bin ein Wolf.“ – „Ich bin ein Jäger.“ – … – „Ich bin Anti-Leben, das Biest des Gerichts.“ – „Ich bin Hoffnung.“*
 
-Ein Duell der Vorstellungskraft für **zwei Spieler an einem Gerät**, inspiriert von der Szene aus *Sandman*,
+Ein Duell der Vorstellungskraft für **zwei Spieler – an einem Gerät oder online**, inspiriert von der Szene aus *Sandman*,
 in der Morpheus in der Hölle das älteste Spiel spielt. Abwechselnd wird jeder zu etwas, das die letzte
 Gestalt des Gegners besiegt – bis einer keine Antwort mehr findet.
 
@@ -30,6 +30,29 @@ API-Key nie; Modell und `max_tokens` legt der Server fest.
 **Ohne Server:** die einzelne `index.html` (aus dem PR-Kommentar/CI-Artefakt oder `npm run build`) direkt öffnen
 und einen eigenen API-Key eintragen („bring your own key“, bleibt in deinem Browser). `index.html?debug` spielt
 ganz ohne Claude (mechanischer Debug-Modus).
+
+**Online zu zweit:** Mit `npm start` (oder dem eigenen Server unten) steht im Startbildschirm „Raum eröffnen“.
+Den Link bzw. fünfstelligen Code an den Gegner schicken – das Duell beginnt, sobald er beitritt. Der Server hält
+Spielzustand und API-Key; die Browser schicken nur Text und zeigen, was zurückkommt. Verbindungsabbrüche
+(Neuladen, Handy im Standby) holen den Platz automatisch zurück. Zum Ausprobieren reichen zwei Browser-Tabs.
+
+### Eigener Server (Docker)
+
+Auf einem Rechner mit Docker, z. B. dem Server eines Freundes:
+```bash
+git clone https://github.com/k0uks1/oldest-game.git && cd oldest-game
+cp .env.example .env     # ANTHROPIC_API_KEY=… und ACCESS_CODE=… eintragen
+docker compose up -d     # → http://<server>:8080
+```
+- Alle Duelle laufen dort in Räumen, auch zu zweit an einem Gerät. Gelerntes, Schiedssprüche und Skizzen
+  gelten sofort für alle Räume und liegen im Docker-Volume `learned` (`/data/pack.json`).
+- **Zugangscode:** Mit `ACCESS_CODE` braucht jeder, der einen Raum eröffnet oder beitritt, diesen Code.
+- **Kosten deckeln:** `CLAUDE_MOVES_PER_HOUR` (Standard 600, alle Räume zusammen). Dazu kommen feste Grenzen
+  pro Verbindung, IP-Adresse und Raum; verlassene Räume werden aufgeräumt.
+- **HTTPS mit eigener Domain:** in `.env` `COMPOSE_PROFILES=https`, `DOMAIN=spiel.example.de`, `TRUST_PROXY=1`
+  und `GAME_PORT=127.0.0.1:8080` setzen, DNS auf den Server zeigen lassen, dann `docker compose up -d`.
+  Caddy holt das Zertifikat selbst (Ports 80/443 müssen frei sein).
+- Aktualisieren: `git pull && docker compose up -d --build`. Logs: `docker compose logs -f game`.
 
 **Gehostet (optional):** Spiel statisch hosten (z. B. GitHub Pages) + `server/worker.ts` als Cloudflare Worker
 mit dem Key als Secret und einem Zugangscode; die Worker-URL in den Claude-Einstellungen eintragen.
