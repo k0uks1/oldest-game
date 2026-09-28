@@ -22,7 +22,8 @@ import type { Ontology } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
 import { narrateEnd } from "../narrate/offline.ts";
 import { Resolver, type Novelty, type PlayedOutcome, type Turn } from "../game/resolver.ts";
-import { Arena, attackOutcome, attackStyle, easterEggFor, type AttackStyle } from "../render/arena.ts";
+import { attackOutcome, attackStyle, easterEggFor, type AttackStyle } from "../render/arena.ts";
+import { createArena, type Arena } from "../render/arenas.ts";
 import { clear, h } from "./dom.ts";
 import { OnlineLink, savedSeat, type LinkStatus } from "../online/link.ts";
 import { applyPackDelta, type ChronicleEntry, type ClientMsg, type SeatInfo, type ServerMsg } from "../online/protocol.ts";
@@ -180,7 +181,7 @@ export class App {
       today: () => new Date().toISOString().slice(0, 10),
     });
     const canvas = h("canvas", { class: "arena", "aria-label": "Arena" });
-    this.arena = new Arena(canvas, onto);
+    this.arena = createArena(canvas, onto);
     this.arena.onCue = (cue) => {
       this.sound.play(cue);
     };
