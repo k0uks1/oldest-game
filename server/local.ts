@@ -9,7 +9,7 @@
  * browser proxy and uploads of learned packs are switched off – there, every move is
  * resolved on the server inside a room (one-device duels too), and only the rooms learn.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createServer, type IncomingMessage } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,7 +22,7 @@ import type { LlmSettings } from "../src/llm/client.ts";
 import { reconcileLearned } from "../src/llm/learning.ts";
 import { narrateEpilogueWithClaude } from "../src/llm/narrator.ts";
 import { narrateEnd } from "../src/narrate/offline.ts";
-import { applyPackDelta, packDelta, WS_PATH, type ServerMsg } from "../src/online/protocol.ts";
+import { applyPackDelta, packDelta, parseReport, WS_PATH, type AbsurdReport, type ServerMsg } from "../src/online/protocol.ts";
 import { ArtService, withArt } from "./art-service.ts";
 import { handleLearned, readLearnedFile, writeLearnedFile } from "./learned.ts";
 import { OnlineHub, type HubLimits } from "./online.ts";
@@ -156,7 +156,20 @@ export function startServer(opts: ServerOptions): RunningServer {
     },
     today: () => new Date().toISOString().slice(0, 10),
   });
+  // "Das war Quatsch!" – collected next to the learned pack for the engine rebuild
+  const reportsFile = join(dirname(file), "reports.jsonl");
+  const storeReport = (r: AbsurdReport & { readonly room?: string }): void => {
+    try {
+      mkdirSync(dirname(reportsFile), { recursive: true });
+      appendFileSync(reportsFile, `${JSON.stringify({ ...r, at: new Date().toISOString() })}\n`);
+      log(`Quatsch gemeldet: ${r.attacker} ${r.verb} ${r.target}`);
+    } catch {
+      // a lost report is no reason to fail a request
+    }
+  };
+
   const theHub = new OnlineHub(resolver, {
+    report: storeReport,
     ...(opts.env.accessCode === undefined ? {} : { accessCode: opts.env.accessCode }),
     ...(opts.limits === undefined ? {} : { limits: opts.limits }),
     claude,
@@ -222,6 +235,14 @@ export function startServer(opts: ServerOptions): RunningServer {
               online: true,
             }),
           );
+          return;
+        }
+        if (url.startsWith("/api/report") && !isPublic && req.method === "POST") {
+          const body: unknown = await (await toRequest(req, 0)).json().catch(() => null);
+          const r = typeof body === "object" && body !== null ? parseReport(body as Record<string, unknown>) : undefined;
+          if (r !== undefined) storeReport(r);
+          res.writeHead(r === undefined ? 400 : 204);
+          res.end();
           return;
         }
         if (url.startsWith("/api/learned")) {

@@ -28,6 +28,7 @@ import { clear, h } from "./dom.ts";
 import { OnlineLink, savedSeat, type LinkStatus } from "../online/link.ts";
 import { applyPackDelta, normalizeRoom, type ChronicleEntry, type ClientMsg, type SeatInfo, type ServerMsg } from "../online/protocol.ts";
 import { Music } from "./music.ts";
+import { addReport, clearReports, loadReports, reportsText } from "./reports.ts";
 import { Sound } from "./sound.ts";
 
 function sleep(ms: number): Promise<void> {
@@ -364,6 +365,12 @@ export class App {
           this.toggleMenu(false);
           this.showRules();
         }),
+        loadReports().length > 0
+          ? item(`Quatsch-Meldungen · ${String(loadReports().length)}`, () => {
+              this.toggleMenu(false);
+              this.showReports();
+            })
+          : null,
         item(this.sound.muted ? "Klang: aus" : "Klang: an", () => {
           this.sound.toggle();
           this.toggleMenu(true);
@@ -645,10 +652,54 @@ export class App {
       if (check.ruling === true) badges.push("⚖ Schiedsspruch");
       if (this.state.config.mercyOutcomes.includes(check.outcome)) badges.push("Gnade");
       for (const b of badges) el.append(" ", h("span", { class: "w-badge" }, b));
+      if (target !== undefined && check.verb !== ESCAPE) {
+        const btn = h("button", { class: "w-quatsch", title: "Dieser Sieg ergibt keinen Sinn? Melden – das hilft der Engine." }, "Quatsch?");
+        btn.addEventListener("click", () => {
+          this.reportAbsurd({ attacker: form.name, target: target.name, verb: label });
+          btn.replaceWith(h("span", { class: "w-badge quiet" }, "gemeldet"));
+        });
+        el.append(" ", btn);
+      }
     } else {
       el.append(h("span", { class: "w-verb" }, `${form.name} ${label}`), " · ", h("span", { class: "w-fail" }, brief(reason ?? check.steps.at(-1)?.text ?? "", 90)));
     }
     el.className = "why-line show"; // stays until the next move, like the narration
+  }
+
+  /** "Das war Quatsch!" – remember the absurd win here and tell the server, if there is one. */
+  private reportAbsurd(r: { attacker: string; target: string; verb: string }): void {
+    addReport(r, new Date().toISOString());
+    if (this.online?.send({ t: "report", ...r }) !== true) {
+      void fetch("/api/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(r) }).catch(() => undefined);
+    }
+    this.flashBanner("Gemeldet – danke! Das fließt in die neue Engine.", "info");
+  }
+
+  private showReports(): void {
+    const list = loadReports();
+    const text = reportsText(list);
+    const copy = h("button", { class: "btn" }, "Alle kopieren");
+    copy.addEventListener("click", () => {
+      void navigator.clipboard
+        .writeText(text)
+        .then(() => {
+          this.flashBanner("Kopiert.", "info");
+        })
+        .catch(() => {
+          this.flashBanner("Kopieren ging nicht – bitte markieren.", "bad");
+        });
+    });
+    const wipe = h("button", { class: "btn ghost" }, "Liste leeren");
+    wipe.addEventListener("click", () => {
+      clearReports();
+      this.closeModal();
+    });
+    this.modal(
+      "Quatsch-Meldungen",
+      h("p", { class: "lore" }, "Siege, die keinen Sinn ergeben. Jede Meldung wird ein Testfall für die neue Engine."),
+      h("pre", { class: "reports" }, text),
+      h("div", { class: "actions" }, copy, wipe),
+    );
   }
 
   /** Small explanation sheet for HUD elements – tap anything you don't understand. */

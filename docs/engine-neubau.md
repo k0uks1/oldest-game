@@ -55,6 +55,17 @@ Alle sechs Richtungen unten sind beschlossen. Offen ist nur noch das *Wie* im De
 - **„Das war Quatsch!“ im Spiel**: Ein Knopf nach einem Sieg speichert das Paar samt Begründung als Fall für den
   Prüfstand. So liefern Testrunden wie die mit Kiki direkt Material.
 
+## Messlatte (Prüfstand, Schritt 1)
+
+`npm run audit` geht alle gültigen Siege im Lexikon durch und markiert verdächtige nach Regeln, die nicht aus
+der Engine stammen. `tests/plausibility.test.ts` hält konkrete Paare fest (was schon stimmt als Test,
+was noch absurd ist als `todo`). Im Spiel meldet der „Quatsch?“-Knopf neue Fälle (`learned/reports.jsonl`
+auf dem Server, im Menü unter „Quatsch-Meldungen“ zum Kopieren).
+
+| Stand | gültige Siege | verdächtig | weich schneidet | Begriff prügelt | Ding denkt | Zwerg-Gewalt |
+|---|---|---|---|---|---|---|
+| v0.46 (vor dem Neubau) | 547 682 | 14 977 (2,7 %) | 1 827 | 3 972 | 4 637 | 4 907 |
+
 ## Fahrplan
 
 | Schritt | Inhalt | Warum in dieser Reihenfolge |

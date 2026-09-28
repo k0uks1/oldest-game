@@ -38,6 +38,18 @@ const flag = (name: string): string | undefined => {
   return i < 0 ? undefined : (rest[i + 1] ?? "");
 };
 
+/** "Too many concurrent jobs" (429): wait and try again instead of skipping the form. */
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt >= 8 || !(e instanceof Error) || !e.message.includes(" 429")) throw e;
+      await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+    }
+  }
+}
+
 if (cmd === "status") {
   const all = onto.lexicon.length;
   console.log(`Kunst: ${String(Object.keys(art).length)} / ${String(all)} Gestalten · Prompts: ${String(Object.keys(prompts).length)}`);
@@ -77,7 +89,7 @@ if (cmd === "status") {
     for (let f = todo.shift(); f !== undefined; f = todo.shift()) {
       const size = spriteSize(f.scale);
       try {
-        const img = await generatePixelArt(key, prompts[f.id] ?? f.name, size);
+        const img = await withRetry(() => generatePixelArt(key, prompts[f.id] ?? f.name, size));
         art[f.id] = encodeArt(img);
         save();
         done++;

@@ -32,7 +32,30 @@ export type ClientMsg =
   | { readonly t: "pass" }
   | { readonly t: "rematch" }
   /** Ask for the full learned pack again (after a delta did not apply). */
-  | { readonly t: "sync" };
+  | { readonly t: "sync" }
+  /** "Das war Quatsch!" – a win that makes no sense (collected for the engine rebuild). */
+  | ({ readonly t: "report" } & AbsurdReport);
+
+/** A reported absurd win: who beat whom with what (names as shown in the game). */
+export interface AbsurdReport {
+  readonly attacker: string;
+  readonly target: string;
+  readonly verb: string;
+}
+
+/** Validate a report from an untrusted client: three short printable strings. */
+export function parseReport(o: Record<string, unknown>): AbsurdReport | undefined {
+  const field = (k: string): string | undefined => {
+    const v = o[k];
+    if (typeof v !== "string") return undefined;
+    const clean = v.replace(/[\p{C}]/gu, "").trim().slice(0, 80);
+    return clean === "" ? undefined : clean;
+  };
+  const attacker = field("attacker");
+  const target = field("target");
+  const verb = field("verb");
+  return attacker === undefined || target === undefined || verb === undefined ? undefined : { attacker, target, verb };
+}
 
 // ── server → client ───────────────────────────────────────────────────────
 
@@ -150,6 +173,10 @@ export function parseClientMsg(raw: string): ClientMsg | undefined {
     case "rematch":
     case "sync":
       return { t: m["t"] };
+    case "report": {
+      const r = parseReport(m);
+      return r === undefined ? undefined : { t: "report", ...r };
+    }
     default:
       return undefined;
   }
