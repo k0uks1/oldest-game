@@ -39,11 +39,19 @@ export interface RefereeVerdict {
 
 function describe(onto: Ontology, f: Form): string {
   const tags = onto.formTags(f).slice(0, 18).map((t) => onto.tagLabel(t));
-  return `${f.name} (Stufe ${String(f.scale)}; ${tags.join(", ")})`;
+  const levels = [...onto.compileForm(f).qualities]
+    .filter(([, n]) => n > 0)
+    .map(([q, n]) => `${onto.qualities.get(q)?.label ?? q} ${String(n)}`);
+  return `${f.name} (Stufe ${String(f.scale)}; ${tags.join(", ")}${levels.length > 0 ? `; ${levels.join(", ")}` : ""})`;
 }
 
 export async function refereeWithClaude(onto: Ontology, settings: LlmSettings, failure: Failure): Promise<RefereeVerdict | undefined> {
-  const verbs = [...onto.verbs.values()].map((v) => `${v.spec.id}: ${v.spec.label} – ${v.spec.hint}`);
+  // Only the attacker's own mechanisms – a hat cannot win by trampling just because trampling exists.
+  const verbs = onto
+    .compileForm(failure.form)
+    .verbs.map((id) => onto.verbs.get(id)?.spec)
+    .filter((v) => v !== undefined)
+    .map((v) => `${v.id}: ${v.label} – ${v.hint}`);
   const user = [
     `Angreifer: ${describe(onto, failure.form)}`,
     `Ziel: ${describe(onto, failure.target)}`,
@@ -51,7 +59,7 @@ export async function refereeWithClaude(onto: Ontology, settings: LlmSettings, f
     failure.closest === null ? "" : `Versuchter Weg: ${failure.closest.check.steps.map((s) => s.text).join(" → ")}`,
     `Unsicherheit der Engine: ${failure.uncertain ?? "?"}`,
     "",
-    "Mechanismen:",
+    `Mechanismen von ${failure.form.name} (nur diese zählen):`,
     ...verbs,
   ]
     .filter((l) => l !== "")
@@ -74,5 +82,7 @@ export function verdictFrom(onto: Ontology, failure: Failure, raw: unknown): Ref
   if (typeof sieg !== "boolean" || reason === "") return undefined;
   const resolved = onto.verbs.has(verb) ? verb : (onto.resolveVerb(verb) ?? failure.closest?.verb);
   if (resolved === undefined || !onto.verbs.has(resolved)) return undefined;
+  // A victory must use a mechanism the attacker actually has.
+  if (sieg && !onto.compileForm(failure.form).verbs.includes(resolved)) return undefined;
   return { ruling: { attacker: failure.form.id, target: failure.target.id, valid: sieg, verb: resolved, reason } };
 }

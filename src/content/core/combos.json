@@ -1,0 +1,9 @@
+[
+  {"id": "nasses_holz", "if": ["holz", "wasser"], "remove": ["brennbar"], "hint": "Nasses Holz brennt nicht."},
+  {"id": "gluehendes_metall", "if": ["metall", "feuer"], "qualities": {"hitzefest": 2}, "hint": "Was selbst glüht, hält Hitze aus."},
+  {"id": "irrlicht", "if": ["feuer", "koerperlos"], "qualities": {"hitze": -1}, "hint": "Ein Feuer ohne Körper glimmt nur."},
+  {"id": "oelbrand", "if": ["oel", "feuer"], "qualities": {"hitze": 1}, "hint": "Brennendes Öl brennt heißer – und Wasser macht es schlimmer."},
+  {"id": "feuerwesen", "if": ["feuer", "lebendig"], "qualities": {"hitzefest": 3}, "hint": "Was aus Feuer lebt, verbrennt nicht am Feuer."},
+  {"id": "untote_kaelte", "if": ["untot"], "unless": ["lebendig"], "qualities": {"kaeltefest": 3}, "hint": "Wer nicht lebt, friert nicht."},
+  {"id": "eisenhaut", "if": ["gepanzert", "metall"], "qualities": {"haerte": 1}, "hint": "Stahlpanzer über Metall – doppelt hart."}
+]

@@ -43,6 +43,8 @@ export interface Form {
   readonly immune: readonly string[];
   /** Tags that are an exposed weakness (hitting them gives a bonus). */
   readonly weak: readonly string[];
+  /** Intensity overrides (quality id → 0..6); everything else comes from the tags. */
+  readonly qualities?: Readonly<Record<string, number>>;
   /** Where this form came from – lexicon entry, composed, or LLM. */
   readonly origin: "lexikon" | "komponiert" | "llm";
   readonly flavor?: string;
@@ -158,7 +160,7 @@ export interface CounterCheck {
   /** How the target is beaten – or, for an escape, how the attacker got away. */
   readonly outcome: Outcome;
   /** Where the check failed – lets the engine judge how sure it is (see attempt.ts). */
-  readonly failedAt?: "surface" | "blocked" | "immune" | "scale" | "power" | "other";
+  readonly failedAt?: "surface" | "blocked" | "immune" | "reach" | "intensity" | "scale" | "power" | "other";
   /** Decided by a stored precedent ("Schiedsspruch") instead of the tag rules. */
   readonly ruling?: true;
   readonly power: number;

@@ -20,7 +20,47 @@ export interface TagSpec {
    * attacker (`feuer`). A startled target counts as hit in its weakness and flees.
    */
   readonly startledBy?: readonly string[];
+  /** Intensities (quality id → 0..6) every carrier has; the most specific tag wins. */
+  readonly qualities?: Readonly<Record<string, number>>;
   readonly aliases?: readonly string[];
+}
+
+/**
+ * "Intensität": a graded property. A `kraft` (hitze, naesse …) is what a mechanism brings,
+ * a `schutz` (hitzefest, haerte …) is what resists it. Levels run 0..6.
+ */
+export interface QualitySpec {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: "kraft" | "schutz";
+  /** Level a form has when nothing specifies it. Default 0. */
+  readonly default?: number;
+  readonly hint?: string;
+}
+
+/** A mechanism requirement: the attacker's `by` must reach the target's `vs` (e.g. hitze vs hitzefest). */
+export interface NeedSpec {
+  readonly by: string;
+  readonly vs: string;
+}
+
+/** Melee (`nah`) mechanisms cannot reach a flying target unless the attacker flies or towers over it. */
+export const REACHES = ["nah", "fern"] as const;
+export type Reach = (typeof REACHES)[number];
+
+/**
+ * "Kombination": if a closure carries all `if` tags and none of `unless`, add/remove tags and shift
+ * qualities – wet wood does not burn, armour hardens, fire without body is weaker.
+ */
+export interface ComboSpec {
+  readonly id: string;
+  readonly if: readonly string[];
+  readonly unless?: readonly string[];
+  readonly add?: readonly string[];
+  readonly remove?: readonly string[];
+  /** Quality deltas. */
+  readonly qualities?: Readonly<Record<string, number>>;
+  readonly hint: string;
 }
 
 export interface VerbSpec {
@@ -38,6 +78,10 @@ export interface VerbSpec {
   readonly phrase?: string;
   /** How the loser is beaten ("Siegart"). Default: vernichtet. */
   readonly outcome?: VictoryKind;
+  /** Intensity requirements; all must hold. Surplus ≥ 2 on each adds +1 power. */
+  readonly needs?: readonly NeedSpec[];
+  /** Default `fern`. */
+  readonly reach?: Reach;
   readonly aliases?: readonly string[];
 }
 
@@ -53,6 +97,13 @@ function victoryKind(raw: string | undefined, where: string, errors: string[]): 
   if (raw === undefined) return undefined;
   if (isVictoryKind(raw)) return raw;
   errors.push(`${where}.outcome: unbekannte Siegart „${raw}“ (erlaubt: ${VICTORY_KINDS.join(", ")}).`);
+  return undefined;
+}
+
+function reach(raw: string | undefined, where: string, errors: string[]): Reach | undefined {
+  if (raw === undefined) return undefined;
+  if ((REACHES as readonly string[]).includes(raw)) return raw as Reach;
+  errors.push(`${where}.reach: „nah“ oder „fern“ erwartet, nicht „${raw}“.`);
   return undefined;
 }
 
@@ -83,6 +134,8 @@ export interface FormSpec {
   readonly verbs?: readonly string[];
   readonly immune?: readonly string[];
   readonly weak?: readonly string[];
+  /** Intensity overrides (quality id → 0..6), beat anything inherited from tags. */
+  readonly qualities?: Readonly<Record<string, number>>;
   readonly aliases?: readonly string[];
   readonly flavor?: string;
   /** Custom 16×16 pixel art (rows of . # + o * ,) – validated by the ontology compiler. */
@@ -130,6 +183,8 @@ export interface ContentPack {
   readonly forms: readonly FormSpec[];
   readonly fields?: readonly FieldSpec[];
   readonly rulings?: readonly RulingSpec[];
+  readonly qualities?: readonly QualitySpec[];
+  readonly combos?: readonly ComboSpec[];
 }
 
 // ── Runtime shape validation (packs may come from untrusted JSON) ─────────
@@ -182,6 +237,17 @@ class ShapeChecker {
     return v;
   }
 
+  /** `{ id: number }` map, e.g. quality levels. */
+  levels(o: Obj, key: string, where: string): Record<string, number> | undefined {
+    const v = o[key];
+    if (v === undefined) return undefined;
+    if (!isObj(v) || !Object.values(v).every((x) => typeof x === "number" && Number.isFinite(x))) {
+      this.errors.push(`${where}: "${key}" muss ein Objekt { id: Zahl } sein`);
+      return {};
+    }
+    return v as Record<string, number>;
+  }
+
   array(o: Obj, key: string, where: string): Obj[] {
     const v = o[key];
     if (v === undefined) return [];
@@ -222,6 +288,7 @@ export function parsePack(input: unknown): PackResult {
         ...opt("implies", c.list(o, "implies", w)),
         ...opt("grants", c.list(o, "grants", w)),
         ...opt("startledBy", c.list(o, "startledBy", w)),
+        ...opt("qualities", c.levels(o, "qualities", w)),
         ...opt("aliases", c.list(o, "aliases", w)),
       };
     }),
@@ -238,6 +305,8 @@ export function parsePack(input: unknown): PackResult {
         ...opt("minRelativeScale", c.optNum(o, "minRelativeScale", w)),
         ...opt("phrase", c.optStr(o, "phrase", w)),
         ...opt("outcome", victoryKind(c.optStr(o, "outcome", w), w, c.errors)),
+        ...opt("needs", o["needs"] === undefined ? undefined : c.array(o, "needs", w).map((n, j) => ({ by: c.str(n, "by", `${w}.needs[${j}]`), vs: c.str(n, "vs", `${w}.needs[${j}]`) }))),
+        ...opt("reach", reach(c.optStr(o, "reach", w), w, c.errors)),
         ...opt("aliases", c.list(o, "aliases", w)),
       };
     }),
@@ -269,6 +338,7 @@ export function parsePack(input: unknown): PackResult {
         ...opt("verbs", c.list(o, "verbs", w)),
         ...opt("immune", c.list(o, "immune", w)),
         ...opt("weak", c.list(o, "weak", w)),
+        ...opt("qualities", c.levels(o, "qualities", w)),
         ...opt("aliases", c.list(o, "aliases", w)),
         ...opt("flavor", c.optStr(o, "flavor", w)),
         ...opt("sprite", c.list(o, "sprite", w)),
@@ -299,6 +369,38 @@ export function parsePack(input: unknown): PackResult {
               duration: c.num(o, "duration", w),
               from: c.list(o, "from", w, true) ?? [],
               effects: c.array(o, "effects", w).map((e, j) => ({ on: c.list(e, "on", `${w}.effects[${j}]`, true) ?? [], delta: c.num(e, "delta", `${w}.effects[${j}]`) })),
+            };
+          }),
+        }),
+    ...(input["qualities"] === undefined
+      ? {}
+      : {
+          qualities: c.array(input, "qualities", id).map((o, i) => {
+            const w = `${id}.qualities[${i}]`;
+            const kind = c.str(o, "kind", w);
+            if (kind !== "kraft" && kind !== "schutz") c.errors.push(`${w}.kind: „kraft“ oder „schutz“ erwartet`);
+            return {
+              id: c.str(o, "id", w),
+              label: c.str(o, "label", w),
+              kind: kind === "schutz" ? ("schutz" as const) : ("kraft" as const),
+              ...opt("default", c.optNum(o, "default", w)),
+              ...opt("hint", c.optStr(o, "hint", w)),
+            };
+          }),
+        }),
+    ...(input["combos"] === undefined
+      ? {}
+      : {
+          combos: c.array(input, "combos", id).map((o, i) => {
+            const w = `${id}.combos[${i}]`;
+            return {
+              id: c.str(o, "id", w),
+              if: c.list(o, "if", w, true) ?? [],
+              hint: c.str(o, "hint", w),
+              ...opt("unless", c.list(o, "unless", w)),
+              ...opt("add", c.list(o, "add", w)),
+              ...opt("remove", c.list(o, "remove", w)),
+              ...opt("qualities", c.levels(o, "qualities", w)),
             };
           }),
         }),

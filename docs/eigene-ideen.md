@@ -278,3 +278,16 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Auch volle Räume** | Ist ein Raum schon voll, sagt die Meldung beim Beitreten, dass man noch zuschauen kann. | ebd. |
 | **Auge in der Kopfzeile** | Die Spieler sehen unter der Runde „👁 2“ und bekommen kurz Bescheid, wenn jemand dazukommt. | `showWatchers` |
 | **Neuladen geht** | Auch Zuschauer bekommen ein Token und kehren nach dem Neuladen in den Raum zurück, mit der bisherigen Chronik. | `resume` |
+
+## Intensität statt Ja/Nein (Nutzerwunsch: „Eigenschaften mit Intensität, Modifikatoren, Implikationen – ich will beeindruckt sein“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Stufen für Eigenschaften** | Hitze, Wasserkraft, Kälte gegen Hitzefestigkeit, Härte, Kältefestigkeit, je 0–6. Eine Kerze hat Hitze 1, ein Schmiedefeuer 3, die Sonne 6. Metall hält 3 aus, Stein 5. Die Fackel schmilzt keinen Anker mehr, der Schmied schon. Ein Eimer Wasser trägt keinen Fels ab, ein Fluss schon. | `qualities.json`, `intensity()` |
+| **Der genaueste Tag gewinnt** | Stahl ist härter als „Metall“, Gold weicher. Ohne Sonderfall, nur über die Ist-ein-Hierarchie. | `resolveQualities` |
+| **Übermacht** | Wer die Anforderung um 2 übertrifft, bekommt +1 Kraft. Ein Drache schmilzt Eis mühelos. | `intensity()` |
+| **Kombinationen** | Regeln der Form „wenn A und B, dann …“: nasses Holz brennt nicht, glühendes Metall hält Hitze aus, ein Irrlicht glimmt nur, Untote frieren nicht, brennendes Öl brennt heißer. | `combos.json` |
+| **Reichweite** | Nahkampf (fesseln, zerschlagen, zerreißen …) erreicht nichts, was fliegt – außer man fliegt selbst oder ist viel größer. Der Jäger fesselt keinen Adler mehr, er schießt ihn. | `inRange()` |
+| **Ein Ofen ist kein Feuer** | Ofen, Kamin, Toaster, Schmied, Gewehr, Kanone haben Hitze, sind aber nicht selbst Feuer – Wasser „löscht“ keinen Ofen. | Content |
+| **Ehrlicher Schiedsrichter** | Claude sieht nur die Mechanismen, die der Angreifer wirklich hat; ein Urteil mit fremdem Mechanismus wird verworfen, und Urteile übergehen weder Reichweite noch Intensität. Ein Hut gegen einen Elefanten gilt nicht mehr als „strittig“ – nur wer mindestens so groß ist wie das Ziel und es gar nicht berühren kann, ist ein Fall für den Schiedsrichter. | `referee.ts`, `uncertainty()`, `checkRuling` |
+| **Seife ist fest** | Die letzte Form, gegen die der Bot aufgeben musste, lässt sich jetzt auch zerdrücken. Selbstspiel: 0 Aufgaben in 2000 Partien (vorher 4). | Content |

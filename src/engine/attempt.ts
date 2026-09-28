@@ -77,7 +77,7 @@ export function attempt(onto: Ontology, state: GameState, form: Form, intendedVe
   const closest = closestOption(options);
   // A shattered form costs half its price plus a small penalty – guessing is not free, but not ruinous.
   const paid = Math.min(me.wille, Math.ceil(cost / 2) + state.config.failurePenalty);
-  const doubt = onto.rulingFor(form.id, target.id) === undefined ? uncertainty(options) : undefined;
+  const doubt = onto.rulingFor(form.id, target.id) === undefined ? uncertainty(options, form, target) : undefined;
   const failure: Failure = {
     player: state.active,
     form,
@@ -106,13 +106,15 @@ export function attempt(onto: Ontology, state: GameState, form: Form, intendedVe
  * or was stopped by a blocker/immunity (the model may be too coarse), or when a form of at least the
  * target's size found no surface at all (an interaction the tags don't capture).
  */
-export function uncertainty(options: readonly MoveOption[]): string | undefined {
+export function uncertainty(options: readonly MoveOption[], form: Form, target: Form): string | undefined {
   const real = options.filter((o) => o.verb !== ESCAPE);
   const near = real.find((o) => o.check.failedAt === "power" && o.check.needed - o.check.power <= 1);
   if (near !== undefined) return `knapp: ${String(near.check.power)} gegen ${String(near.check.needed)}`;
   const blocked = real.find((o) => o.check.failedAt === "blocked" || o.check.failedAt === "immune");
   if (blocked !== undefined) return "blockiert";
-  if (real.length > 0 && real.every((o) => o.check.failedAt === "surface")) return "keine Angriffsfläche";
+  // A hat finding no surface on an elephant is no gap in the model – only a form of the target's
+  // size that cannot touch it at all hints at an interaction the tags miss.
+  if (form.scale >= target.scale && real.length > 0 && real.every((o) => o.check.failedAt === "surface")) return "keine Angriffsfläche";
   return undefined;
 }
 

@@ -103,6 +103,15 @@ export function checkCounter(
   }
   if (t.immune.has(verbId)) return fail(`${target.name} ist immun gegen „${verb.spec.label}“.`, { hitTag, failedAt: "immune" });
 
+  // 2b. reach: a melee mechanism does not get at something in the air
+  const range = inRange(onto, attacker, target, verbId);
+  if (!range.ok) return fail(range.text, { hitTag, failedAt: "reach" });
+
+  // 2c. intensity: a candle's heat does not melt an anchor
+  const heat = intensity(onto, attacker, target, verbId);
+  if (!heat.ok) return fail(heat.text, { hitTag, failedAt: "intensity" });
+  if (heat.text !== "") steps.push({ ok: true, text: heat.text });
+
   // 3. game rules on scale
   const jump = attacker.scale - target.scale;
   const base = Math.max(target.scale, floorScale);
@@ -132,11 +141,12 @@ export function checkCounter(
   const weaknessHit = weakHit !== undefined || scare !== undefined;
   const fieldDelta = modifiers.reduce((sum, m) => sum + m.delta, 0);
   for (const m of modifiers) steps.push({ ok: m.delta >= 0, text: m.text });
-  const power = attacker.scale + verb.spec.leverage + (weaknessHit ? WEAKNESS_BONUS : 0) + fieldDelta;
+  const power = attacker.scale + verb.spec.leverage + (weaknessHit ? WEAKNESS_BONUS : 0) + heat.bonus + fieldDelta;
   const needed = target.scale;
   const powerText =
     `Kraft ${attacker.scale} (Stufe) + ${verb.spec.leverage} (Hebel)` +
     (weaknessHit ? ` + ${WEAKNESS_BONUS} (${weakHit === undefined ? "Schreck" : "Schwäche"}!)` : "") +
+    (heat.bonus > 0 ? ` + ${String(heat.bonus)} (Übermacht)` : "") +
     (fieldDelta === 0 ? "" : ` ${fieldDelta > 0 ? "+" : "−"} ${String(Math.abs(fieldDelta))} (Arena)`) +
     ` = ${power} gegen Stufe ${needed}`;
   if (power < needed) return fail(`${powerText} – zu schwach.`, { hitTag, weaknessHit, power, needed, failedAt: "power" });
@@ -163,18 +173,67 @@ export function checkRuling(
   const steps: CheckStep[] = [{ ok: true, text: `${attacker.name} ${label} …` }];
   const base = Math.max(target.scale, floorScale);
   const common = { verb: ruling.verb, hitTag: null, weaknessHit: false, needed: target.scale, ruling: true as const };
-  if (attacker.scale - base > config.maxScaleJump) {
-    return { ...common, valid: false, steps: [...steps, { ok: false, text: `Maßlos: ${attacker.name} ist zu groß.` }], power: 0, outcome: "vernichtet", failedAt: "scale" };
+  const reject = (text: string, failedAt: NonNullable<CounterCheck["failedAt"]>): CounterCheck => ({ ...common, valid: false, steps: [...steps, { ok: false, text }], power: 0, outcome: "vernichtet", failedAt });
+  if (attacker.scale - base > config.maxScaleJump) return reject(`Maßlos: ${attacker.name} ist zu groß.`, "scale");
+  if (ruling.valid) {
+    // A ruling decides whether a mechanism the attacker *has* works – never hands out new ones,
+    // and never overrides reach or intensity.
+    if (!onto.compileForm(attacker).verbs.includes(ruling.verb)) return reject(`${attacker.name} beherrscht „${label}“ nicht.`, "other");
+    const range = inRange(onto, attacker, target, ruling.verb);
+    if (!range.ok) return reject(range.text, "reach");
+    const heat = intensity(onto, attacker, target, ruling.verb);
+    if (!heat.ok) return reject(heat.text, "intensity");
   }
   // A ruling may settle *whether* something works, never overturn proportions:
-  // the same power budget as a regular check applies (+1 grace for near misses).
+  // the same power budget as a regular check applies (+1 grace for near misses – only
+  // where the mechanism actually touches the target by the tag rules).
   const leverage = verb?.spec.leverage ?? 0;
   const mythic = leverage >= config.mythicLeverage;
-  if (ruling.valid && !mythic && (base - attacker.scale > config.maxScaleDrop || attacker.scale + leverage + 1 < base)) {
+  const grace = reaches(onto, ruling.verb, target) ? 1 : 0;
+  if (ruling.valid && !mythic && (base - attacker.scale > config.maxScaleDrop || attacker.scale + leverage + grace < base)) {
     return { ...common, valid: false, steps: [...steps, { ok: false, text: `Zu klein: ${attacker.name} kommt gegen ${target.name} nicht an.` }], power: attacker.scale + leverage, outcome: "vernichtet", failedAt: "power" };
   }
   steps.push({ ok: ruling.valid, text: `Schiedsspruch: ${ruling.reason}` });
   return { ...common, valid: ruling.valid, steps, power: attacker.scale, outcome: verb?.spec.outcome ?? "vernichtet", ...(ruling.valid ? {} : { failedAt: "other" as const }) };
+}
+
+/** Tag that puts a form out of reach of melee mechanisms. */
+export const AIRBORNE = "fliegt";
+/** A grounded attacker this many steps larger than a flier still gets at it (a giant swats a bird). */
+export const TOWER_OVER = 2;
+
+/**
+ * Reichweite: a melee (`reach: "nah"`) mechanism cannot touch a flying target –
+ * unless the attacker flies too or towers over it.
+ */
+export function inRange(onto: Ontology, attacker: Form, target: Form, verbId: string): { ok: boolean; text: string } {
+  const verb = onto.verbs.get(verbId);
+  if (verb?.spec.reach !== "nah" || !onto.formHas(target, AIRBORNE)) return { ok: true, text: "" };
+  if (onto.formHas(attacker, AIRBORNE)) return { ok: true, text: "" };
+  if (attacker.scale >= target.scale + TOWER_OVER) return { ok: true, text: "" };
+  return { ok: false, text: `Außer Reichweite: ${target.name} fliegt – „${verb.spec.label}“ braucht Nähe.` };
+}
+
+/**
+ * Intensität: every requirement of the mechanism (`needs`) compares a force of the attacker
+ * with a resistance of the target – Hitze gegen Hitzefestigkeit, Nässe gegen Härte. A shortfall
+ * fails; a clear surplus (≥ 2 on every requirement) adds +1 power ("Übermacht").
+ */
+export function intensity(onto: Ontology, attacker: Form, target: Form, verbId: string): { ok: boolean; text: string; bonus: number } {
+  const needs = onto.verbs.get(verbId)?.spec.needs ?? [];
+  if (needs.length === 0) return { ok: true, text: "", bonus: 0 };
+  const label = (q: string): string => onto.qualities.get(q)?.label ?? q;
+  const parts: string[] = [];
+  let surplus = true;
+  for (const n of needs) {
+    const by = onto.quality(attacker, n.by);
+    const vs = onto.quality(target, n.vs);
+    const text = `${label(n.by)} ${String(by)} (${attacker.name}) gegen ${label(n.vs)} ${String(vs)} (${target.name})`;
+    if (by < vs) return { ok: false, text: `${text} – reicht nicht.`, bonus: 0 };
+    if (by - vs < 2) surplus = false;
+    parts.push(text);
+  }
+  return { ok: true, text: `${parts.join(", ")} ✓`, bonus: surplus ? 1 : 0 };
 }
 
 /** Pseudo-mechanism recorded in the history for an escape (subject to echo like any mechanism). */

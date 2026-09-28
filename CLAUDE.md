@@ -74,10 +74,18 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
 - **Form closure** = declared tags + ancestors + implications − (`not` tags and their descendants).
 - **Verb** `targets` / `blockedBy` match against the closure, so a rule on `metall` covers every metal.
 - **Weakness** hit = a verb target at or above a declared weakness tag (`weak: eisen`, verb targets `metall` ✓).
+- **Qualities** (`qualities.json`, levels 0–6): graded properties, `kraft` (hitze, naesse, kaelte) vs `schutz`
+  (hitzefest, haerte, kaeltefest). Set on tags (most specific tag wins: `stahl` over `metall`; unrelated → max),
+  shifted by combos, overridden per form (`FormSpec.qualities`); unset `kraft` falls back to its default.
+- **Combos** (`combos.json`): if the closure has all `if` tags and no `unless` tag → add/remove tags, shift
+  qualities (wet wood is not `brennbar`). Applied to fixpoint in `compileForm`, before grants.
+- Containers of fire are not fire: an oven has `hitze 3`, not the `feuer` tag (so water finds nothing to quench).
 
 ### Resolution (`checkCounter`)
 
-surface (targets ∩ closure) → blockers / immunity → scale rules (max +2 up; more than 3 down only with
+surface (targets ∩ closure) → blockers / immunity → reach (`reach: "nah"` verbs miss a `fliegt` target unless the
+attacker flies or is ≥ 2 steps larger) → intensity (every `needs {by, vs}`: attacker's `by` ≥ target's `vs`, surplus
+≥ 2 on all → +1 "Übermacht") → scale rules (max +2 up; more than 3 down only with
 mythic leverage ≥ 4) → power = scale + leverage (+2 weakness) ≥ target scale. Game layer adds: echo
 (no mechanism from the last 2 moves), escalation (min scale rises every 3 moves, mythic exempt),
 one use per form, Wille budget, and discovery eleganz ("Einfallsreichtum": `play(…, discovery)` –
