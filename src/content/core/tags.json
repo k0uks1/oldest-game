@@ -150,5 +150,10 @@
   {"id": "blossstellend", "label": "bloßstellend, blamierend", "group": "faehigkeit", "grants": ["demuetigt"]},
   {"id": "entkraeftend", "label": "entkräftend (raubt Kraft und Energie)", "group": "faehigkeit", "grants": ["entzieht_energie"]},
   {"id": "bauend", "label": "baut (Dämme, Mauern, Nester)", "group": "faehigkeit", "grants": ["staut"]},
-  {"id": "tueckisch", "label": "tückisch (Falle, Stolperstein, Glätte, Finte)", "group": "faehigkeit", "grants": ["taeuscht"]}
+  {"id": "tueckisch", "label": "tückisch (Falle, Stolperstein, Glätte, Finte)", "group": "faehigkeit", "grants": ["taeuscht"]},
+  {"id": "vielarmig", "label": "vielarmig (greift, hält und haut mit vielen Armen)", "group": "faehigkeit", "parents": ["wuchtig", "bindend"]},
+  {"id": "klebrig", "label": "klebrig", "group": "faehigkeit", "parents": ["bindend"]},
+  {"id": "stinkend", "label": "stinkend (Gestank, der Augen tränen lässt)", "group": "faehigkeit", "parents": ["reizend"]},
+  {"id": "betrunken", "label": "betrunken", "group": "merkmal", "parents": ["chaotisch"]},
+  {"id": "laecherlich", "label": "lächerlich (niemand nimmt es ernst)", "group": "merkmal"}
 ]

@@ -102,7 +102,7 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
 
 affordance (attacker can do it at all, else „kann nicht … – bräuchte …“) → surface (targets ∩ closure) → blockers / immunity → reach (`reach: "nah"` verbs miss a `fliegt` target unless the
 attacker flies or is ≥ 2 steps larger) → intensity (every `needs {by, vs}`: attacker's `by` ≥ target's `vs`, surplus
-≥ 2 on all → +1 "Übermacht") → scale rules (max +2 up; more than 3 down only with
+≥ 2 on all → +1 "Übermacht"; `by` = `vs` is a contest: a tie fails) → scale rules (max +2 up; more than 3 down only with
 mythic leverage ≥ 4) → power = scale + leverage (+2 weakness) ≥ target scale. Game layer adds: echo
 (no mechanism from the last 2 moves), escalation (min scale rises every 3 moves, mythic exempt),
 one use per form, Wille budget, and discovery eleganz ("Einfallsreichtum": `play(…, discovery)` –

@@ -37,7 +37,9 @@ Regeln für den Satz:
   verschlingt ihn, Feuer lässt Holz zu Asche werden, Rost frisst Stahl. „Zerfällt zu Staub“ nur, wenn es wirklich passt.
 - Nur Bewegungen, die die Gestalt wirklich kann: Ein Damm, ein Berg, ein Tresor bewegen sich nicht – sie halten,
   stauen, versperren, stürzen oder werden geworfen.
-- Scheitert ein Zug, zeige kurz, woran er abprallt oder wie das Ziel antwortet.`;
+- Scheitert ein Zug, zeige kurz, woran er abprallt oder wie das Ziel antwortet.
+- Ist eine Gestalt als albern oder heiter markiert, darf der Satz trocken-komisch sein: erzähle den Witz todernst,
+  wie ein Chronist, der nicht lacht – die Pointe kommt aus ihren Eigenheiten, nicht aus Albernheit des Erzählers.`;
 
 const MOVERS = ["lebendig", "fluessig", "gas", "feuer", "koerperlos", "fliegt", "schwimmt", "graebt"];
 
@@ -45,7 +47,9 @@ const MOVERS = ["lebendig", "fluessig", "gas", "feuer", "koerperlos", "fliegt", 
 function describe(onto: Ontology, f: Form): string {
   const tags = onto.formTags(f).slice(0, 6).map((t) => onto.tagLabel(t));
   const still = f.archetype !== "vehicle" && !MOVERS.some((t) => onto.formHas(f, t));
-  return `${f.name} (Stufe ${String(f.scale)}; ${tags.join(", ")}${still ? "; bewegt sich nicht von selbst" : ""})`;
+  const tone = f.tone === "albern" || f.tone === "heiter" ? `; Ton: ${f.tone}` : "";
+  const mods = f.mods === undefined ? "" : `; ${f.mods.join(", ")}`;
+  return `${f.name} (Stufe ${String(f.scale)}; ${tags.join(", ")}${mods}${still ? "; bewegt sich nicht von selbst" : ""}${tone})`;
 }
 
 /** Richer narration of an already-resolved move. Falls back to offline text on any error. */
