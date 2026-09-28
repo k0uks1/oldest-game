@@ -8,6 +8,7 @@ import type { Ontology } from "../engine/ontology/ontology.ts";
 import type { ArenaSim } from "./arena.ts";
 import { CanvasArena } from "./canvas-arena.ts";
 import { PixiArena } from "./pixi-arena.ts";
+import { stageFor } from "./stage.ts";
 
 export type Arena = ArenaSim;
 
@@ -32,5 +33,7 @@ export function createArena(target: HTMLCanvasElement, onto: Ontology): Arena {
   const q = typeof location === "undefined" ? new URLSearchParams() : new URLSearchParams(location.search);
   const pixi = q.has("pixi") || (!q.has("canvas") && hardwareWebgl());
   target.dataset["renderer"] = pixi ? "pixi" : "canvas";
-  return pixi ? new PixiArena(target, onto) : new CanvasArena(target, onto);
+  const stage = stageFor(typeof location === "undefined" ? "" : location.search);
+  target.dataset["stage"] = stage.name;
+  return pixi ? new PixiArena(target, onto, stage) : new CanvasArena(target, onto, stage);
 }

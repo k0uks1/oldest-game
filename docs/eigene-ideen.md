@@ -221,3 +221,12 @@ Erzählung und Warum-Zeile verschwinden nicht mehr nach einer festen Zeit. Sie b
 | **Simulation getrennt vom Zeichnen** | Die Arena besteht jetzt aus `ArenaSim` (Zustand, Animationen, Partikel, bröckelnde Wand) und einem Renderer. Die UI merkt davon nichts, sie ruft weiter `summon`, `reveal`, `attack` usw. auf. | `src/render/arena.ts` |
 | **PixiJS-Renderer mit gleichem Look** | Szenengraph statt Canvas-Befehle: Sprites für Gestalten mit Materialisieren, Silhouette, Rand, Stein und Blitz, Grafiken für Partikel, Ringe, Blitze, Rune und Fackeln, weiche Lichtkegel als getönte Sprites. Die Szene wird wie bisher in 480×270 gerendert, ×4 pixelgenau vergrößert, und darüber liegen zwei geblurrte Bloom-Stufen (Pixi-`BlurFilter`, additiv). | `src/render/pixi-arena.ts` |
 | **Software-WebGL zählt nicht** | Ohne echte GPU (SwiftShader, llvmpipe, blockierte Treiber) ist WebGL bei Vollbild-Durchgängen viel langsamer als Chromes Canvas; gemessen wurden 4 statt 36 fps. Das Spiel prüft deshalb, wer rendert, und nimmt dann den alten Canvas-Renderer. `?pixi` bzw. `?canvas` erzwingen einen der beiden. Das Arena-Element trägt `data-renderer`. | `createArena`, `hardwareWebgl` in `src/render/arenas.ts` |
+
+## Isometrische Dungeon-Arena
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Ein Raum statt einer Wand** | Die Arena ist jetzt ein isometrischer Kerkerraum: Zwei Ziegelwände treffen sich hinten an einem Eckpfeiler, der Boden besteht aus Rautenfliesen im Verhältnis 2:1, die Fackeln hängen an den Wänden, und die rechte Wand liegt im Schatten. Über den Wänden verliert sich das Gewölbe im Dunkel, und dort öffnen sich die Augen. Die Kulisse wird prozedural in Pixeln gemalt (Iso-Treppenstufen, Rasterdithering nach oben). | `src/render/stage.ts` (`ISO`) |
+| **Die Mauern fallen auch schräg** | Die Eskalation funktioniert weiter: Die Wandziegel sind Parallelogramme aus 1-px-Spalten und bröckeln von oben nach unten ins Sternenfeld weg. Eckpfeiler und Fackelhalter bleiben im Nichts stehen. | `isoBricks`, `openBricks` |
+| **Runenkreis auf dem Boden** | Der Kreis liegt perspektivisch flacher auf den Fliesen. Die Duellanten stehen auf seinem Durchmesser, und die Lichtkegel unter leuchtenden Gestalten sind jetzt echte Ellipsen statt Rechtecke. | `Rune`, `drawLightPool` |
+| **Kulisse austauschbar** | Simulation und beide Renderer lesen nur `StageLayout`. `?flat` zeigt die alte Wand, und `data-stage` am Arena-Element sagt, welche Kulisse läuft. | `stageFor` |
