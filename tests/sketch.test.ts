@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { coreOntology } from "../src/content/index.ts";
 import { validPixelArt } from "../src/engine/pixelart.ts";
 import { formFromLlm } from "../src/llm/parser.ts";
-import { opaqueBounds, pixelsToRows, sanitizeSketch, SKETCH_EXAMPLES } from "../src/render/svgsprite.ts";
+import { fitSketch, opaqueBounds, pixelsToRows, sanitizeSketch, SKETCH_EXAMPLES } from "../src/render/svgsprite.ts";
 
 const onto = coreOntology();
 
@@ -37,6 +37,26 @@ describe("SVG sketches for new things", () => {
     assert.equal(rows.length, 32);
     assert.equal(rows[0]?.slice(0, 6), "#+o*,.");
     assert.deepEqual(opaqueBounds(px, 32), { x: 0, y: 0, w: 5, h: 1 });
+  });
+
+  it("fitSketch crops a small drawing and fits it into the frame, standing on the ground", () => {
+    const size = 128;
+    const px = new Uint8ClampedArray(size * size * 4);
+    for (let y = 10; y < 30; y++) {
+      for (let x = 10; x < 20; x++) {
+        const i = (y * size + x) * 4;
+        px[i] = 128;
+        px[i + 1] = 128;
+        px[i + 2] = 128;
+        px[i + 3] = 255;
+      }
+    }
+    const rows = fitSketch(px, size);
+    assert.ok(rows);
+    assert.equal(rows.length, 32);
+    assert.equal(rows.filter((r) => r.includes("#")).length, 30, "fills the height (32 − 2 margin)");
+    assert.ok(rows[30]?.includes("#") === true && rows[31] === ".".repeat(32), "stands on the ground");
+    assert.equal(fitSketch(new Uint8ClampedArray(size * size * 4), size), undefined);
   });
 
   it("32×32 grids are valid sprites", () => {

@@ -86,20 +86,55 @@ export async function rasterizeSketch(raw: string): Promise<string[] | undefined
   const sctx = src.getContext("2d", { willReadFrequently: true });
   if (sctx === null) return undefined;
   sctx.drawImage(img, 0, 0, big, big);
-  const box = opaqueBounds(sctx.getImageData(0, 0, big, big).data, big);
+  return fitSketch(sctx.getImageData(0, 0, big, big).data, big);
+}
+
+/**
+ * Pure: a large square RGBA rendering (browser canvas or the server's SVG renderer) → 32×32
+ * symbol rows. Crops to the drawing, fits it into the frame (centred, standing on the ground)
+ * and averages the covered source pixels – identical results on client and server.
+ */
+export function fitSketch(data: Uint8ClampedArray, size: number): string[] | undefined {
+  const box = opaqueBounds(data, size);
   if (box === undefined) return undefined;
-  const out = document.createElement("canvas");
-  out.width = SKETCH_SIZE;
-  out.height = SKETCH_SIZE;
-  const ctx = out.getContext("2d", { willReadFrequently: true });
-  if (ctx === null) return undefined;
-  const inner = SKETCH_SIZE - 2;
-  const k = inner / Math.max(box.w, box.h);
+  const N = SKETCH_SIZE;
+  const k = (N - 2) / Math.max(box.w, box.h);
   const w = box.w * k;
   const h = box.h * k;
-  // centred horizontally, standing on the ground
-  ctx.drawImage(src, box.x, box.y, box.w, box.h, (SKETCH_SIZE - w) / 2, SKETCH_SIZE - 1 - h, w, h);
-  return pixelsToRows(ctx.getImageData(0, 0, SKETCH_SIZE, SKETCH_SIZE).data);
+  const ox = (N - w) / 2;
+  const oy = N - 1 - h;
+  const out = new Uint8ClampedArray(N * N * 4);
+  for (let dy = 0; dy < N; dy++) {
+    for (let dx = 0; dx < N; dx++) {
+      const sx0 = box.x + (dx - ox) / k;
+      const sx1 = box.x + (dx + 1 - ox) / k;
+      const sy0 = box.y + (dy - oy) / k;
+      const sy1 = box.y + (dy + 1 - oy) / k;
+      let n = 0;
+      let a = 0;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      for (let sy = Math.max(box.y, Math.floor(sy0)); sy < Math.min(box.y + box.h, Math.ceil(sy1)); sy++) {
+        for (let sx = Math.max(box.x, Math.floor(sx0)); sx < Math.min(box.x + box.w, Math.ceil(sx1)); sx++) {
+          const i = (sy * size + sx) * 4;
+          const al = data[i + 3] ?? 0;
+          n++;
+          a += al;
+          r += (data[i] ?? 0) * al;
+          g += (data[i + 1] ?? 0) * al;
+          b += (data[i + 2] ?? 0) * al;
+        }
+      }
+      if (n === 0 || a === 0) continue;
+      const o = (dy * N + dx) * 4;
+      out[o] = r / a;
+      out[o + 1] = g / a;
+      out[o + 2] = b / a;
+      out[o + 3] = a / n;
+    }
+  }
+  return pixelsToRows(out);
 }
 
 /** Bounding box of the clearly opaque pixels. */
