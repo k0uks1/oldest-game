@@ -404,6 +404,7 @@ export class Ontology {
       origin: "lexikon",
       ...(spec.qualities === undefined ? {} : { qualities: spec.qualities }),
       ...(spec.look === undefined ? {} : { look: spec.look }),
+      ...(spec.art === undefined ? {} : { art: spec.art }),
       ...(spec.flavor === undefined ? {} : { flavor: spec.flavor }),
       ...spriteOf(spec),
     };

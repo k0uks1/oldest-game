@@ -320,3 +320,13 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Claude schätzt Intensitäten** | Neue Gestalten bekommen beim Lernen eigene Stufen, wenn sie vom Üblichen abweichen: ein Schweißbrenner hat Hitze 4 und schmilzt den Anker, den die Fackel nicht schafft. | `qualitiesOf` in `parser.ts` |
 | **Kalibrierung über Anker** | Die Lexikon-Anker im Prompt zeigen ihre Intensitäten („Fackel · hitze 2“) – Claude ordnet relativ zu Bekanntem ein statt frei zu schätzen. | `anchorLine` |
 | **Deckel gegen Übertreibung** | Kräfte (Hitze, Wasserkraft, Kälte) höchstens Stufe + 2 – ein Streichholz brennt nie wie die Sonne, egal was der Spieler behauptet. Doppelt geprüft: im Parser und in `learn()`. | `cappedQualities` |
+
+## Generierte Pixel Art (Nutzerwunsch: „Service für geile und schnelle Sprite-Generierung, unser manueller Modus ist Fallback“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Ein Stil-Rezept für alle** | Jedes Bild entsteht mit denselben Vorgaben (Seitenansicht, Blick nach rechts, schwarze Kontur, mittlere Schattierung, transparenter Hintergrund, „dark fantasy“) – 1 200 Gestalten sehen aus wie ein Spiel, ohne alte Sprites als Vorlage. | `server/pixellab.ts` |
+| **Größe folgt der Stufe** | Winziges wird in 32 px, Mittleres in 64 px, Riesiges in 128 px generiert – eine Maus steht klein neben dem Elefanten. Kostet gleich viel. | `scripts/art.ts` |
+| **Eigenes, reines Bildformat** | Palette + Lauflängen statt PNG: 1–3 KB pro Bild, synchron dekodierbar im Browser, auf dem Server und in der Einzeldatei – kein Canvas, kein Netzwerk. | `render/art.ts` |
+| **Alle Effekte bleiben** | Materialisieren, Silhouette, Leuchtkontur, Versteinern und Glühen werden aus den Pixeln des Bildes abgeleitet; Flammen und Augen leuchten von selbst. | `arena.ts`, `artGlow` |
+| **Fallback bleibt** | Ohne Bild greift wie bisher Bauplan, Skizze oder Figur. | `artFor` |
