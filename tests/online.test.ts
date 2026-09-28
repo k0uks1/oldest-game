@@ -131,10 +131,19 @@ describe("online rooms (authoritative server)", () => {
     await settle();
     assert.ok(b.last("rejected"), "unknown words are rejected for the mover only");
     assert.equal(a.last("rejected"), undefined);
+    assert.equal(a.last("tried")?.text, "blubbergrütz", "…but the opponent learns it did not count");
+    assert.equal(a.last("tried")?.seat, 1);
 
     cb.receive(JSON.stringify({ t: "move", text: "Drache" }));
     await settle();
     assert.equal(a.last("turn")?.turn.form.name, "Drache");
+
+    ca.receive(JSON.stringify({ t: "move", text: "Seife" }));
+    await settle();
+    const lost = b.last("turn");
+    assert.ok(lost);
+    assert.equal(lost.turn.form.name, "Seife", "a failed attempt reaches the opponent too");
+    assert.equal(lost.turn.outcome.kind, "failure");
   });
 
   it("reconnect with the seat token restores state and chronicle", async () => {
