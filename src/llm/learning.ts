@@ -351,11 +351,15 @@ export function reconcileLearned(base: readonly ContentPack[], pack: ContentPack
   };
   if (compile(base, trimmed) !== undefined) return trimmed;
   // Something still clashes: rebuild form by form, keeping whatever compiles.
-  let kept: ContentPack = { ...trimmed, forms: [], rulings: [] };
+  let kept: ContentPack = { ...trimmed, forms: [], rulings: [], extensions: [] };
   if (compile(base, kept) === undefined) kept = { ...kept, tags: [], verbs: [], modifiers: [] };
   if (compile(base, kept) === undefined) return undefined;
   for (const f of trimmed.forms) {
     const next: ContentPack = { ...kept, forms: [...kept.forms, f] };
+    if (compile(base, next) !== undefined) kept = next;
+  }
+  for (const x of trimmed.extensions ?? []) {
+    const next: ContentPack = { ...kept, extensions: [...(kept.extensions ?? []), x] };
     if (compile(base, next) !== undefined) kept = next;
   }
   for (const r of trimmed.rulings ?? []) {

@@ -204,6 +204,18 @@ export interface RulingSpec {
   readonly reason: string;
 }
 
+/**
+ * A learned widening of a mechanism ("Siegweg"): generalised from precedents, it lets a mechanism
+ * reach more tags (`targets`) or be stopped by more (`blockedBy`). Only ever adds.
+ */
+export interface VerbExtensionSpec {
+  readonly verb: string;
+  readonly targets?: readonly string[];
+  readonly blockedBy?: readonly string[];
+  /** The precedents it was learned from ("attacker>target"). */
+  readonly evidence?: readonly string[];
+}
+
 export interface ContentPack {
   readonly id: string;
   readonly name: string;
@@ -214,6 +226,7 @@ export interface ContentPack {
   readonly forms: readonly FormSpec[];
   readonly fields?: readonly FieldSpec[];
   readonly rulings?: readonly RulingSpec[];
+  readonly extensions?: readonly VerbExtensionSpec[];
   readonly qualities?: readonly QualitySpec[];
   readonly combos?: readonly ComboSpec[];
 }
@@ -445,6 +458,19 @@ export function parsePack(input: unknown): PackResult {
         ...opt("tone", c.optStr(o, "tone", w)),
       };
     }),
+    ...(input["extensions"] === undefined
+      ? {}
+      : {
+          extensions: c.array(input, "extensions", id).map((o, i) => {
+            const w = `${id}.extensions[${i}]`;
+            return {
+              verb: c.str(o, "verb", w),
+              ...opt("targets", c.list(o, "targets", w)),
+              ...opt("blockedBy", c.list(o, "blockedBy", w)),
+              ...opt("evidence", c.list(o, "evidence", w)),
+            };
+          }),
+        }),
     ...(input["rulings"] === undefined
       ? {}
       : {

@@ -5,7 +5,7 @@
  * The server holds the game state and the API key and resolves every move with the same
  * `Resolver` the hot-seat UI uses; clients only send text and show what comes back.
  */
-import type { ContentPack, FormSpec, ModifierSpec, QualitySpec, RulingSpec, TagSpec, VerbSpec } from "../engine/ontology/pack.ts";
+import type { ContentPack, FormSpec, ModifierSpec, QualitySpec, RulingSpec, TagSpec, VerbExtensionSpec, VerbSpec } from "../engine/ontology/pack.ts";
 import type { GameState, PlayerId } from "../engine/types.ts";
 import type { Turn } from "../game/resolver.ts";
 
@@ -92,6 +92,8 @@ export interface PackDelta {
   readonly rulings: readonly RulingSpec[];
   /** Learned intensities (optional: servers before v0.49 send none). */
   readonly qualities?: readonly QualitySpec[];
+  /** Learned mechanism widenings (optional: servers before v0.53 send none). */
+  readonly extensions?: readonly VerbExtensionSpec[];
 }
 
 export type ErrorCode = "access" | "noroom" | "full" | "limit" | "bad" | "turn" | "busy" | "claude";
@@ -227,11 +229,12 @@ export function packDelta(before: ContentPack, after: ContentPack): PackDelta {
     forms: changed(before.forms, after.forms, id),
     rulings: changed(before.rulings ?? [], after.rulings ?? [], rulingKey),
     qualities: changed(before.qualities ?? [], after.qualities ?? [], id),
+    extensions: changed(before.extensions ?? [], after.extensions ?? [], (x) => x.verb),
   };
 }
 
 export function isEmptyDelta(d: PackDelta): boolean {
-  return d.tags.length + d.verbs.length + d.modifiers.length + d.forms.length + d.rulings.length + (d.qualities ?? []).length === 0;
+  return d.tags.length + d.verbs.length + d.modifiers.length + d.forms.length + d.rulings.length + (d.qualities ?? []).length + (d.extensions ?? []).length === 0;
 }
 
 function upsert<T>(list: readonly T[], add: readonly T[], key: (x: T) => string): T[] {
@@ -250,5 +253,6 @@ export function applyPackDelta(pack: ContentPack, d: PackDelta): ContentPack {
     forms: upsert(pack.forms, d.forms, id),
     rulings: upsert(pack.rulings ?? [], d.rulings, rulingKey),
     ...(d.qualities === undefined || d.qualities.length === 0 ? {} : { qualities: upsert(pack.qualities ?? [], d.qualities, id) }),
+    ...(d.extensions === undefined || d.extensions.length === 0 ? {} : { extensions: upsert(pack.extensions ?? [], d.extensions, (x) => x.verb) }),
   };
 }

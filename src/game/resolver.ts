@@ -14,6 +14,7 @@ import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
 import { parseForm } from "../engine/parse.ts";
 import { validPixelArt } from "../engine/pixelart.ts";
 import { reaches } from "../engine/rules.ts";
+import { describeInsight, learnInsights } from "./insight.ts";
 import type { Form, GameState, PlayerId } from "../engine/types.ts";
 import { isClaudeReady, type LlmSettings } from "../llm/client.ts";
 import { addRuling, amend, findLearned, learn } from "../llm/learning.ts";
@@ -155,9 +156,10 @@ export class Resolver {
       if (v !== undefined && stored !== undefined) {
         this.onto = stored.onto;
         this.learned = stored.pack;
-        this.host.saveLearned(stored.pack);
+        const learnedWays = this.generalize();
+        this.host.saveLearned(this.learned);
         outcome = attempt(this.onto, state, form, v.ruling.valid ? v.ruling.verb : intendedVerb, isDiscovery);
-        verdict = `⚖ ${v.ruling.reason}`;
+        verdict = `⚖ ${v.ruling.reason}${learnedWays}`;
       }
     }
     if (outcome.kind === "rejected") return { kind: "rejected", reason: outcome.reason };
@@ -209,14 +211,29 @@ export class Resolver {
         outcome = attempt(onto, state2, f2, j.win ? (rulingVerb ?? null) : intendedVerb, isDiscovery);
       }
     }
+    let learnedWays = "";
     if (pack !== this.learned) {
       this.onto = onto;
       this.learned = pack;
-      this.host.saveLearned(pack);
+      learnedWays = this.generalize();
+      this.host.saveLearned(this.learned);
     }
     const learnedNow = [...j.attacker.tags, ...j.target.tags].map((t) => onto.tagLabel(t));
     const extra = amended === undefined || learnedNow.length === 0 ? "" : ` · gelernt: ${[...new Set(learnedNow)].join(", ")}`;
-    return { form: f2, outcome, verdict: `⚖ Urteil: ${j.reason}${extra}` };
+    return { form: f2, outcome, verdict: `⚖ Urteil: ${j.reason}${extra}${learnedWays}` };
+  }
+
+  /**
+   * After a new precedent: do the precedents now agree on a general rule? Then learn it (a
+   * widening of the mechanism) – unless it would leave some form without any counter.
+   * Returns the verdict-line addition ("· neuer Siegweg: …"), or "".
+   */
+  private generalize(): string {
+    const l = learnInsights(this.basePacks, this.learned, this.onto);
+    if (l === undefined) return "";
+    this.learned = l.pack;
+    this.onto = l.onto;
+    return ` · neuer Siegweg: ${l.learned.map((n) => describeInsight(this.onto, n)).join("; ")}`;
   }
 
   /** The form's legend for its card: its own, or a fresh one from Claude (undefined offline). */
