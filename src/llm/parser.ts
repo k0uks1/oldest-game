@@ -6,9 +6,9 @@ import { parseForm, suggest } from "../engine/parse.ts";
 import { clampScale } from "../engine/rules.ts";
 import { hash32, normalize } from "../engine/text.ts";
 import { ARCHETYPES, PLANES, type Archetype, type Form, type FormLook, type Plane } from "../engine/types.ts";
-import type { RequiresSpec, TagSpec, VerbSpec } from "../engine/ontology/pack.ts";
+import type { QualitySpec, RequiresSpec, TagSpec, VerbSpec } from "../engine/ontology/pack.ts";
 import { callClaude, type LlmSettings, type ToolDef } from "./client.ts";
-import { EMPTY_DELTA, MAX_NEW_TAGS, slug, type LearningDelta } from "./learning.ts";
+import { EMPTY_DELTA, LEARNED_TAG_FORCE, MAX_NEW_QUALITIES, MAX_NEW_TAGS, slug, type LearningDelta } from "./learning.ts";
 
 /**
  * Claude parser: free text → Form. This is the primary input path of the game.
@@ -79,15 +79,33 @@ const TOOL: ToolDef = {
         type: "array",
         maxItems: MAX_NEW_TAGS,
         description:
-          "NUR wenn eine für diese Gestalt wesentliche Eigenschaft im Vokabular wirklich fehlt. Jede neue Eigenschaft MUSS unter bestehende Kategorien eingeordnet werden (parents) – so erbt sie deren Regeln.",
+          "NUR wenn eine für diese Gestalt wesentliche Eigenschaft im Vokabular wirklich fehlt – ein Stoff, eine Fähigkeit oder ein Merkmal. Jede neue Eigenschaft MUSS unter bestehende eingeordnet werden (parents) – so erbt sie deren Regeln und Fähigkeiten.",
         items: {
           type: "object",
           properties: {
-            name: { type: "string", description: "Kurzer deutscher Name, z. B. „Käse“" },
-            parents: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 3, description: "Bestehende Eigenschaften, deren Unterart sie ist (z. B. fest, Pflanze, Tier)." },
+            name: { type: "string", description: "Kurzer deutscher Name, z. B. „Käse“, „Zwiebel-Atem“, „achtarmig“" },
+            art: { type: "string", enum: ["ist", "kann", "merkmal"], description: "ist = Stoff/Art (Käse ist fest), kann = Fähigkeit (Zwiebel-Atem kann reizen), merkmal = Zustand/Eigenheit (betrunken, achtarmig)." },
+            parents: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 3, description: "Bestehende Eigenschaften, deren Unterart sie ist (z. B. fest, Pflanze, Tier; bei Fähigkeiten eine Fähigkeit: reizend, wuchtig …)." },
             implies: { type: "array", items: { type: "string" }, maxItems: 4, description: "Bestehende Eigenschaften, die sie mit sich bringt (z. B. brennbar)." },
+            verleiht: { type: "array", items: { type: "string" }, maxItems: 2, description: "Nur bei art = kann: Mechanismus-IDs (oder das Verb eines new_mechanism), die jede Gestalt mit dieser Fähigkeit bekommt." },
+            intensitaet: { type: "object", additionalProperties: { type: "integer", minimum: 0, maximum: 6 }, description: "Stufen, die jeder Träger hat (Qualitäts-ID oder Name einer new_qualities), z. B. {\"Gestank\": 3}." },
           },
-          required: ["name", "parents"],
+          required: ["name", "art", "parents"],
+        },
+      },
+      new_qualities: {
+        type: "array",
+        maxItems: MAX_NEW_QUALITIES,
+        description:
+          "NUR wenn eine abgestufte Größe fehlt, auf die es im Kampf ankommt (z. B. Gestank, Klebkraft). kraft = was ein Angriff mitbringt, schutz = was dagegen hilft. Stufen 0–6.",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Kurzer deutscher Name, z. B. „Gestank“ oder „Geruchsfestigkeit“" },
+            art: { type: "string", enum: ["kraft", "schutz"] },
+            hint: { type: "string", description: "Ein Satz mit Beispielstufen: „Socke 2, Müllhalde 4, Stinktier 5“." },
+          },
+          required: ["name", "art", "hint"],
         },
       },
       intensitaet: {
@@ -125,6 +143,9 @@ const TOOL: ToolDef = {
           family: { type: "string", enum: [...FAMILIES] },
           targets: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 4, description: "Bestehende Eigenschaften, auf die er wirkt." },
           blocked_by: { type: "array", items: { type: "string" }, maxItems: 4 },
+          braucht: { type: "array", items: { type: "string" }, maxItems: 4, description: "Was der Angreifer sein/können muss (Eigenschaften oder neue Fähigkeiten). Ohne das kann niemand den Mechanismus nutzen." },
+          kraft: { type: ["string", "null"], description: "Optional: Kraft-Qualität, deren Stufe zählt (bestehend oder aus new_qualities)." },
+          gegen: { type: ["string", "null"], description: "Optional: Schutz-Qualität des Ziels, die die Kraft übertreffen muss." },
           hint: { type: "string", description: "Ein Satz, wie er wirkt." },
         },
         required: ["label", "family", "targets", "hint"],
@@ -183,8 +204,14 @@ Die Werte folgen meist aus den Eigenschaften (Feuer = hitze 2, Stein = haerte 3,
 wenn die Gestalt deutlich abweicht: Kerze = hitze 1, Schweißbrenner = hitze 4, Sonne = hitze 6, Pfütze = naesse 1,
 Ozean = naesse 5, Diamant = haerte 6, Eisbär = kaeltefest 4. Kräfte höchstens Stufe + 2.
 
-DAZULERNEN: Das Spiel lernt aus deinen Einordnungen. Wenn eine wesentliche Eigenschaft fehlt, schlage sie mit new_properties vor
-(immer unter bestehende Eigenschaften eingeordnet). Einen neuen Mechanismus schlägst du nur vor, wenn wirklich keiner passt.
+DAZULERNEN: Das Spiel lernt aus deinen Einordnungen – auch völlig neue Eigenschaften. Das Format:
+- new_properties: was die Gestalt IST (Stoff/Art), KANN (Fähigkeit) oder HAT (Merkmal) – immer unter bestehende Eigenschaften
+  eingeordnet. Eine Fähigkeit unter eine bestehende Fähigkeit hängen (Zwiebel-Atem → reizend) erbt deren Mechanismen;
+  verleiht nennt weitere. intensitaet gibt jedem Träger Stufen mit.
+- new_qualities: eine neue abgestufte Kraft oder ein Schutz, wenn es im Kampf auf das „Wie stark“ ankommt.
+- new_mechanism: nur wenn wirklich keiner passt; braucht sagt, wer ihn nutzen kann, kraft/gegen, woran er sich misst.
+Beispiel „ungeladener Gast mit Zwiebel-Atem“: base mensch, new_properties [{name „Zwiebel-Atem“, art „kann“, parents
+[„reizend“], intensitaet {„Gestank“: 3}}], new_qualities [{name „Gestank“, art „kraft“, hint „Socke 2, Müllhalde 4“}].
 Erfinde nichts, was es schon gibt – nutze vorhandene Begriffe, wo immer sie passen.
 
 REGELN FÜR DICH:
@@ -233,14 +260,14 @@ function anchorLine(onto: Ontology, f: Form): string {
  * Claude's `intensitaet` → known qualities, integers 0..6; a force (hitze, naesse, kaelte) at most
  * scale + 2 – a match cannot burn like the sun, whatever the player claims.
  */
-export function qualitiesOf(onto: Ontology, raw: unknown, scale: number): Record<string, number> | undefined {
+export function qualitiesOf(onto: Ontology, raw: unknown, scale: number, proposed: readonly QualitySpec[] = []): Record<string, number> | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
   const out: Record<string, number> = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    const q = onto.qualities.get(k);
+    const q = onto.qualities.get(k) ?? proposed.find((p) => p.id === k || normalize(p.label) === normalize(k));
     if (q === undefined || typeof v !== "number" || !Number.isFinite(v)) continue;
     const cap = q.kind === "kraft" ? Math.min(MAX_LEVEL, scale + 2) : MAX_LEVEL;
-    out[k] = Math.max(0, Math.min(cap, Math.round(v)));
+    out[q.id] = Math.max(0, Math.min(cap, Math.round(v)));
   }
   return Object.keys(out).length === 0 ? undefined : out;
 }
@@ -358,10 +385,13 @@ function shapeFromLlm(onto: Ontology, input: unknown, text: string): Shaped {
     ...[...new Set([...(base?.weak ?? []), ...knownWeak])].filter((w) => onto.formHas(draft, w)),
     ...proposedWeak.filter((w) => tags.has(w)),
   ];
-  const qualities = qualitiesOf(onto, o["intensitaet"], draft.scale) ?? base?.qualities;
+  const qualities = qualitiesOf(onto, o["intensitaet"], draft.scale, delta.qualities) ?? base?.qualities;
   const shaped: Form = { ...draft, weak, ...(qualities === undefined ? {} : { qualities }) };
-  // "Affordanz": a mechanism the form cannot perform is dropped, whoever proposed it (a radio does not corrode)
-  const able = new Set(onto.compileForm(shaped).verbs);
+  // "Affordanz": a mechanism the form cannot perform is dropped, whoever proposed it (a radio does not corrode).
+  // New properties count already: they stand in for their parents, implications and grants.
+  const shadow = shadowOf(shaped, delta);
+  const sc = onto.compileForm(shadow.form);
+  const able = new Set([...sc.verbs, ...shadow.granted.filter((v) => onto.verbs.has(v) && onto.affords(v, sc.closure, sc.qualities))]);
   const keep = (v: string): boolean => able.has(v) || delta.verbs.some((d) => d.id === v);
   const unable = draft.verbs.filter((v) => !keep(v) && v !== ESCAPE).map((verb): Unable => ({ verb, why: onto.lacks(shaped, verb) ?? "passt nicht" }));
   const form: Form = { ...draft, weak, verbs: draft.verbs.filter(keep) };
@@ -380,6 +410,33 @@ function shapeFromLlm(onto: Ontology, input: unknown, text: string): Shaped {
   return { result: { form: looked, intendedVerb: iv, base, unresolved, fromCache: false, delta, ...(sketch === undefined ? {} : { sketch }) }, unable };
 }
 
+/**
+ * The form as the engine will see it once the proposal is learned, for the affordance check:
+ * each new property stands in for its parents and implications; its grants and levels count.
+ */
+function shadowOf(form: Form, delta: LearningDelta): { form: Form; granted: string[] } {
+  const proposed = new Map(delta.tags.map((t) => [t.id, t]));
+  if (proposed.size === 0) return { form, granted: [] };
+  const tags = new Set<string>();
+  const granted: string[] = [];
+  const levels: Record<string, number> = {};
+  const seen = new Set<string>();
+  const visit = (id: string): void => {
+    const t = proposed.get(id);
+    if (t === undefined) {
+      tags.add(id);
+      return;
+    }
+    if (seen.has(id)) return;
+    seen.add(id);
+    granted.push(...(t.grants ?? []));
+    for (const [q, n] of Object.entries(t.qualities ?? {})) levels[q] = Math.max(levels[q] ?? 0, n);
+    for (const p of [...(t.parents ?? []), ...(t.implies ?? [])]) visit(p);
+  };
+  for (const t of form.tags) visit(t);
+  return { form: { ...form, tags: [...tags], qualities: { ...levels, ...form.qualities } }, granted };
+}
+
 /** The one follow-up when every proposed mechanism was beyond the form. */
 export function abilityCorrection(onto: Ontology, name: string, unable: readonly Unable[]): string {
   const list = unable.map((u) => `${onto.verbs.get(u.verb)?.spec.label ?? u.verb} (${u.why})`).join(", ");
@@ -390,57 +447,115 @@ export function abilityCorrection(onto: Ontology, name: string, unable: readonly
   );
 }
 
-/** Turn Claude's vocabulary proposals into specs – only what resolves against existing tags survives. */
+const records = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => typeof x === "object" && x !== null) : []);
+const clip = (v: unknown, max: number): string => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+/** Where a proposed property sits: what it *is*, what it *can* do, or a trait it *has*. */
+const PROPERTY_GROUPS = { kann: "faehigkeit", merkmal: "merkmal" } as const;
+
+function withoutGrant(t: TagSpec, verb: string): TagSpec {
+  const { grants, ...rest } = t;
+  const left = (grants ?? []).filter((g) => g !== verb);
+  return left.length > 0 ? { ...rest, grants: left } : rest;
+}
+
+/**
+ * Turn Claude's vocabulary proposals into specs – only what resolves against existing (or
+ * co-proposed) vocabulary survives. The format ties everything together: a new ability hangs
+ * under existing ones and may grant mechanisms (`verleiht`); a new intensity is a force or a
+ * protection; a new mechanism names what its user needs (`braucht`, `kraft` vs `gegen`).
+ * `learn()` re-validates all of it – this only shapes.
+ */
 function proposeDelta(onto: Ontology, o: Record<string, unknown>, unresolved: string[]): LearningDelta {
+  // ── intensities ───────────────────────────────────────────────────
+  const qualities: QualitySpec[] = [];
+  const knownQuality = (k: string): QualitySpec | undefined =>
+    onto.qualities.get(k) ?? [...onto.qualities.values()].find((q) => normalize(q.label) === normalize(k)) ?? qualities.find((q) => q.id === k || normalize(q.label) === normalize(k));
+  for (const q of records(o["new_qualities"]).slice(0, MAX_NEW_QUALITIES)) {
+    const label = clip(q["name"], 30);
+    const kind = q["art"] === "kraft" || q["art"] === "schutz" ? q["art"] : undefined;
+    if (label.length < 3 || kind === undefined || knownQuality(label) !== undefined) continue;
+    const id = `q_${slug(label)}`;
+    if (onto.qualities.has(id)) continue;
+    const hint = clip(q["hint"], 160);
+    qualities.push({ id, label, kind, default: 0, ...(hint === "" ? {} : { hint }) });
+  }
+
+  // ── the new mechanism's id first, so abilities can grant it ────────
+  const m = typeof o["new_mechanism"] === "object" && o["new_mechanism"] !== null ? (o["new_mechanism"] as Record<string, unknown>) : undefined;
+  const mLabel = clip(m?.["label"], 40);
+  const mId = mLabel.length >= 3 && onto.resolveVerb(mLabel) === undefined && !onto.verbs.has(`g_${slug(mLabel)}`) ? `g_${slug(mLabel)}` : undefined;
+  const verbRef = (k: string): string | undefined =>
+    mId !== undefined && (k === mId || normalize(k) === normalize(mLabel)) ? mId : onto.verbs.has(k) ? k : onto.resolveVerb(k);
+
+  // ── properties ────────────────────────────────────────────────────
   const tags: TagSpec[] = [];
-  const rawTags = Array.isArray(o["new_properties"]) ? (o["new_properties"] as unknown[]) : [];
-  for (const raw of rawTags.slice(0, MAX_NEW_TAGS)) {
-    if (typeof raw !== "object" || raw === null) continue;
-    const p = raw as Record<string, unknown>;
-    const name = typeof p["name"] === "string" ? p["name"].trim() : "";
+  const tagRef = (k: string): string | undefined => (onto.hasTag(k) ? k : (onto.resolveTag(k) ?? tags.find((t) => t.id === k || normalize(t.label) === normalize(k))?.id));
+  for (const p of records(o["new_properties"]).slice(0, MAX_NEW_TAGS)) {
+    const name = clip(p["name"], 41);
     if (name.length < 2 || name.length > 40) continue;
     if (onto.resolveTag(name) !== undefined) continue; // already known – not new
-    const parents = strings(p["parents"]).map((k) => (onto.hasTag(k) ? k : onto.resolveTag(k))).filter((x): x is string => x !== undefined);
+    const parents = strings(p["parents"]).map(tagRef).filter((x): x is string => x !== undefined);
     if (parents.length === 0) continue; // must hang under the existing taxonomy
-    const implies = strings(p["implies"]).map((k) => (onto.hasTag(k) ? k : onto.resolveTag(k))).filter((x): x is string => x !== undefined);
-    const first = onto.tagAt(onto.tagIndexOf(parents[0] ?? "") ?? -1);
+    const implies = strings(p["implies"]).map(tagRef).filter((x): x is string => x !== undefined);
     const id = `g_${slug(name)}`;
     if (onto.hasTag(id) || tags.some((t) => t.id === id)) continue;
+    const art = p["art"] === "kann" || p["art"] === "merkmal" ? PROPERTY_GROUPS[p["art"]] : undefined;
+    const first = onto.tagAt(onto.tagIndexOf(parents[0] ?? "") ?? -1) ?? tags.find((t) => t.id === parents[0]);
+    const grants = [...new Set(strings(p["verleiht"]).map(verbRef).filter((x): x is string => x !== undefined))].slice(0, 2);
+    const levels: Record<string, number> = {};
+    if (typeof p["intensitaet"] === "object" && p["intensitaet"] !== null) {
+      for (const [k, v] of Object.entries(p["intensitaet"] as Record<string, unknown>)) {
+        const q = knownQuality(k);
+        if (q !== undefined && typeof v === "number" && Number.isFinite(v)) levels[q.id] = Math.max(0, Math.min(q.kind === "kraft" ? LEARNED_TAG_FORCE : MAX_LEVEL, Math.round(v)));
+      }
+    }
     tags.push({
       id,
       label: name,
-      group: first?.group ?? "existenz",
+      group: art ?? first?.group ?? "existenz",
       parents: [...new Set(parents)].slice(0, 3),
       ...(implies.length > 0 ? { implies: [...new Set(implies)].slice(0, 4) } : {}),
+      ...(grants.length > 0 ? { grants } : {}),
+      ...(Object.keys(levels).length > 0 ? { qualities: levels } : {}),
       aliases: [name],
     });
     const i = unresolved.findIndex((u) => normalize(u) === normalize(name));
     if (i >= 0) unresolved.splice(i, 1);
   }
+
+  // ── the new mechanism ─────────────────────────────────────────────
   const verbs: VerbSpec[] = [];
-  const m = o["new_mechanism"];
-  if (typeof m === "object" && m !== null) {
-    const v = m as Record<string, unknown>;
-    const label = typeof v["label"] === "string" ? v["label"].trim() : "";
-    const family = FAMILIES.find((f) => f === v["family"]) ?? "gewalt";
-    const resolve = (k: string): string | undefined => (onto.hasTag(k) ? k : (onto.resolveTag(k) ?? tags.find((t) => normalize(t.label) === normalize(k))?.id));
-    const targets = strings(v["targets"]).map(resolve).filter((x): x is string => x !== undefined);
-    const blockedBy = strings(v["blocked_by"]).map(resolve).filter((x): x is string => x !== undefined && !targets.includes(x));
-    const id = `g_${slug(label)}`;
-    if (label.length >= 3 && label.length <= 40 && targets.length > 0 && onto.resolveVerb(label) === undefined && !onto.verbs.has(id)) {
+  if (m !== undefined && mId !== undefined) {
+    const family = FAMILIES.find((f) => f === m["family"]) ?? "gewalt";
+    const targets = strings(m["targets"]).map(tagRef).filter((x): x is string => x !== undefined);
+    const blockedBy = strings(m["blocked_by"]).map(tagRef).filter((x): x is string => x !== undefined && !targets.includes(x));
+    // who may use it: what Claude says it needs, plus every new ability that grants it
+    const needsTags = [...new Set([...strings(m["braucht"]).map(tagRef).filter((x): x is string => x !== undefined), ...tags.filter((t) => t.grants?.includes(mId) === true).map((t) => t.id)])];
+    const force = knownQuality(clip(m["kraft"], 30));
+    const guard = knownQuality(clip(m["gegen"], 30));
+    const kraft = force?.kind === "kraft" ? force.id : undefined;
+    const gegen = guard?.kind === "schutz" ? guard.id : undefined;
+    if (targets.length > 0) {
       verbs.push({
-        id,
-        label,
+        id: mId,
+        label: mLabel,
         family,
         // Learned mechanisms stay weak: brute force needs size, everything else a small lever.
         leverage: family === "gewalt" ? 1 : 2,
         targets: [...new Set(targets)],
         ...(blockedBy.length > 0 ? { blockedBy: [...new Set(blockedBy)] } : {}),
-        hint: `(gelernt) ${typeof v["hint"] === "string" ? v["hint"].slice(0, 160) : label}`,
+        ...(kraft !== undefined && gegen !== undefined ? { needs: [{ by: kraft, vs: gegen }] } : {}),
+        ...(needsTags.length > 0 || kraft !== undefined
+          ? { requires: { ...(needsTags.length > 0 ? { any: needsTags.slice(0, 6) } : {}), ...(kraft === undefined ? {} : { qualities: { [kraft]: 1 } }) } }
+          : {}),
+        hint: `(gelernt) ${clip(m["hint"], 160) || mLabel}`,
       });
     }
   }
-  return tags.length === 0 && verbs.length === 0 ? EMPTY_DELTA : { tags, verbs };
+  // a mechanism that did not survive (no valid targets) cannot be granted
+  const finalTags = verbs.length > 0 || mId === undefined ? tags : tags.map((t) => withoutGrant(t, mId));
+  return finalTags.length === 0 && verbs.length === 0 && qualities.length === 0 ? EMPTY_DELTA : { tags: finalTags, verbs, qualities };
 }
 
 export async function parseWithClaude(onto: Ontology, settings: LlmSettings, text: string): Promise<LlmParseResult | undefined> {

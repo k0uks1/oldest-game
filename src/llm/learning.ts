@@ -1,5 +1,5 @@
 import { Ontology, OntologyError, lookupKey } from "../engine/ontology/ontology.ts";
-import { parsePack, type ContentPack, type FormSpec, type RulingSpec, type TagSpec, type VerbSpec } from "../engine/ontology/pack.ts";
+import { parsePack, type ContentPack, type FormSpec, type QualitySpec, type RulingSpec, type TagSpec, type VerbSpec } from "../engine/ontology/pack.ts";
 import { findCounters } from "../engine/rules.ts";
 import { normalize } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
@@ -14,6 +14,9 @@ import type { Form } from "../engine/types.ts";
  *
  * Guardrails (all enforced here, not trusted from the model):
  *  - new tags need ≥ 1 existing parent; at most MAX_NEW_TAGS per proposal
+ *  - a new ability may grant mechanisms (`grants`) only if it can actually perform them
+ *    (affordance) and only small ones (leverage ≤ 2); forces it carries stay ≤ LEARNED_TAG_FORCE
+ *  - at most MAX_NEW_QUALITIES new intensities (a force or a protection, default 0)
  *  - at most one new mechanism, leverage clamped to 1–2, targets must exist
  *  - the resulting form must have a mechanism, a weakness and at least one
  *    counter in the lexicon – otherwise it is rejected as too powerful
@@ -21,15 +24,20 @@ import type { Form } from "../engine/types.ts";
  */
 
 export const LEARNED_PACK_ID = "gelernt";
-export const MAX_NEW_TAGS = 2;
+export const MAX_NEW_TAGS = 3;
+export const MAX_NEW_QUALITIES = 2;
+/** A learned property may carry a force of at most this (a form still caps it at scale + 2). */
+export const LEARNED_TAG_FORCE = 3;
 export const MAX_LEARNED_FORMS = 5000;
 
 export interface LearningDelta {
   readonly tags: readonly TagSpec[];
   readonly verbs: readonly VerbSpec[];
+  /** New intensities (optional: parse results cached before v0.49 have none). */
+  readonly qualities?: readonly QualitySpec[];
 }
 
-export const EMPTY_DELTA: LearningDelta = { tags: [], verbs: [] };
+export const EMPTY_DELTA: LearningDelta = { tags: [], verbs: [], qualities: [] };
 
 export function emptyLearnedPack(): ContentPack {
   return { id: LEARNED_PACK_ID, name: "Gelernt", version: "1", tags: [], verbs: [], modifiers: [], forms: [] };
@@ -53,6 +61,8 @@ export interface Learned {
   readonly isNew: boolean;
   readonly newTags: readonly string[];
   readonly newVerbs: readonly string[];
+  /** Labels of new intensities ("Gestank"). */
+  readonly newQualities?: readonly string[];
 }
 
 export type LearnResult = { readonly ok: true; readonly value: Learned } | { readonly ok: false; readonly reason: string };
@@ -78,9 +88,9 @@ export interface Discovery {
  * Learned intensities: known qualities only, integers 0..6, a force (hitze, naesse …) at most
  * scale + 2 – re-checked here whatever the parser let through.
  */
-function cappedQualities(base: readonly ContentPack[], form: Form): Record<string, number> | undefined {
+function cappedQualities(known: readonly QualitySpec[], form: Form): Record<string, number> | undefined {
   if (form.qualities === undefined) return undefined;
-  const kinds = new Map(base.flatMap((p) => p.qualities ?? []).map((q) => [q.id, q.kind]));
+  const kinds = new Map(known.map((q) => [q.id, q.kind]));
   const out: Record<string, number> = {};
   for (const [k, v] of Object.entries(form.qualities)) {
     const kind = kinds.get(k);
@@ -110,7 +120,8 @@ export function learn(
   }
 
   const aliases = [...new Set([normalize(text), normalize(form.name)])].filter((a) => a.length >= 3);
-  const qualities = cappedQualities(base, form);
+  const clean = sanitizeDelta([...base, learned], delta);
+  const qualities = cappedQualities([...base, learned].flatMap((p) => p.qualities ?? []).concat(clean.qualities ?? []), form);
   const spec = (tags: readonly string[], verbs: readonly string[]): FormSpec => ({
     id,
     name: form.name,
@@ -134,25 +145,45 @@ export function learn(
     ...(discovery === undefined ? {} : { discoveredBy: discovery.by.slice(0, 40), discoveredAt: discovery.at.slice(0, 24) }),
   });
 
-  const newTagIds = new Set(delta.tags.map((t) => t.id));
-  const newVerbIds = new Set(delta.verbs.map((v) => v.id));
+  const newTagIds = new Set(clean.tags.map((t) => t.id));
+  const newVerbIds = new Set(clean.verbs.map((v) => v.id));
+  const newQualities = clean.qualities ?? [];
+  const noNewVerb = (t: TagSpec): TagSpec => (t.grants?.some((g) => newVerbIds.has(g)) === true ? stripGrants(t, (g) => newVerbIds.has(g)) : t);
   // Try the full proposal first, then fall back to more conservative variants.
-  const attempts: { tags: readonly TagSpec[]; verbs: readonly VerbSpec[]; formTags: readonly string[]; formVerbs: readonly string[] }[] = [
-    { tags: delta.tags, verbs: delta.verbs, formTags: form.tags, formVerbs: form.verbs },
-    { tags: delta.tags, verbs: [], formTags: form.tags, formVerbs: form.verbs.filter((v) => !newVerbIds.has(v)) },
-    { tags: [], verbs: [], formTags: form.tags.filter((t) => !newTagIds.has(t)), formVerbs: form.verbs.filter((v) => !newVerbIds.has(v)) },
+  const attempts: {
+    tags: readonly TagSpec[];
+    verbs: readonly VerbSpec[];
+    qualities: readonly QualitySpec[];
+    formTags: readonly string[];
+    formVerbs: readonly string[];
+  }[] = [
+    { tags: clean.tags, verbs: clean.verbs, qualities: newQualities, formTags: form.tags, formVerbs: form.verbs },
+    { tags: clean.tags.map(noNewVerb), verbs: [], qualities: newQualities, formTags: form.tags, formVerbs: form.verbs.filter((v) => !newVerbIds.has(v)) },
+    { tags: [], verbs: [], qualities: [], formTags: form.tags.filter((t) => !newTagIds.has(t)), formVerbs: form.verbs.filter((v) => !newVerbIds.has(v)) },
   ];
   let lastReason = "Die Gestalt ließ sich nicht einordnen.";
   for (const a of attempts) {
     if (a.formTags.length === 0) continue;
-    const candidate: ContentPack = {
+    const packWith = (tags: readonly TagSpec[]): ContentPack => ({
       ...learned,
-      tags: [...learned.tags, ...a.tags.filter((t) => !learned.tags.some((x) => x.id === t.id))],
+      tags: [...learned.tags, ...tags.filter((t) => !learned.tags.some((x) => x.id === t.id))],
       verbs: [...learned.verbs, ...a.verbs.filter((v) => !learned.verbs.some((x) => x.id === v.id))],
+      ...(a.qualities.length === 0 && learned.qualities === undefined
+        ? {}
+        : { qualities: [...(learned.qualities ?? []), ...a.qualities.filter((q) => !(learned.qualities ?? []).some((x) => x.id === q.id))] }),
       forms: [...learned.forms.filter((f) => f.id !== id), spec(a.formTags, a.formVerbs)],
-    };
-    const onto = compile(base, candidate);
+    });
+    let candidate = packWith(a.tags);
+    let onto = compile(base, candidate);
     if (onto === undefined) continue;
+    // Affordance for learned abilities: a property grants only what a bare carrier of it can do.
+    const probe = onto;
+    const honest = a.tags.map((t) => stripGrants(t, (g) => !probe.compileForm(probeForm(t.id)).verbs.includes(g)));
+    if (honest.some((t, i) => t !== a.tags[i])) {
+      candidate = packWith(honest);
+      onto = compile(base, candidate);
+      if (onto === undefined) continue;
+    }
     const compiled = onto.formById(id);
     if (compiled === undefined) continue;
     if (onto.compileForm(compiled).verbs.length === 0) {
@@ -176,10 +207,50 @@ export function learn(
     }
     return {
       ok: true,
-      value: { ...final, isNew: true, newTags: a.tags.map((t) => t.label), newVerbs: a.verbs.map((v) => v.label) },
+      value: { ...final, isNew: true, newTags: a.tags.map((t) => t.label), newVerbs: a.verbs.map((v) => v.label), newQualities: a.qualities.map((q) => q.label) },
     };
   }
   return { ok: false, reason: lastReason };
+}
+
+/** A bare carrier of one property – what it grants must work for this. */
+function probeForm(tag: string): Form {
+  return { id: `probe:${tag}`, name: tag, archetype: "orb", scale: 3, plane: "materie", tags: [tag], not: [], verbs: [], immune: [], weak: [], origin: "komponiert" };
+}
+
+function stripGrants(t: TagSpec, drop: (verb: string) => boolean): TagSpec {
+  const { grants, ...rest } = t;
+  if (grants?.some(drop) !== true) return t;
+  const left = grants.filter((g) => !drop(g));
+  return left.length > 0 ? { ...rest, grants: left } : rest;
+}
+
+/**
+ * The authoritative shape check for a proposal, whatever the parser let through: limits, known
+ * references, small levers, capped forces. Affordance of grants is checked after compiling.
+ */
+export function sanitizeDelta(packs: readonly ContentPack[], delta: LearningDelta): LearningDelta {
+  const known = new Map(packs.flatMap((p) => p.qualities ?? []).map((q) => [q.id, q]));
+  const qualities = (delta.qualities ?? [])
+    .filter((q) => /^q_[a-z0-9_]{2,48}$/.test(q.id) && !known.has(q.id) && q.label.length >= 3 && q.label.length <= 30)
+    .slice(0, MAX_NEW_QUALITIES)
+    .map((q): QualitySpec => ({ id: q.id, label: q.label, kind: q.kind, default: 0, ...(q.hint === undefined ? {} : { hint: q.hint.slice(0, 160) }) }));
+  for (const q of qualities) known.set(q.id, q);
+  const verbs = delta.verbs.slice(0, 1).map((v): VerbSpec => ({ ...v, leverage: Math.max(1, Math.min(2, Math.round(v.leverage))) }));
+  const verbLever = new Map(packs.flatMap((p) => p.verbs).map((v) => [v.id, v.leverage]));
+  for (const v of verbs) verbLever.set(v.id, v.leverage);
+  const capped = (t: TagSpec): TagSpec => {
+    const { qualities: set, ...rest } = t;
+    const levels: Record<string, number> = {};
+    for (const [k, n] of Object.entries(set ?? {})) {
+      const q = known.get(k);
+      if (q === undefined || !Number.isFinite(n)) continue;
+      levels[k] = Math.max(0, Math.min(q.kind === "kraft" ? LEARNED_TAG_FORCE : 6, Math.round(n)));
+    }
+    return Object.keys(levels).length > 0 ? { ...rest, qualities: levels } : rest;
+  };
+  const tags = delta.tags.slice(0, MAX_NEW_TAGS).map((t) => capped(stripGrants(t, (g) => (verbLever.get(g) ?? 99) > 2)));
+  return { tags, verbs, qualities };
 }
 
 function compile(base: readonly ContentPack[], learned: ContentPack): Ontology | undefined {
@@ -212,8 +283,10 @@ export function reconcileLearned(base: readonly ContentPack[], pack: ContentPack
   const verbs = ids((p) => p.verbs);
   const modifiers = ids((p) => p.modifiers);
   const forms = ids((p) => p.forms);
+  const qualities = ids((p) => p.qualities ?? []);
   const trimmed: ContentPack = {
     ...pack,
+    ...(pack.qualities === undefined ? {} : { qualities: pack.qualities.filter((q) => !qualities.has(q.id)) }),
     tags: pack.tags.filter((t) => !tags.has(t.id)),
     verbs: pack.verbs.filter((v) => !verbs.has(v.id)),
     modifiers: pack.modifiers.filter((m) => !modifiers.has(m.id)),

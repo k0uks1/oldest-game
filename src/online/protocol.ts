@@ -5,7 +5,7 @@
  * The server holds the game state and the API key and resolves every move with the same
  * `Resolver` the hot-seat UI uses; clients only send text and show what comes back.
  */
-import type { ContentPack, FormSpec, ModifierSpec, RulingSpec, TagSpec, VerbSpec } from "../engine/ontology/pack.ts";
+import type { ContentPack, FormSpec, ModifierSpec, QualitySpec, RulingSpec, TagSpec, VerbSpec } from "../engine/ontology/pack.ts";
 import type { GameState, PlayerId } from "../engine/types.ts";
 import type { Turn } from "../game/resolver.ts";
 
@@ -88,6 +88,8 @@ export interface PackDelta {
   readonly modifiers: readonly ModifierSpec[];
   readonly forms: readonly FormSpec[];
   readonly rulings: readonly RulingSpec[];
+  /** Learned intensities (optional: servers before v0.49 send none). */
+  readonly qualities?: readonly QualitySpec[];
 }
 
 export type ErrorCode = "access" | "noroom" | "full" | "limit" | "bad" | "turn" | "busy" | "claude";
@@ -217,11 +219,12 @@ export function packDelta(before: ContentPack, after: ContentPack): PackDelta {
     modifiers: changed(before.modifiers, after.modifiers, id),
     forms: changed(before.forms, after.forms, id),
     rulings: changed(before.rulings ?? [], after.rulings ?? [], rulingKey),
+    qualities: changed(before.qualities ?? [], after.qualities ?? [], id),
   };
 }
 
 export function isEmptyDelta(d: PackDelta): boolean {
-  return d.tags.length + d.verbs.length + d.modifiers.length + d.forms.length + d.rulings.length === 0;
+  return d.tags.length + d.verbs.length + d.modifiers.length + d.forms.length + d.rulings.length + (d.qualities ?? []).length === 0;
 }
 
 function upsert<T>(list: readonly T[], add: readonly T[], key: (x: T) => string): T[] {
@@ -239,5 +242,6 @@ export function applyPackDelta(pack: ContentPack, d: PackDelta): ContentPack {
     modifiers: upsert(pack.modifiers, d.modifiers, id),
     forms: upsert(pack.forms, d.forms, id),
     rulings: upsert(pack.rulings ?? [], d.rulings, rulingKey),
+    ...(d.qualities === undefined || d.qualities.length === 0 ? {} : { qualities: upsert(pack.qualities ?? [], d.qualities, id) }),
   };
 }

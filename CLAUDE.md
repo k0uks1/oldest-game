@@ -67,6 +67,11 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
    New tags must have existing parents; learned mechanisms have leverage ≤ 2; learned intensities are known
    qualities 0–6, forces (`kraft`) at most scale + 2 (clamped in the parser *and* in `learn()`). Never write learned content
    anywhere without this validation (the local server re-validates on `PUT /api/learned`).
+   **Open property format** (`new_properties` with `art` ist/kann/merkmal, `verleiht`, `intensitaet`; `new_qualities`
+   kraft/schutz; `new_mechanism` with `braucht`, `kraft`/`gegen`): `sanitizeDelta()` is the authority – ≤ 3 tags,
+   ≤ 2 qualities (`q_…`, default 0), learned tags carry forces ≤ `LEARNED_TAG_FORCE` and grant only mechanisms with
+   leverage ≤ 2 that a bare carrier can actually perform (probe form after compiling). Learned qualities travel in
+   pack deltas (`PackDelta.qualities`).
 6. **Scale:** content must work with tens of thousands of tags/forms. Avoid O(tags) or
    O(forms) work per check/lookup; use the ontology's indexes (`usersOf`, tries, trigram index).
    `tests/scale.test.ts` guards budgets.

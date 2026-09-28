@@ -1,6 +1,6 @@
 {
   "name": "oldest-game",
-  "version": "0.48.0",
+  "version": "0.49.0",
   "private": true,
   "description": "The Oldest Game – ein Duell der Vorstellungskraft für zwei Spieler. Deterministische Regel-Engine, Pixel-Arena, Claude Haiku als Erzähler und Klassifikator.",
   "type": "module",

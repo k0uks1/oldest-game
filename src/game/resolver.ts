@@ -93,7 +93,7 @@ export class Resolver {
     const r = await parseWithClaude(this.onto, this.host.llm(), text);
     if (r === undefined) return { ok: false, reason: "Diese Gestalt lässt sich nicht fassen. Beschreibe sie anders." };
     // A plain lexicon entry (no changes, nothing new) is not worth remembering – play the original.
-    if (r.base !== null && r.delta.tags.length === 0 && r.delta.verbs.length === 0 && sameShape(r.form, r.base)) {
+    if (r.base !== null && r.delta.tags.length === 0 && r.delta.verbs.length === 0 && (r.delta.qualities ?? []).length === 0 && sameShape(r.form, r.base)) {
       return { ok: true, form: r.base, verb: r.intendedVerb, novelty: null };
     }
     // Claude's SVG sketch → 32×32 sprite (invalid or missing: the archetype stays the fallback).
@@ -107,7 +107,7 @@ export class Resolver {
       this.learned = l.value.pack;
       this.host.saveLearned(l.value.pack);
     }
-    const extra = [...l.value.newTags, ...l.value.newVerbs];
+    const extra = [...l.value.newTags, ...l.value.newVerbs, ...(l.value.newQualities ?? [])];
     // A true discovery: something the lexicon had no anchor for, or that needed new properties.
     const isDiscovery = l.value.isNew && (extra.length > 0 || r.base === null);
     return { ok: true, form: l.value.form, verb: r.intendedVerb, novelty: isDiscovery ? { kind: "discovery", extra } : null };
