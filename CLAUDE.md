@@ -78,6 +78,12 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
   Inheritance must be acyclic; implications may cycle.
 - **Form closure** = declared tags + ancestors + implications − (`not` tags and their descendants).
 - **Verb** `targets` / `blockedBy` match against the closure, so a rule on `metall` covers every metal.
+- **Affordanz** (`VerbSpec.requires {any, all, none, qualities}`): what the *attacker* must be to use a mechanism at all –
+  checked against its closure, qualities only where actually set (never a default). Form verbs = (assigned ∪ granted),
+  filtered by `affords()`; `lacks()` says why not („bräuchte Säure“). Abilities are tags in group `faehigkeit`
+  (`scharf ⇒ zerschneidet`, `laut ⇒ uebertoent`, `tueckisch ⇒ taeuscht` …) that grant their mechanism. The parser drops
+  mechanisms Claude assigns but the form cannot perform and asks once more when none are left (`abilityCorrection`).
+  A new mechanism in content needs `requires`; a new form gets the ability tag, not just the verb.
 - **Weakness** hit = a verb target at or above a declared weakness tag (`weak: eisen`, verb targets `metall` ✓).
 - **Qualities** (`qualities.json`, levels 0–6): graded properties, `kraft` (hitze, naesse, kaelte) vs `schutz`
   (hitzefest, haerte, kaeltefest). Set on tags (most specific tag wins: `stahl` over `metall`; unrelated → max),
@@ -88,7 +94,7 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
 
 ### Resolution (`checkCounter`)
 
-surface (targets ∩ closure) → blockers / immunity → reach (`reach: "nah"` verbs miss a `fliegt` target unless the
+affordance (attacker can do it at all, else „kann nicht … – bräuchte …“) → surface (targets ∩ closure) → blockers / immunity → reach (`reach: "nah"` verbs miss a `fliegt` target unless the
 attacker flies or is ≥ 2 steps larger) → intensity (every `needs {by, vs}`: attacker's `by` ≥ target's `vs`, surplus
 ≥ 2 on all → +1 "Übermacht") → scale rules (max +2 up; more than 3 down only with
 mythic leverage ≥ 4) → power = scale + leverage (+2 weakness) ≥ target scale. Game layer adds: echo

@@ -24,6 +24,13 @@ export interface CompiledVerb {
   readonly spec: VerbSpec;
   readonly targets: TagSet;
   readonly blocked: TagSet;
+  /** Attacker requirements ("Affordanz"), compiled; undefined = anyone may use it. */
+  readonly requires?: {
+    readonly any: TagSet;
+    readonly all: TagSet;
+    readonly none: TagSet;
+    readonly qualities: readonly (readonly [string, number])[];
+  };
 }
 
 export interface CompiledForm {
@@ -153,10 +160,15 @@ export class Ontology {
           errors.push(`Mechanismus „${v.id}“ doppelt definiert (${p.id}).`);
           continue;
         }
+        const req = v.requires;
+        const tagsOf = (ids: readonly string[] | undefined, part: string): TagSet => fromIterable((ids ?? []).map((t) => ref(t, `Mechanismus ${v.id}.requires.${part}`)).filter(isNum));
         verbs.set(v.id, {
           spec: v,
           targets: fromIterable(v.targets.map((t) => ref(t, `Mechanismus ${v.id}.targets`)).filter(isNum)),
           blocked: fromIterable((v.blockedBy ?? []).map((t) => ref(t, `Mechanismus ${v.id}.blockedBy`)).filter(isNum)),
+          ...(req === undefined
+            ? {}
+            : { requires: { any: tagsOf(req.any, "any"), all: tagsOf(req.all, "all"), none: tagsOf(req.none, "none"), qualities: Object.entries(req.qualities ?? {}) } }),
         });
         if (v.targets.length === 0) errors.push(`Mechanismus ${v.id} hat keine Ziele.`);
       }
@@ -250,6 +262,7 @@ export class Ontology {
       for (const n of v.spec.needs ?? []) {
         for (const q of [n.by, n.vs]) if (!qualities.has(q)) errors.push(`Mechanismus ${v.spec.id}.needs: unbekannte Qualität „${q}“.`);
       }
+      for (const q of Object.keys(v.spec.requires?.qualities ?? {})) if (!qualities.has(q)) errors.push(`Mechanismus ${v.spec.id}.requires: unbekannte Qualität „${q}“.`);
     }
 
     // ── Combination rules ───────────────────────────────────────────────
@@ -499,21 +512,48 @@ export class Ontology {
     const cached = this.compiled.get(form);
     if (cached !== undefined) return cached;
     const { closure, applied } = this.applyCombos(this.expand(form.tags, form.not));
-    const verbs = new Set<string>();
-    for (const v of form.verbs) if (this.verbs.has(v)) verbs.add(v);
-    for (const t of intersection(closure, this.grantTags)) for (const g of this.grantsByTag.get(t) ?? []) verbs.add(g);
+    const qualities = this.resolveQualities(closure, applied, form.qualities);
+    const candidates = new Set<string>();
+    for (const v of form.verbs) if (this.verbs.has(v)) candidates.add(v);
+    for (const t of intersection(closure, this.grantTags)) for (const g of this.grantsByTag.get(t) ?? []) candidates.add(g);
+    // "Affordanz": assigned or granted, a mechanism only counts if the form can actually do it
+    const verbs = [...candidates].filter((v) => this.affords(v, closure, qualities));
     const compiled: CompiledForm = {
       form,
       closure,
-      verbs: [...verbs],
+      verbs,
       weak: fromIterable(form.weak.map((w) => this.tagIndex.get(w)).filter(isNum)),
       immune: new Set(form.immune),
       startle: intersection(closure, this.startleTags).map((tag) => ({ tag, ...(this.startleByTag.get(tag) ?? { verbs: new Set<string>(), tags: fromIterable([]) }) })),
-      qualities: this.resolveQualities(closure, applied, form.qualities),
+      qualities,
       combos: applied.map((c) => c.id),
     };
     this.compiled.set(form, compiled);
     return compiled;
+  }
+
+  /** Does a form with this closure and these (set) qualities meet the mechanism's requirements? */
+  affords(verbId: string, closure: TagSet, qualities: ReadonlyMap<string, number>): boolean {
+    const r = this.verbs.get(verbId)?.requires;
+    if (r === undefined) return true;
+    if (r.none.length > 0 && intersection(r.none, closure).length > 0) return false;
+    if (r.all.length > 0 && intersection(r.all, closure).length < r.all.length) return false;
+    if (r.any.length === 0 && r.qualities.length === 0) return true;
+    return intersection(r.any, closure).length > 0 || r.qualities.some(([q, min]) => (qualities.get(q) ?? -1) >= min);
+  }
+
+  /** Why a form cannot use a mechanism (for "Warum?"), or undefined when it can. */
+  lacks(form: Form, verbId: string): string | undefined {
+    const r = this.verbs.get(verbId)?.requires;
+    const c = this.compileForm(form);
+    if (r === undefined || this.affords(verbId, c.closure, c.qualities)) return undefined;
+    const label = (set: TagSet): string => [...set].map((i) => this.tagLabel(i)).join(" / ");
+    const bad = intersection(r.none, c.closure);
+    if (bad.length > 0) return `ist ${bad.map((i) => this.tagLabel(i)).join(" und ")}`;
+    const missingAll = [...r.all].filter((i) => !has(c.closure, i));
+    if (missingAll.length > 0) return `ist nicht ${missingAll.map((i) => this.tagLabel(i)).join(" und ")}`;
+    const q = r.qualities.map(([id, min]) => `${this.qualities.get(id)?.label ?? id} ≥ ${String(min)}`);
+    return `bräuchte ${[label(r.any), ...q].filter((x) => x !== "").join(" / ")}`;
   }
 
   /**

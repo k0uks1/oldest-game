@@ -66,9 +66,9 @@ describe("SVG sketches for new things", () => {
   });
 
   it("the parser keeps a sketch only for brand-new, non-living forms", () => {
-    const thing = formFromLlm(onto, { name: "Zahnseide-Automat", base: null, scale: 1, plane: "materie", archetype: "box", properties: ["metall", "maschine"], mechanisms: ["fesselt"], skizze: SKETCH_EXAMPLES.kuehlschrank }, "Zahnseide-Automat");
+    const thing = formFromLlm(onto, { name: "Zahnseide-Automat", base: null, scale: 1, plane: "materie", archetype: "box", properties: ["metall", "maschine", "bindend"], mechanisms: ["fesselt"], skizze: SKETCH_EXAMPLES.kuehlschrank }, "Zahnseide-Automat");
     assert.ok(thing?.sketch?.includes("<rect"));
-    const beast = formFromLlm(onto, { name: "Glitzerotter", base: null, scale: 2, plane: "leben", archetype: "beast", properties: ["saeugetier"], mechanisms: ["zerreisst"], skizze: SKETCH_EXAMPLES.kuehlschrank }, "Glitzerotter");
+    const beast = formFromLlm(onto, { name: "Glitzerotter", base: null, scale: 2, plane: "leben", archetype: "beast", properties: ["saeugetier", "klauen"], mechanisms: ["zerreisst"], skizze: SKETCH_EXAMPLES.kuehlschrank }, "Glitzerotter");
     assert.ok(beast);
     assert.equal(beast.sketch, undefined);
   });
@@ -125,7 +125,7 @@ describe("learned things keep their colour hints", () => {
     assert.ok(svg);
     const rows = validPixelArt(rasterizeSketch(svg));
     assert.ok(rows);
-    const r = formFromLlm(onto, { name: "Blauer Zahnseide-Automat", base: null, scale: 1, plane: "materie", archetype: "box", properties: ["metall", "maschine"], mechanisms: ["fesselt"], skizze: svg }, "Blauer Zahnseide-Automat");
+    const r = formFromLlm(onto, { name: "Blauer Zahnseide-Automat", base: null, scale: 1, plane: "materie", archetype: "box", properties: ["metall", "maschine", "bindend"], mechanisms: ["fesselt"], skizze: svg }, "Blauer Zahnseide-Automat");
     assert.ok(r);
     const l = learn([core], emptyLearnedPack(), "Blauer Zahnseide-Automat", { ...r.form, sprite: rows, sketch: svg }, r.delta);
     assert.ok(l.ok);
