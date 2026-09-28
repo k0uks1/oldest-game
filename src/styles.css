@@ -1196,3 +1196,172 @@ input,
   letter-spacing: 0.05em;
   min-height: 0;
 }
+
+/* ── Form card (grimoire, overview under the input line) ─────────────── */
+.grimoire .entry[role="button"] {
+  cursor: pointer;
+}
+.grimoire .entry[role="button"]:hover .ename,
+.grimoire .entry.open .ename {
+  color: var(--rune);
+}
+.form-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(20, 12, 34, 0.7);
+  font-size: 17px;
+  animation: card-in 0.25s ease-out;
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.form-card.learned {
+  border-color: rgba(240, 200, 80, 0.3);
+}
+.card-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.card-sprite {
+  image-rendering: pixelated;
+  flex: none;
+  filter: drop-shadow(0 0 6px rgba(200, 160, 255, 0.25));
+}
+.card-title h3 {
+  margin: 0;
+  font-family: var(--title);
+  font-weight: normal;
+  font-size: 28px;
+  line-height: 1;
+  color: var(--text);
+}
+.form-card.learned .card-title h3 {
+  color: var(--gold);
+}
+.card-sub,
+.card-meta {
+  color: var(--muted);
+  font-size: 16px;
+}
+.card-row,
+.card-variant {
+  display: grid;
+  grid-template-columns: 5.5em 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+.card-key {
+  color: var(--faint);
+  text-align: right;
+}
+.card-val {
+  color: var(--text);
+}
+.card-val small {
+  color: var(--muted);
+  font-size: 15px;
+}
+.card-row.weak .card-val {
+  color: var(--bad);
+}
+.chip {
+  display: inline-block;
+  margin: 1px 3px 1px 0;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 16px;
+}
+.chip.mod {
+  color: var(--gold);
+  border-color: rgba(240, 200, 80, 0.35);
+}
+.chip.plus {
+  color: var(--good);
+}
+.chip.minus {
+  color: var(--bad);
+}
+.chip.force {
+  color: var(--ember);
+}
+.chip.guard {
+  color: var(--p0);
+}
+.card-lore {
+  margin: 6px 0 0;
+  font-style: italic;
+  color: #c8b8e8;
+  line-height: 1.25;
+}
+.card-lore.tone-albern,
+.card-lore.tone-heiter {
+  color: #e8d8a8;
+}
+.card-lore.waiting {
+  color: var(--faint);
+  animation: breathe 1.3s ease-in-out infinite;
+}
+
+/* the overview: one quiet line under the input, unfolds into the card */
+.peek {
+  width: min(560px, 100%);
+  margin: 2px auto 0;
+  font-size: 17px;
+  color: var(--muted);
+}
+.peek summary {
+  cursor: pointer;
+  list-style: none;
+  text-align: center;
+  padding: 2px 0;
+  color: var(--faint);
+}
+.peek summary::-webkit-details-marker {
+  display: none;
+}
+.peek summary::before {
+  content: "▾ ";
+  display: inline-block;
+  transition: transform 0.2s;
+  transform: rotate(-90deg);
+}
+.peek[open] summary::before {
+  transform: none;
+}
+.peek summary:hover,
+.peek[open] summary {
+  color: var(--rune);
+}
+.peek-mods {
+  color: var(--gold);
+  opacity: 0.8;
+}
+.command {
+  position: relative;
+}
+/* the unfolded card floats above the input line (over the arena floor) instead of pushing the page */
+.peek .form-card {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 24px));
+  max-height: min(52vh, 460px);
+  overflow: auto;
+  margin: 0;
+  z-index: 6;
+  text-align: left;
+  background: rgba(12, 8, 22, 0.95);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+}

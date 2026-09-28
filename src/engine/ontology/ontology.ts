@@ -1,6 +1,6 @@
 import { validPixelArt } from "../pixelart.ts";
 import { normalize } from "../text.ts";
-import { ARCHETYPES, PLANES, type Archetype, type Form, type Plane, type Scale } from "../types.ts";
+import { ARCHETYPES, PLANES, TONES, type Archetype, type Form, type Plane, type Scale, type Tone } from "../types.ts";
 import { Trie, TrigramIndex } from "./indexes.ts";
 import type { ComboSpec, ContentPack, FieldSpec, FormSpec, ModifierSpec, QualitySpec, RulingSpec, TagSpec, VerbSpec } from "./pack.ts";
 import { difference, fromIterable, has, intersection, union, type TagSet } from "./tagset.ts";
@@ -420,6 +420,7 @@ export class Ontology {
       ...(spec.art === undefined ? {} : { art: spec.art }),
       ...(spec.artPrompt === undefined ? {} : { artPrompt: spec.artPrompt }),
       ...(spec.flavor === undefined ? {} : { flavor: spec.flavor }),
+      ...presentationOf(spec),
       ...spriteOf(spec),
     };
   }
@@ -619,6 +620,22 @@ export class Ontology {
     return i !== undefined && has(this.compileForm(form).closure, i);
   }
 
+  /**
+   * The property a form's mechanism comes from ("zerschneidet" ← scharf), for the form card;
+   * undefined when it is the form's own. Named by the declared tag it comes through.
+   */
+  grantSource(form: Form, verbId: string): string | undefined {
+    const c = this.compileForm(form);
+    const carriers = intersection(c.closure, this.grantTags).filter((t) => this.grantsByTag.get(t)?.includes(verbId) === true);
+    if (carriers.length === 0) return undefined;
+    // name what the form was declared with: Zwiebel-Atem (which is reizend) rather than reizend
+    for (const id of form.tags) {
+      const i = this.tagIndex.get(id);
+      if (i !== undefined && carriers.some((t) => has(this.closureOf(i), t))) return id;
+    }
+    return this.tags[carriers[0] ?? -1]?.id;
+  }
+
   /** Expanded tag ids of a form (for UI / narration). */
   formTags(form: Form): string[] {
     return [...this.compileForm(form).closure].map((i) => this.tags[i]?.id ?? "").filter((x) => x !== "");
@@ -727,6 +744,18 @@ function findCycles(parents: readonly (readonly number[])[], tags: readonly TagS
   return errors;
 }
 
+
+/** Presentation fields, clipped: modifications ≤ 4 × 40 chars, legend ≤ 480 chars, a known tone. */
+function presentationOf(spec: FormSpec): Pick<Form, "base" | "mods" | "lore" | "tone"> {
+  const mods = (spec.mods ?? []).map((m) => m.trim().slice(0, 40)).filter((m) => m !== "").slice(0, 4);
+  const tone = TONES.find((t): t is Tone => t === spec.tone);
+  return {
+    ...(spec.base === undefined || spec.base === spec.id ? {} : { base: spec.base }),
+    ...(mods.length === 0 ? {} : { mods }),
+    ...(spec.lore === undefined || spec.lore.trim() === "" ? {} : { lore: spec.lore.trim().slice(0, 480) }),
+    ...(tone === undefined ? {} : { tone }),
+  };
+}
 
 function spriteOf(spec: FormSpec): { sprite?: readonly string[]; sketch?: string } {
   const sprite = spec.sprite === undefined ? undefined : validPixelArt(spec.sprite);

@@ -141,6 +141,10 @@ export function learn(
     ...(form.look === undefined ? {} : { look: form.look }),
     ...(form.art === undefined ? {} : { art: form.art }),
     ...(form.artPrompt === undefined ? {} : { artPrompt: form.artPrompt }),
+    ...(form.base === undefined ? {} : { base: form.base }),
+    ...(form.mods === undefined ? {} : { mods: form.mods }),
+    ...(form.lore === undefined ? {} : { lore: form.lore }),
+    ...(form.tone === undefined ? {} : { tone: form.tone }),
     ...(qualities === undefined ? {} : { qualities }),
     ...(discovery === undefined ? {} : { discoveredBy: discovery.by.slice(0, 40), discoveredAt: discovery.at.slice(0, 24) }),
   });

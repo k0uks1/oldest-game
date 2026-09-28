@@ -25,6 +25,7 @@ import { narrateEpilogueWithClaude } from "../src/llm/narrator.ts";
 import { narrateEnd } from "../src/narrate/offline.ts";
 import { applyPackDelta, packDelta, parseReport, WS_PATH, type AbsurdReport, type ArtItem, type ServerMsg } from "../src/online/protocol.ts";
 import { artRequest } from "./art-prompts.ts";
+import { LoreStore } from "./lore-store.ts";
 import { ArtService } from "./art-service.ts";
 import { handleLearned, readLearnedFile, writeLearnedFile } from "./learned.ts";
 import { OnlineHub, type HubArt, type HubLimits } from "./online.ts";
@@ -38,6 +39,9 @@ const FORM_STUB: Form = { id: "", name: "", archetype: "orb", scale: 1, plane: "
 const MAX_BODY = 1_000_000;
 
 /** Minimal .env reader (KEY=value, # comments, optional quotes). */
+
+/** Fresh legends per hour on this server, all players together (one short Claude call each). */
+const LORE_PER_HOUR = 120;
 export function readDotEnv(path: string): Record<string, string> {
   if (!existsSync(path)) return {};
   const out: Record<string, string> = {};
@@ -193,9 +197,13 @@ export function startServer(opts: ServerOptions): RunningServer {
     onDone: (listener) => pictures.onDone(listener),
   };
 
+  // Legends for form cards: written once per form by Claude, kept next to the learned pack.
+  const legends = new LoreStore({ write: (form) => resolver.legend(form), file: join(dirname(file), "lore.json"), perHour: LORE_PER_HOUR });
+
   const theHub = new OnlineHub(resolver, {
     report: storeReport,
     art: hubArt,
+    lore: (form) => legends.get(form),
     ...(opts.env.accessCode === undefined ? {} : { accessCode: opts.env.accessCode }),
     ...(opts.limits === undefined ? {} : { limits: opts.limits }),
     claude,

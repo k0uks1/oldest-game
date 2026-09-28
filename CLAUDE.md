@@ -41,6 +41,7 @@ src/
                      stage.ts = scenery types; stage-iso.ts (default) / stage-flat.ts (?flat)
   ui/                hot-seat UI, no framework; sound.ts = WebAudio synth (no audio files)
   game/resolver.ts   one turn, text → classification/learning → engine → referee → narration (DOM-free)
+  game/card.ts       the form card as data (is / has / can + via, intensities, weakness, base + modifications, legend)
   online/            WebSocket protocol (shared) + browser link with reconnect
 server/              Claude proxy core + Node game server (local.ts) + online rooms (online.ts) + Cloudflare Worker
 Dockerfile, compose.yml, Caddyfile   self-hosting (public mode: HOST=0.0.0.0 → rooms only, no browser proxy)
@@ -137,6 +138,16 @@ a freehand `skizze` only when no part fits. Unknown ids are dropped (`knownLook`
 
 > **Planned:** a fundamental engine rebuild (derived mechanisms/affordances, several axes instead of one scale,
 > context-aware modifiers). Collected absurd wins and directions: `docs/engine-neubau.md`. Add new cases there.
+
+### Form card, modifications, legends
+
+`formCard()` (pure) → `cardView()`: in the grimoire (a click unfolds an entry) and folded under the input line
+(`details.peek`, the form to beat; built only while open). A varied form keeps `base` (anchor id) and `mods` (the
+player's words: „mit Zwiebel-Atem“); the card shows both plus the tag difference. Claude's classifier also returns
+`ton` (ernst/heiter/albern) and, for new or varied forms, `geschichte` → `Form.lore` (≤ 480 chars, `loreOf`).
+Other forms get a legend on demand: `Resolver.legend` → `loreWithClaude`; online via `lore` messages from the
+server's `LoreStore` (`learned/lore.json`, one Claude call per form, hourly budget); the browser remembers them
+(`LoreClient`). Presentation only – the engine never reads base, mods, lore or tone.
 
 ## UI principles
 

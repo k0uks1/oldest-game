@@ -30,6 +30,11 @@ import { applyPackDelta, normalizeRoom, type ChronicleEntry, type ClientMsg, typ
 import { Music } from "./music.ts";
 import { addReport, clearReports, loadReports, reportsText } from "./reports.ts";
 import { ArtClient, httpTransport, socketTransport } from "./art-client.ts";
+import { formCard, SCALE_NAMES } from "../game/card.ts";
+import { artFor } from "../render/art.ts";
+import { renderSprite, type PixelImage } from "../render/sprite.ts";
+import { cardView } from "./card-view.ts";
+import { LoreClient } from "./lore-client.ts";
 import { Sound } from "./sound.ts";
 
 function sleep(ms: number): Promise<void> {
@@ -49,7 +54,6 @@ const VICTORY_TEXT: Readonly<Record<string, string>> = {
 /** How long a summon waits for its generated picture before the drawn sprite stands in. */
 const ART_WAIT_MS = 75_000;
 
-const SCALE_NAMES = ["", "winzig", "klein", "menschengroß", "groß", "gewaltig", "Landschaft", "Welt", "kosmisch"];
 
 function roman(n: number): string {
   const map: [number, string][] = [
@@ -165,6 +169,7 @@ export class App {
     plates: [HTMLElement, HTMLElement];
     caption: HTMLElement;
     why: HTMLElement;
+    peek: HTMLDetailsElement;
     round: HTMLElement;
     fields: HTMLElement;
     watchers: HTMLElement;
@@ -180,6 +185,8 @@ export class App {
   private server: ServerInfo | null = null;
   /** Generated pictures from the server (just in time); no transport = drawn sprites. */
   private readonly art = new ArtClient();
+  /** Legends for form cards (Claude directly in hot-seat, the server online). */
+  private readonly lore = new LoreClient();
   /** Set while playing online – the server resolves turns, this client only shows them. */
   private online: OnlineLink | null = null;
   /** Seats this client plays online (both on one device). */
@@ -269,6 +276,7 @@ export class App {
       plates: [h("div", { class: "plate left" }), h("div", { class: "plate right" })] as [HTMLElement, HTMLElement],
       caption: h("div", { class: "caption", role: "status" }),
       why: h("div", { class: "why-line" }),
+      peek: h("details", { class: "peek" }),
       round: h("div", { class: "round", role: "button", onclick: () => { this.showInfo("runde"); } }),
       fields: h("div", { class: "fields", role: "button", onclick: () => { this.showInfo("arena"); } }),
       watchers: h("div", { class: "watchers", title: "Zuschauer" }),
@@ -298,7 +306,7 @@ export class App {
         // Outcome line and narration: over the arena on wide screens, below it on phones – never on top of each other.
         h("div", { class: "tale" }, els.banner, els.caption, els.why),
       ),
-      h("section", { class: "command" }, h("div", { class: "line" }, input, enterHint)),
+      h("section", { class: "command" }, h("div", { class: "line" }, input, enterHint), els.peek),
       els.menu,
       els.modal,
     );
@@ -441,6 +449,8 @@ export class App {
     }
     // Hot-seat next to a picture-painting server: ask it over HTTP (rooms switch to the socket).
     if (this.server?.art === true) this.art.setTransport(httpTransport());
+    this.lore.direct((f) => this.resolver.legend(f));
+    this.setupPeek();
     this.art.onArrive = () => {
       this.arena.refreshArt();
     };
@@ -825,6 +835,7 @@ export class App {
     clear(this.els.fields);
     for (const f of fields) this.els.fields.append(h("span", { title: f.spec.hint }, f.spec.label));
     this.music.setTier(s.phase === "finished" ? 1 : arenaMinScale(s));
+    this.renderPeek(s.phase === "finished" ? null : target);
     this.arena.setWitnesses(Math.floor(s.history.length / 2) + this.discoveries.length);
     const line = this.els.input.parentElement;
     line?.classList.toggle("p0", s.active === 0);
@@ -846,6 +857,71 @@ export class App {
             ? full
             : short;
     }
+  }
+
+  // ── Form cards ──────────────────────────────────────────────────────────
+
+  /** Generated picture if there is one, else the drawn sprite. */
+  private spriteOf(form: Form): PixelImage {
+    return artFor(form) ?? renderSprite(this.onto, form);
+  }
+
+  /** A card for this form; the picture is swapped in when a generated one arrives. */
+  private cardFor(form: Form, opts: { lore: boolean; meta?: string; spritePx?: number }): HTMLElement {
+    const card = cardView(formCard(this.onto, form), {
+      sprite: this.spriteOf(form),
+      spritePx: opts.spritePx ?? 96,
+      ...(opts.lore ? { lore: this.lore.known(form) ?? this.lore.get(form) } : {}),
+      ...(opts.meta === undefined ? {} : { meta: opts.meta }),
+    });
+    if (this.art.coming(form)) {
+      this.art.want([form]);
+      void this.art.whenReady(form, 90_000).then((ok) => {
+        if (!ok || !card.isConnected) return;
+        const fresh = cardView(formCard(this.onto, form), { sprite: this.spriteOf(form), spritePx: opts.spritePx ?? 96 }).querySelector("canvas");
+        const old = card.querySelector("canvas");
+        if (fresh !== null && old !== null) old.replaceWith(fresh);
+      });
+    }
+    return card;
+  }
+
+  /** The overview under the input line: what stands in the arena, folded away by default. */
+  private peekForm: Form | null = null;
+
+  private setupPeek(): void {
+    const peek = this.els.peek;
+    try {
+      peek.open = localStorage.getItem("oldest-game:peek") === "1";
+    } catch {
+      peek.open = false;
+    }
+    peek.addEventListener("toggle", () => {
+      try {
+        localStorage.setItem("oldest-game:peek", peek.open ? "1" : "0");
+      } catch {
+        // not remembered – fine
+      }
+      this.fillPeek();
+    });
+  }
+
+  private renderPeek(target: Form | null): void {
+    if (target === this.peekForm) return;
+    this.peekForm = target;
+    this.fillPeek();
+  }
+
+  private fillPeek(): void {
+    const peek = this.els.peek;
+    const form = this.peekForm;
+    clear(peek);
+    peek.hidden = form === null;
+    if (form === null) return;
+    const mods = form.mods === undefined ? "" : ` · ${form.mods.join(" · ")}`;
+    peek.append(h("summary", { title: "Eigenschaften der Gestalt, die es zu besiegen gilt" }, h("span", { class: "peek-name" }, form.name), h("span", { class: "peek-mods" }, mods)));
+    // built only while open: a closed overview costs nothing (no legend asked for)
+    if (peek.open) peek.append(this.cardFor(form, { lore: true, spritePx: 72 }));
   }
 
   private renderHud(p: PlayerId): void {
@@ -974,6 +1050,7 @@ export class App {
     this.online.close();
     this.online = null;
     this.art.setTransport(this.server?.art === true ? httpTransport() : null);
+    this.lore.direct((f) => this.resolver.legend(f));
     this.seats = [];
     this.joined = false;
     this.showWatchers(0);
@@ -1065,6 +1142,7 @@ export class App {
         // every (re)connect asks again – pictures of a lost connection are not lost for good
         const link = this.online;
         this.art.setTransport(m.art && link !== null ? socketTransport((ids) => link.send({ t: "art", ids })) : null);
+        this.lore.socket((id) => link?.send({ t: "lore", id }) ?? false);
         if (m.state !== null) this.art.want(m.state.history.map((mv) => mv.form));
         this.showWatchers(m.watchers);
         this.adoptLearned(m.learned);
@@ -1157,6 +1235,9 @@ export class App {
         } catch {
           /* keep what we have */
         }
+        return;
+      case "lore":
+        this.lore.receive(m.id, m.text);
         return;
       case "art":
         this.art.receive(m.items);
@@ -1533,12 +1614,30 @@ export class App {
         const spec = learnedIds.has(f.id) ? this.learnedSpec(f.id) : undefined;
         const meta =
           spec?.discoveredBy === undefined ? null : `entdeckt von ${spec.discoveredBy}${spec.discoveredAt === undefined ? "" : ` · ${spec.discoveredAt}`}`;
+        // a click unfolds the card (picture, properties, legend); a second click folds it again
+        const open = (entry: HTMLElement): void => {
+          const next = entry.nextElementSibling;
+          if (next?.classList.contains("form-card") === true) {
+            next.remove();
+            entry.classList.remove("open");
+            return;
+          }
+          entry.classList.add("open");
+          entry.after(this.cardFor(f, { lore: true, ...(meta === null ? {} : { meta }) }));
+        };
         list.append(
           h(
             "div",
-            { class: `entry${learnedIds.has(f.id) ? " learned" : ""}` },
+            {
+              class: `entry${learnedIds.has(f.id) ? " learned" : ""}`,
+              role: "button",
+              title: "Aufklappen",
+              onclick: (e) => {
+                if (e.currentTarget instanceof HTMLElement) open(e.currentTarget);
+              },
+            },
             h("span", { class: "ename" }, `${learnedIds.has(f.id) ? "✦ " : ""}${f.name}`),
-            h("span", { class: "escale" }, SCALE_NAMES[f.scale] ?? ""),
+            h("span", { class: "escale" }, SCALE_NAMES[f.scale]),
             meta === null ? null : h("span", { class: "emeta" }, meta),
             f.flavor === undefined || !learnedIds.has(f.id) ? null : h("span", { class: "eflavor" }, f.flavor),
             this.debug

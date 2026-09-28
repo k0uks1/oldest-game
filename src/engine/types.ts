@@ -25,6 +25,10 @@ export type Archetype = (typeof ARCHETYPES)[number];
 /** Victory kinds (see VerbSpec.outcome) plus the two ways of getting away. */
 export type Outcome = VictoryKind | "entkommen" | "versteckt";
 
+/** How a form is meant: a knight is serious, a squeaky duck cheerful, the eight-armed drunkard absurd. */
+export const TONES = ["ernst", "heiter", "albern"] as const;
+export type Tone = (typeof TONES)[number];
+
 /** A fully resolved form ("Gestalt") that can appear in the arena. */
 export interface Form {
   /** Stable id (lexicon id or derived from normalised name). */
@@ -58,6 +62,13 @@ export interface Form {
   readonly art?: string;
   /** English picture description for the image service (a server generates `art` from it later). */
   readonly artPrompt?: string;
+  /** The lexicon form this one varies ("Gast mit Zwiebel-Atem" → gast). Presentation and grimoire only. */
+  readonly base?: string;
+  /** Modifications as the player meant them ("mit Zwiebel-Atem", "ungeladen") – shown on the form card. */
+  readonly mods?: readonly string[];
+  /** Short legend (3–4 sentences) in the form's own tone. Presentation only. */
+  readonly lore?: string;
+  readonly tone?: Tone;
 }
 
 /**
