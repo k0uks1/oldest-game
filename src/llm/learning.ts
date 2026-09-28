@@ -217,6 +217,59 @@ export function learn(
   return { ok: false, reason: lastReason };
 }
 
+/** What a judgement adds to an already learned form. */
+export interface Amendment {
+  readonly id: string;
+  readonly tags: readonly string[];
+  readonly verbs?: readonly string[];
+  readonly qualities?: Readonly<Record<string, number>>;
+}
+
+/**
+ * Add properties (and new vocabulary) to learned forms – the judge's way of making a verdict
+ * follow from the rules. Validated like `learn`: the pack must compile, learned abilities grant
+ * only what their carriers can do, and every amended form keeps a mechanism and a counter.
+ * Core forms are never touched. Undefined = rejected (nothing changes).
+ */
+export function amend(base: readonly ContentPack[], learned: ContentPack, amendments: readonly Amendment[], delta: LearningDelta): { onto: Ontology; pack: ContentPack } | undefined {
+  const clean = sanitizeDelta([...base, learned], delta);
+  const known = [...base, learned].flatMap((p) => p.qualities ?? []).concat(clean.qualities ?? []);
+  const changed = new Map<string, FormSpec>();
+  for (const a of amendments) {
+    const spec = learned.forms.find((f) => f.id === a.id);
+    if (spec === undefined || !a.id.startsWith("g:")) return undefined;
+    const merged = { ...(spec.qualities ?? {}), ...(a.qualities ?? {}) };
+    const capped = cappedQualities(known, { ...probeForm(""), scale: spec.scale as Form["scale"], qualities: merged });
+    const tags = [...new Set([...spec.tags, ...a.tags])];
+    const verbs = [...new Set([...(spec.verbs ?? []), ...(a.verbs ?? [])])];
+    changed.set(a.id, { ...spec, tags, ...(verbs.length > 0 ? { verbs } : {}), ...(capped === undefined ? {} : { qualities: capped }) });
+  }
+  const packWith = (tags: readonly TagSpec[]): ContentPack => ({
+    ...learned,
+    tags: [...learned.tags, ...tags.filter((t) => !learned.tags.some((x) => x.id === t.id))],
+    verbs: [...learned.verbs, ...clean.verbs.filter((v) => !learned.verbs.some((x) => x.id === v.id))],
+    ...((clean.qualities ?? []).length === 0 && learned.qualities === undefined
+      ? {}
+      : { qualities: [...(learned.qualities ?? []), ...(clean.qualities ?? []).filter((q) => !(learned.qualities ?? []).some((x) => x.id === q.id))] }),
+    forms: learned.forms.map((f) => changed.get(f.id) ?? f),
+  });
+  let pack = packWith(clean.tags);
+  let onto = compile(base, pack);
+  if (onto === undefined) return undefined;
+  const probe = onto;
+  const honest = clean.tags.map((t) => stripGrants(t, (g) => !probe.compileForm(probeForm(t.id)).verbs.includes(g)));
+  if (honest.some((t, i) => t !== clean.tags[i])) {
+    pack = packWith(honest);
+    onto = compile(base, pack);
+    if (onto === undefined) return undefined;
+  }
+  for (const id of changed.keys()) {
+    const f = onto.formById(id);
+    if (f === undefined || onto.compileForm(f).verbs.length === 0 || findCounters(onto, f).length === 0) return undefined;
+  }
+  return { onto, pack };
+}
+
 /** A bare carrier of one property – what it grants must work for this. */
 function probeForm(tag: string): Form {
   return { id: `probe:${tag}`, name: tag, archetype: "orb", scale: 3, plane: "materie", tags: [tag], not: [], verbs: [], immune: [], weak: [], origin: "komponiert" };

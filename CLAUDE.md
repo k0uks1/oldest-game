@@ -57,6 +57,10 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
    uncertain (`Failure.uncertain`, see `uncertainty()`), Claude may rule on that exact pair; the ruling
    is validated and stored as a precedent (`rulings` in the learned pack) and from then on replayed
    deterministically by the engine (`checkRuling`, scale caps still apply).
+   Second exception, the **judge** (`src/llm/judge.ts`, „Urteil“): when *both* forms are invented (learned `g:` forms),
+   Claude judges the pair outright – but must name what was missing in the open property format. `amend()` teaches
+   the forms (validated like `learn`), the engine re-checks with them, and only a remaining disagreement is stored as
+   a ruling. Once per pair; core forms are never judged or amended.
 2. **Classification is independent of the opponent.** `parseWithClaude` gets only the player's
    text plus lexicon anchors, never the current target. Results are cached per text.
 3. **Rules reference tags, never concrete forms.** No `if (form.id === "drache")` anywhere.
