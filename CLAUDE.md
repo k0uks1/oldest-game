@@ -62,7 +62,8 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
    `hash32`/`rng` from `engine/text.ts` for seeded randomness.
 5. **Live learning goes through `learn()`** (`src/llm/learning.ts`). Claude's proposals become a normal
    content pack ("gelernt") and must compile with the core, have a mechanism, a weakness and a counter.
-   New tags must have existing parents; learned mechanisms have leverage ≤ 2. Never write learned content
+   New tags must have existing parents; learned mechanisms have leverage ≤ 2; learned intensities are known
+   qualities 0–6, forces (`kraft`) at most scale + 2 (clamped in the parser *and* in `learn()`). Never write learned content
    anywhere without this validation (the local server re-validates on `PUT /api/learned`).
 6. **Scale:** content must work with tens of thousands of tags/forms. Avoid O(tags) or
    O(forms) work per check/lookup; use the ontology's indexes (`usersOf`, tries, trigram index).

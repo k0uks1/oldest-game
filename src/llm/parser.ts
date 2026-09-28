@@ -1,7 +1,7 @@
 import { ESCAPE } from "../engine/rules.ts";
 import { ITEM_IDS, knownLook, SYMBOL_IDS } from "../render/look.ts";
 import { SKETCH_EXAMPLES, SKETCH_GUIDE, sanitizeSketch } from "../render/svgsprite.ts";
-import type { Ontology } from "../engine/ontology/ontology.ts";
+import { MAX_LEVEL, type Ontology } from "../engine/ontology/ontology.ts";
 import { parseForm, suggest } from "../engine/parse.ts";
 import { clampScale } from "../engine/rules.ts";
 import { hash32, normalize } from "../engine/text.ts";
@@ -90,6 +90,11 @@ const TOOL: ToolDef = {
           required: ["name", "parents"],
         },
       },
+      intensitaet: {
+        type: "object",
+        additionalProperties: { type: "integer", minimum: 0, maximum: 6 },
+        description: "Nur wo die Gestalt deutlich vom Üblichen ihrer Eigenschaften abweicht: Qualität → Stufe 0–6 (IDs siehe INTENSITÄT).",
+      },
       aussehen: {
         type: "object",
         description: "Bauplan fürs Bild aus fertigen Teilen – statt einer skizze. Nur IDs aus den Listen.",
@@ -141,6 +146,7 @@ function systemPrompt(onto: Ontology): string {
     .slice(0, 400)
     .map((v) => `- ${v.spec.id}: ${v.spec.label} – ${v.spec.hint}`)
     .join("\n");
+  const qualities = [...onto.qualities.values()].map((q) => `- ${q.id} (${q.label}, ${q.kind === "kraft" ? "Kraft" : "Schutz"}): ${q.hint ?? ""}`).join("\n");
   const prompt = `Du bist der Klassifikator von „The Oldest Game“, einem Duell der Vorstellungskraft zwischen zwei Menschen
 (inspiriert von der Szene aus „Sandman“, in der Morpheus und ein Dämon abwechselnd zu etwas werden, das den anderen besiegt).
 
@@ -166,6 +172,12 @@ Nenne daher die spezifischste passende Eigenschaft.
 
 MECHANISMEN (antworte mit den IDs):
 ${verbs}
+
+INTENSITÄT (Stufe 0–6; Kräfte bringt ein Mechanismus mit, Festigkeiten schützen das Ziel):
+${qualities}
+Die Werte folgen meist aus den Eigenschaften (Feuer = hitze 2, Stein = haerte 3, Stahl = haerte 4). Setze intensitaet nur,
+wenn die Gestalt deutlich abweicht: Kerze = hitze 1, Schweißbrenner = hitze 4, Sonne = hitze 6, Pfütze = naesse 1,
+Ozean = naesse 5, Diamant = haerte 6, Eisbär = kaeltefest 4. Kräfte höchstens Stufe + 2.
 
 DAZULERNEN: Das Spiel lernt aus deinen Einordnungen. Wenn eine wesentliche Eigenschaft fehlt, schlage sie mit new_properties vor
 (immer unter bestehende Eigenschaften eingeordnet). Einen neuen Mechanismus schlägst du nur vor, wenn wirklich keiner passt.
@@ -201,9 +213,26 @@ export function anchorsFor(onto: Ontology, text: string, limit = 5): Form[] {
 }
 
 function anchorLine(onto: Ontology, f: Form): string {
-  const verbs = onto.compileForm(f).verbs.join(", ");
+  const c = onto.compileForm(f);
   const tags = f.tags.map((t) => onto.tagLabel(t)).join(", ");
-  return `- ${f.id}: ${f.name} · Stufe ${String(f.scale)} · ${f.plane} · Eigenschaften: ${tags} · Mechanismen: ${verbs}`;
+  const levels = [...c.qualities].map(([q, n]) => `${q} ${String(n)}`).join(", ");
+  return `- ${f.id}: ${f.name} · Stufe ${String(f.scale)} · ${f.plane} · Eigenschaften: ${tags} · Mechanismen: ${c.verbs.join(", ")}${levels === "" ? "" : ` · Intensität: ${levels}`}`;
+}
+
+/**
+ * Claude's `intensitaet` → known qualities, integers 0..6; a force (hitze, naesse, kaelte) at most
+ * scale + 2 – a match cannot burn like the sun, whatever the player claims.
+ */
+export function qualitiesOf(onto: Ontology, raw: unknown, scale: number): Record<string, number> | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const q = onto.qualities.get(k);
+    if (q === undefined || typeof v !== "number" || !Number.isFinite(v)) continue;
+    const cap = q.kind === "kraft" ? Math.min(MAX_LEVEL, scale + 2) : MAX_LEVEL;
+    out[k] = Math.max(0, Math.min(cap, Math.round(v)));
+  }
+  return Object.keys(out).length === 0 ? undefined : out;
 }
 
 const CACHE_PREFIX = "oldest-game:parse:";
@@ -294,7 +323,8 @@ export function formFromLlm(onto: Ontology, input: unknown, text: string): LlmPa
   if (onto.compileForm(form).verbs.length === 0 && delta.verbs.length === 0) return undefined;
   const iv = typeof o["intended_mechanism"] === "string" ? (resolveVerb(o["intended_mechanism"]) ?? null) : null;
   const look = lookOf(o["aussehen"]) ?? base?.look;
-  const looked: Form = look === undefined ? form : { ...form, look };
+  const qualities = qualitiesOf(onto, o["intensitaet"], form.scale) ?? base?.qualities;
+  const looked: Form = { ...form, ...(look === undefined ? {} : { look }), ...(qualities === undefined ? {} : { qualities }) };
   // an emblem is the better picture – a freehand sketch only where no part fits
   const sketch = look?.emblem === undefined ? sketchOf(onto, base, looked, o["skizze"]) : undefined;
   return { form: looked, intendedVerb: iv, base, unresolved, fromCache: false, delta, ...(sketch === undefined ? {} : { sketch }) };

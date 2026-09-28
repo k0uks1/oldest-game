@@ -135,6 +135,47 @@ describe("learned weaknesses", () => {
   });
 });
 
+describe("learned intensities", () => {
+  const brenner = {
+    name: "Schweißbrenner",
+    base: null,
+    scale: 2,
+    plane: "materie",
+    archetype: "weapon",
+    properties: ["Feuer", "Stahl"],
+    mechanisms: ["schmilzt"],
+    weaknesses: ["Stahl"],
+    intended_mechanism: null,
+    intensitaet: { hitze: 9, hitzefest: 4, quatsch: 3 },
+  };
+
+  it("Claude's levels are clamped: forces at most scale + 2, unknown qualities dropped", () => {
+    const r = formFromLlm(onto, brenner, "Schweißbrenner");
+    assert.ok(r);
+    assert.deepEqual(r.form.qualities, { hitze: 4, hitzefest: 4 });
+  });
+
+  it("a learned welding torch melts the anchor a torch cannot", async () => {
+    const { checkCounter } = await import("../src/engine/rules.ts");
+    const r = formFromLlm(onto, brenner, "Schweißbrenner");
+    assert.ok(r);
+    const l = learn([core], emptyLearnedPack(), "Schweißbrenner", r.form, r.delta);
+    assert.ok(l.ok);
+    const anker = l.value.onto.formById("anker");
+    assert.ok(anker);
+    assert.equal(l.value.onto.quality(l.value.form, "hitze"), 4);
+    assert.equal(checkCounter(l.value.onto, l.value.form, anker, "schmilzt").valid, true);
+  });
+
+  it("learn() re-checks the cap whatever it is handed", () => {
+    const r = formFromLlm(onto, brenner, "Schweißbrenner");
+    assert.ok(r);
+    const l = learn([core], emptyLearnedPack(), "Superbrenner", { ...r.form, qualities: { hitze: 6 } }, r.delta);
+    assert.ok(l.ok);
+    assert.equal(l.value.onto.quality(l.value.form, "hitze"), 4);
+  });
+});
+
 describe("referee precedents (Schiedssprüche)", () => {
   it("a stored ruling decides the pair – deterministically, with the reason in the steps", async () => {
     const { addRuling: add } = await import("../src/llm/learning.ts");

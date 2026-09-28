@@ -74,6 +74,22 @@ export interface Discovery {
   readonly at: string;
 }
 
+/**
+ * Learned intensities: known qualities only, integers 0..6, a force (hitze, naesse …) at most
+ * scale + 2 – re-checked here whatever the parser let through.
+ */
+function cappedQualities(base: readonly ContentPack[], form: Form): Record<string, number> | undefined {
+  if (form.qualities === undefined) return undefined;
+  const kinds = new Map(base.flatMap((p) => p.qualities ?? []).map((q) => [q.id, q.kind]));
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(form.qualities)) {
+    const kind = kinds.get(k);
+    if (kind === undefined || !Number.isFinite(v)) continue;
+    out[k] = Math.max(0, Math.min(kind === "kraft" ? Math.min(6, form.scale + 2) : 6, Math.round(v)));
+  }
+  return Object.keys(out).length === 0 ? undefined : out;
+}
+
 export function learn(
   base: readonly ContentPack[],
   learned: ContentPack,
@@ -94,6 +110,7 @@ export function learn(
   }
 
   const aliases = [...new Set([normalize(text), normalize(form.name)])].filter((a) => a.length >= 3);
+  const qualities = cappedQualities(base, form);
   const spec = (tags: readonly string[], verbs: readonly string[]): FormSpec => ({
     id,
     name: form.name,
@@ -111,7 +128,7 @@ export function learn(
     // kept for its colour hints (the rows above are what gets drawn)
     ...(form.sketch === undefined ? {} : { sketch: form.sketch }),
     ...(form.look === undefined ? {} : { look: form.look }),
-    ...(form.qualities === undefined ? {} : { qualities: form.qualities }),
+    ...(qualities === undefined ? {} : { qualities }),
     ...(discovery === undefined ? {} : { discoveredBy: discovery.by.slice(0, 40), discoveredAt: discovery.at.slice(0, 24) }),
   });
 
