@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { colorNum } from "../src/render/pixi-arena.ts";
+import { colorNum } from "../src/render/pixi-pen.ts";
 
 describe("PixiJS arena helpers", () => {
   it("parses the colour strings the simulation uses", () => {

@@ -30,8 +30,9 @@ src/
   content/core/*.json  the core content pack (tags, verbs, modifiers, forms; sketches.json = SVG sprites for things, id → svg)
   llm/               Claude client, parser (text → Form), narrator, live learning + stores
   narrate/offline.ts template narration (debug / fallback)
-  render/            sprite generation (pure) + arena: ArenaSim (animation state, arena.ts) drawn by
-                     PixiArena (WebGL scene graph, pixi-arena.ts) or CanvasArena (2D fallback, canvas-arena.ts);
+  render/            sprite generation (pure) + arena in layers: ArenaSim (state + animation API, arena.ts)
+                     → ArenaScene (what surrounds the fighters, drawn once through the Pen interface, scene.ts)
+                     → PixiArena (WebGL, pixi-arena.ts + pixi-pen.ts) or CanvasArena (2D fallback, canvas-arena.ts);
                      createArena() picks (hardware WebGL → Pixi; ?pixi / ?canvas force);
                      stage.ts = scenery (ISO room by default, FLAT wall with ?flat)
   ui/                hot-seat UI, no framework; sound.ts = WebAudio synth (no audio files)

@@ -1280,13 +1280,6 @@ export function rgbOf(hex: string): [number, number, number] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-export function hexA(hex: string, a: number): string {
-  let h = hex.replace("#", "");
-  if (h.length === 3) h = Array.from(h, (c) => c + c).join("");
-  const n = Number.parseInt(h, 16);
-  return `rgba(${String((n >> 16) & 255)},${String((n >> 8) & 255)},${String(n & 255)},${a.toFixed(3)})`;
-}
-
 export function easeOut(t: number): number {
   return 1 - (1 - t) * (1 - t);
 }

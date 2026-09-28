@@ -230,3 +230,7 @@ Erzählung und Warum-Zeile verschwinden nicht mehr nach einer festen Zeit. Sie b
 | **Die Mauern fallen auch schräg** | Die Eskalation funktioniert weiter: Die Wandziegel sind Parallelogramme aus 1-px-Spalten und bröckeln von oben nach unten ins Sternenfeld weg. Eckpfeiler und Fackelhalter bleiben im Nichts stehen. | `isoBricks`, `openBricks` |
 | **Runenkreis auf dem Boden** | Der Kreis liegt perspektivisch flacher auf den Fliesen. Die Duellanten stehen auf seinem Durchmesser, und die Lichtkegel unter leuchtenden Gestalten sind jetzt echte Ellipsen statt Rechtecke. | `Rune`, `drawLightPool` |
 | **Kulisse austauschbar** | Simulation und beide Renderer lesen nur `StageLayout`. `?flat` zeigt die alte Wand, und `data-stage` am Arena-Element sagt, welche Kulisse läuft. | `stageFor` |
+
+## Aufgeräumt: eine Szene, zwei Renderer
+
+Alles, was die Arena rund um die Gestalten zeigt (Licht, Sterne, Bodeneffekte, Augen, Fackeln, Staub, Regenbogen, Rune, Blitze, Ringe, Partikel), war nach dem Pixi-Umbau doppelt vorhanden, einmal für Canvas und einmal für Pixi. Jetzt steht es nur noch in `ArenaScene` (`src/render/scene.ts`) und zeichnet über ein kleines `Pen`-Interface (Rechteck, Ellipse, Linie, weiches Licht). Canvas und Pixi setzen nur diesen Stift um (`CanvasPen`, `PixiPen`) und kümmern sich selbst um Gestalten und Compositing. Jede künftige Verschönerung gilt dadurch automatisch für beide Renderer.
