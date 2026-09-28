@@ -7,7 +7,7 @@
  *   display (1920×1080) = base ×4 nearest + bloom + crisp glow core + impact flash
  */
 import type { Ontology } from "../engine/ontology/ontology.ts";
-import { canvas, ctx2d, easeOut, GROUND_Y, HEIGHT, SIDE_X, UPSCALE, WIDTH, type Fighter, type Side } from "./arena.ts";
+import { canvas, ctx2d, easeOut, GROUND_Y, HEIGHT, UPSCALE, WIDTH, type Fighter, type Side } from "./arena.ts";
 import { CanvasPen } from "./pen.ts";
 import { ArenaScene } from "./scene.ts";
 import type { StageLayout } from "./stage.ts";
@@ -114,10 +114,6 @@ export class CanvasArena extends ArenaScene {
   private drawFighterBody(side: Side, f: Fighter): void {
     const b = this.base;
     const { x, y, w, h } = this.fighterRect(side, f);
-    // shadow
-    b.fillStyle = "rgba(0,0,0,0.45)";
-    const shw = Math.round(w * 0.4);
-    b.fillRect(SIDE_X[side] - shw + Math.round(f.offsetX), GROUND_Y - 1, shw * 2, 3);
     // materialise: reveal rows from bottom
     const visible = Math.ceil(h * easeOut(f.appear));
     const mirrored = (side === 1) !== (f.facing === -1);

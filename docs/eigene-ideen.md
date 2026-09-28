@@ -234,3 +234,15 @@ Erzählung und Warum-Zeile verschwinden nicht mehr nach einer festen Zeit. Sie b
 ## Aufgeräumt: eine Szene, zwei Renderer
 
 Alles, was die Arena rund um die Gestalten zeigt (Licht, Sterne, Bodeneffekte, Augen, Fackeln, Staub, Regenbogen, Rune, Blitze, Ringe, Partikel), war nach dem Pixi-Umbau doppelt vorhanden, einmal für Canvas und einmal für Pixi. Jetzt steht es nur noch in `ArenaScene` (`src/render/scene.ts`) und zeichnet über ein kleines `Pen`-Interface (Rechteck, Ellipse, Linie, weiches Licht). Canvas und Pixi setzen nur diesen Stift um (`CanvasPen`, `PixiPen`) und kümmern sich selbst um Gestalten und Compositing. Jede künftige Verschönerung gilt dadurch automatisch für beide Renderer.
+
+## Der Iso-Raum lebt (Nutzerwunsch: „freie Hand, die Darstellung hübscher machen – Stil beibehalten“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Einrichtung** | Links ein Torbogen mit halb hochgezogenem Fallgitter, dahinter Schwärze. An beiden Wänden hängt ein Banner mit dem Sigil des Spiels (Ring, Dreieck, Auge), rechts Ketten mit Schellen. Der Runenkreis ist als Rille in den Boden gehauen, dazu Risse, abgetretene Platten, Geröll an den Wandfüßen, ein Schädel und Knochen, vorne zwei gebrochene Säulen. Alles ist in Pixeln gemalt und folgt der Iso-Schräge. | `paintDoor`, `paintBanners`, `paintChains`, `paintFloor`, `paintDebris`, `paintStumps` in `stage.ts` |
+| **Was bleibt, wenn die Mauern fallen** | Tor, Banner, Ketten, Fackeln und Pfeiler stehen noch im Sternenfeld, wenn die Wand bei der Eskalation wegbröckelt. | `KEEP` |
+| **Das erste Augenpaar hinter dem Gitter** | Die Zuschauer haben im Iso-Raum feste dunkle Plätze. Das erste Paar starrt hinter dem Fallgitter hervor, die übrigen aus dem schwarzen Gewölbe über den Wänden. | `StageLayout.eyes` |
+| **Weiche Schatten** | Statt eines harten Balkens liegt unter jeder Gestalt ein weicher, elliptischer Schatten. Unter schwebenden Gestalten ist er kleiner und blasser. | `drawLights` in `scene.ts` |
+| **Licht an der Wand** | Leuchtende Gestalten (Feuer, Blitz, Heiliges …) werfen ihr Licht auch auf die Wand hinter sich. | `drawLights` |
+| **Bodennebel und Tropfen** | Flache Nebelbänke ziehen langsam über den Boden. Aus dem Gewölbe fallen Tropfen, die auf den Fliesen Ringe schlagen und kurz spritzen. Beides entfällt bei reduzierter Bewegung. | `drawFog`, `updateDrops` |
+| **Bodeneffekte folgen dem Boden** | Nässe und Frost halten sich an die tatsächliche Bodenfläche der Kulisse; im Iso-Raum kriecht der Frost von den Wandfüßen her. | `floorTop`, `floorEdge` |

@@ -40,3 +40,18 @@ describe("arena scenery (stage)", () => {
     assert.notDeepEqual(ISO.rune, FLAT.rune);
   });
 });
+
+describe("isometric room details", () => {
+  it("door, banners and chains survive the crumbling wall; eyes sit in the dark", async () => {
+    const { ISO, isoFloorY } = await import("../src/render/stage.ts");
+    const bricks = ISO.wallBricks();
+    const hits = (x0: number, x1: number, y0: number, y1: number): boolean => bricks.some((b) => b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0);
+    assert.ok(!hits(72, 112, isoFloorY(72) - 58, isoFloorY(72)), "the doorway stays");
+    assert.ok(!hits(150, 172, isoFloorY(150) - 150, isoFloorY(150) - 80), "the left banner stays");
+    const eyes = ISO.eyes ?? [];
+    assert.equal(eyes.length, 12);
+    for (const [x, y] of eyes.slice(1)) assert.ok(y + 1 < isoFloorY(x) - 170 || y < 0, `eye at ${String(x)},${String(y)} is not in the vault`);
+    for (const [x, land] of ISO.drips) assert.ok(land > isoFloorY(x), "drips land on the floor");
+    assert.ok(ISO.floorEdge(240, isoFloorY(240)) === 0 && ISO.floorEdge(240, 250) > 0.9);
+  });
+});
