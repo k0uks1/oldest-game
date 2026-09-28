@@ -183,4 +183,12 @@ Erzählung und Warum-Zeile verschwinden nicht mehr nach einer festen Zeit. Sie b
 | **Rollenfarben** | Die Skizze nutzt fünf feste Füllfarben als *Rollen*: Körper, zweite Farbe, Leuchten, Glanz und dunkles Detail. Diese werden auf die Sprite-Zeichen abgebildet. Die echten Farben kommen wie bei jeder Gestalt aus den Tags, die Schattierung und Kontur aus dem normalen Sprite-Weg. So passen Skizzen zum restlichen Look. | `SKETCH_FILLS`, `pixelsToRows` |
 | **Automatischer Zuschnitt** | Die Skizze wird groß gerendert, auf das Gezeichnete zugeschnitten und stehend in 32×32 eingepasst. Zu kleine oder verrutschte Zeichnungen füllen so trotzdem den Rahmen. | `rasterizeSketch`, `opaqueBounds` |
 | **Nur für Dinge** | Ein Test mit Haiku an 20 Gestalten ergab: Gegenstände gelingen gut (Tisch, Leiter, Brille, Lupe, Leuchtturm), Lebewesen schlecht (der Drache wurde ein Streichholz). Lebewesen behalten deshalb die handgebauten Figuren. | `sketchOf` |
-| **Sicher** | Die SVG wird bereinigt (keine Skripte, Links, Bilder oder Stile) und nur als `<img>` gezeichnet, wo Browser sie abschotten. | `sanitizeSketch` |
+| **Sicher** | Die SVG wird bereinigt (keine Skripte, Links, Bilder oder Stile) und nur von unserem eigenen Rasterizer gezeichnet, nie vom Browser. | `sanitizeSketch`, `svgraster.ts` |
+
+## Eigener SVG-Rasterizer (Vorbereitung für Mehrspieler)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Gleiche Skizze, gleiches Sprite** | Skizzen werden nicht mehr über das Browser-Canvas gerastert, sondern von einem kleinen, reinen Rasterizer ohne Abhängigkeiten. Browser und Server machen so aus derselben SVG exakt dasselbe Sprite. Gegen Chromium verglichen weicht er bei den Beispielskizzen in 0–3 von 1024 Zellen ab. | `src/render/svgraster.ts`, `rasterizeSketch` |
+| **Striche wie im Browser** | Linienenden sind wie in SVG standardmäßig stumpf (`butt`), `round` und `square` gehen auf Wunsch. Überlappende Strichteile löschen sich nicht mehr gegenseitig aus. | `strokePolys` |
+| **Zug-Auflösung ohne DOM** | Der Weg Text → Klassifizierung/Lernen → Engine → Schiedsrichter → Erzählung steckt jetzt in einer eigenen Klasse ohne Oberfläche, damit später der Server dieselbe Logik spielen kann. | `src/game/resolver.ts` |
