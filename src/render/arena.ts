@@ -3,19 +3,17 @@ import { hash32, rng } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 import { paletteFor, type SpritePalette } from "./palette.ts";
 import { renderGlow, renderSprite, type PixelImage } from "./sprite.ts";
+import { FLOOR_Y, GROUND_Y, HEIGHT, ISO, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
 
-export const WIDTH = 480;
-export const HEIGHT = 270;
+export { FLOOR_Y, GROUND_Y, HEIGHT, TORCH_X, WIDTH } from "./stage.ts";
+
 /**
  * The scene is drawn at 480×270 into an offscreen buffer, then blown up by an
  * integer factor with nearest-neighbour. The browser only ever *downscales*
  * that large image to fit, which keeps every logical pixel the same size.
  */
 export const UPSCALE = 4;
-export const FLOOR_Y = 172;
-export const GROUND_Y = 222;
 export const SIDE_X = [132, 348] as const;
-export const TORCH_X = [36, 444] as const;
 
 export type Side = 0 | 1;
 
@@ -38,22 +36,7 @@ export function easterEggFor(name: string): EasterEgg | null {
   return EGG_PATTERNS.find(([re]) => re.test(name))?.[1] ?? null;
 }
 
-export interface Brick {
-  readonly x: number;
-  readonly y: number;
-  readonly w: number;
-  readonly h: number;
-  /** 0..1 – the brick opens to the void once the cosmic factor passes this. */
-  readonly threshold: number;
-}
 
-export interface Star {
-  readonly x: number;
-  readonly y: number;
-  readonly brick: number;
-  readonly phase: number;
-  readonly color: string;
-}
 
 export interface Mote {
   x: number;
@@ -298,10 +281,14 @@ export abstract class ArenaSim {
   /** Bumped whenever the backdrop canvas was repainted (bricks fell) – renderers re-upload. */
   protected backdropVersion = 0;
 
-  constructor(protected onto: Ontology) {
-    this.background = paintBackground();
+  constructor(
+    protected onto: Ontology,
+    /** The scenery: flat wall or isometric room. */
+    protected readonly stage: StageLayout = ISO,
+  ) {
+    this.background = stage.paintBackground();
     this.reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-    this.bricks = wallBricks();
+    this.bricks = stage.wallBricks();
     this.open = new Uint8Array(this.bricks.length);
     this.starfield = paintStarfield();
     this.stars = scatterStars(this.bricks);
@@ -1039,7 +1026,8 @@ export abstract class ArenaSim {
     }
     if (this.thinking > 0.1 && this.rand() < dt * 40 * this.thinking) {
       const a = this.rand() * Math.PI * 2;
-      this.particles.push({ x: 240 + Math.cos(a) * 144, y: 226 + Math.sin(a) * 20, vx: 0, vy: -20 - this.rand() * 25, life: 0, max: 0.9, color: "#c8a0ff", size: 1, gravity: 0, glow: true });
+      const { cx, cy, orbit } = this.stage.rune;
+      this.particles.push({ x: cx + Math.cos(a) * orbit[0], y: cy + Math.sin(a) * orbit[1], vx: 0, vy: -20 - this.rand() * 25, life: 0, max: 0.9, color: "#c8a0ff", size: 1, gravity: 0, glow: true });
     }
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
@@ -1205,7 +1193,7 @@ export abstract class ArenaSim {
     for (const [i, br] of this.bricks.entries()) {
       if (this.open[i] !== 1) continue;
       n++;
-      ctx.drawImage(this.starfield, br.x, br.y, br.w, br.h, br.x, br.y, br.w, br.h);
+      openBricks(ctx, this.starfield, br);
     }
     this.openBricks = n;
     this.backdropVersion++;
@@ -1305,145 +1293,4 @@ export function easeOut(t: number): number {
 
 function wait(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-/** Procedural dungeon backdrop, painted once. */
-function paintBackground(): HTMLCanvasElement {
-  const c = document.createElement("canvas");
-  c.width = WIDTH;
-  c.height = HEIGHT;
-  const ctx = c.getContext("2d");
-  if (ctx === null) return c;
-  const rand = rng(99);
-  const px = (x: number, y: number, w: number, h: number, col: string): void => {
-    ctx.fillStyle = col;
-    ctx.fillRect(x, y, w, h);
-  };
-  // wall
-  px(0, 0, WIDTH, FLOOR_Y, "#15111f");
-  const bricks = ["#2a2438", "#2e2740", "#262033", "#302a44"];
-  for (let row = 0; row * 10 < FLOOR_Y; row++) {
-    const off = row % 2 === 0 ? 0 : 12;
-    for (let col = -1; col * 24 < WIDTH; col++) {
-      const x = col * 24 + off;
-      const y = row * 10;
-      const base = bricks[Math.floor(rand() * bricks.length)] ?? "#2a2438";
-      px(x + 1, y + 1, 22, 8, base);
-      px(x + 1, y + 1, 22, 1, "#3a3352");
-      px(x + 1, y + 8, 22, 1, "#1c1728");
-      if (rand() < 0.12) px(x + 3 + Math.floor(rand() * 14), y + 2 + Math.floor(rand() * 5), 2, 1, "#1c1728");
-      if (rand() < 0.07) px(x + 2 + Math.floor(rand() * 16), y + 7, 4, 2, "#243a2a");
-    }
-  }
-  // darken wall toward top (dithered)
-  for (let y = 0; y < FLOOR_Y; y++) {
-    const shade = Math.max(0, 1 - y / (FLOOR_Y * 0.55));
-    for (let x = 0; x < WIDTH; x++) {
-      const b = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5][(y % 4) * 4 + (x % 4)] ?? 0;
-      if (b / 16 < shade * 0.8) px(x, y, 1, 1, "rgba(8,6,14,0.5)");
-    }
-  }
-  // pillars
-  for (const x0 of [20, 428]) {
-    px(x0, 0, 32, FLOOR_Y, "#3a3350");
-    px(x0, 0, 4, FLOOR_Y, "#4a4264");
-    px(x0 + 28, 0, 4, FLOOR_Y, "#251f36");
-    for (let y = 0; y < FLOOR_Y; y += 16) px(x0, y, 32, 1, "#251f36");
-    px(x0 - 3, FLOOR_Y - 10, 38, 10, "#2c2640");
-    px(x0 - 3, 0, 38, 8, "#2c2640");
-    // torch bracket
-    px(x0 + 12, 88, 8, 10, "#5c3418");
-    px(x0 + 10, 86, 12, 3, "#3a2210");
-  }
-  // floor
-  px(0, FLOOR_Y, WIDTH, HEIGHT - FLOOR_Y, "#1a1526");
-  const vx = WIDTH / 2;
-  const vy = 60;
-  let y = FLOOR_Y;
-  let gap = 4;
-  let i = 0;
-  while (y < HEIGHT) {
-    px(0, Math.round(y), WIDTH, 1, i % 2 === 0 ? "#241e34" : "#221c30");
-    y += gap;
-    gap *= 1.28;
-    i++;
-  }
-  ctx.strokeStyle = "#241e34";
-  for (let k = -12; k <= 12; k++) {
-    const bx = vx + k * 40;
-    ctx.beginPath();
-    ctx.moveTo(vx + (bx - vx) * ((FLOOR_Y - vy) / (HEIGHT - vy)), FLOOR_Y);
-    ctx.lineTo(bx, HEIGHT);
-    ctx.stroke();
-  }
-  px(0, FLOOR_Y, WIDTH, 2, "#0e0b16");
-  // vignette
-  const g = ctx.createRadialGradient(WIDTH / 2, HEIGHT / 2, 80, WIDTH / 2, HEIGHT / 2, 300);
-  g.addColorStop(0, "rgba(0,0,0,0)");
-  g.addColorStop(1, "rgba(0,0,0,0.55)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  return c;
-}
-
-/** Brick rectangles of the back wall (same grid as paintBackground), pillars excluded. */
-function wallBricks(): Brick[] {
-  const r = rng(77);
-  const out: Brick[] = [];
-  for (let row = 0; row * 10 < FLOOR_Y - 10; row++) {
-    const off = row % 2 === 0 ? 0 : 12;
-    for (let col = -1; col * 24 < WIDTH; col++) {
-      const x = col * 24 + off;
-      const y = row * 10;
-      const x0 = Math.max(0, x);
-      const x1 = Math.min(WIDTH, x + 24);
-      if (x1 - x0 < 4) continue;
-      // keep the pillars standing in the void
-      if (x1 > 14 && x0 < 58) continue;
-      if (x1 > 422 && x0 < 466) continue;
-      // upper bricks go first, with noise so it looks like crumbling, not a wipe
-      const height = y / FLOOR_Y;
-      out.push({ x: x0, y, w: x1 - x0, h: 10, threshold: Math.min(0.98, 0.05 + height * 0.6 + r() * 0.35) });
-    }
-  }
-  return out;
-}
-
-/** The void behind the wall: deep violet with a faint nebula band. */
-function paintStarfield(): HTMLCanvasElement {
-  const c = canvas(WIDTH, HEIGHT);
-  const ctx = ctx2d(c);
-  ctx.fillStyle = "#05030b";
-  ctx.fillRect(0, 0, WIDTH, FLOOR_Y);
-  const neb = ctx.createLinearGradient(0, 20, WIDTH, 140);
-  neb.addColorStop(0, "rgba(60,20,90,0)");
-  neb.addColorStop(0.45, "rgba(80,30,120,0.35)");
-  neb.addColorStop(0.6, "rgba(30,60,120,0.3)");
-  neb.addColorStop(1, "rgba(20,10,40,0)");
-  ctx.fillStyle = neb;
-  ctx.fillRect(0, 0, WIDTH, FLOOR_Y);
-  // dither the nebula into pixel noise
-  const r = rng(5);
-  for (let y = 0; y < FLOOR_Y; y++) {
-    for (let x = 0; x < WIDTH; x++) {
-      if (r() < 0.25) {
-        ctx.fillStyle = "rgba(5,3,11,0.6)";
-        ctx.fillRect(x, y, 1, 1);
-      }
-    }
-  }
-  return c;
-}
-
-function scatterStars(bricks: readonly Brick[]): Star[] {
-  const r = rng(31);
-  const colors = ["#ffffff", "#c8d8ff", "#ffe8c8", "#c8a0ff"];
-  const out: Star[] = [];
-  for (const [i, br] of bricks.entries()) {
-    const n = r() < 0.5 ? 1 : r() < 0.5 ? 2 : 0;
-    for (let k = 0; k < n; k++) {
-      out.push({ x: br.x + 1 + Math.floor(r() * (br.w - 2)), y: br.y + 1 + Math.floor(r() * (br.h - 2)), brick: i, phase: r() * 20, color: colors[Math.floor(r() * colors.length)] ?? "#ffffff" });
-    }
-  }
-  return out;
 }

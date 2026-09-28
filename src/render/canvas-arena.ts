@@ -8,6 +8,7 @@
  *   display (1920×1080) = base ×4 nearest + bloom + impact flash
  */
 import type { Ontology } from "../engine/ontology/ontology.ts";
+import type { StageLayout } from "./stage.ts";
 import { ArenaSim, canvas, ctx2d, easeOut, FLOOR_Y, GROUND_Y, HEIGHT, hexA, SIDE_X, TORCH_X, UPSCALE, WIDTH, type Fighter, type Side } from "./arena.ts";
 
 export class CanvasArena extends ArenaSim {
@@ -17,8 +18,8 @@ export class CanvasArena extends ArenaSim {
   private readonly bloomNear: CanvasRenderingContext2D;
   private readonly bloomFar: CanvasRenderingContext2D;
 
-  constructor(target: HTMLCanvasElement, onto: Ontology) {
-    super(onto);
+  constructor(target: HTMLCanvasElement, onto: Ontology, stage?: StageLayout) {
+    super(onto, stage);
     target.width = WIDTH * UPSCALE;
     target.height = HEIGHT * UPSCALE;
     this.display = ctx2d(target);
@@ -218,11 +219,16 @@ export class CanvasArena extends ArenaSim {
     const ctx = this.base;
     const cx = SIDE_X[side] + f.offsetX;
     const r = f.sprite.pixels.width * 0.9;
-    const grad = ctx.createRadialGradient(cx, GROUND_Y, 2, cx, GROUND_Y, r);
+    // an elliptical pool on the floor (a circle squashed to the floor's perspective)
+    ctx.save();
+    ctx.translate(cx, GROUND_Y);
+    ctx.scale(1, 0.35);
+    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, r);
     grad.addColorStop(0, hexA(f.sprite.palette.glow, strength));
     grad.addColorStop(1, hexA(f.sprite.palette.glow, 0));
     ctx.fillStyle = grad;
-    ctx.fillRect(cx - r, GROUND_Y - r * 0.35, r * 2, r * 0.7);
+    ctx.fillRect(-r, -r, r * 2, r * 2);
+    ctx.restore();
   }
 
   private drawFighter(side: Side, f: Fighter): void {
@@ -411,16 +417,17 @@ export class CanvasArena extends ArenaSim {
       ctx.strokeStyle = this.thinking > 0.2 ? "#c8a0ff" : "#8a62b0";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.ellipse(240, 226, 150, 22, 0, 0, Math.PI * 2);
+      const { cx, cy, outer, inner, orbit } = this.stage.rune;
+      ctx.ellipse(cx, cy, outer[0], outer[1], 0, 0, Math.PI * 2);
       ctx.stroke();
       ctx.beginPath();
-      ctx.ellipse(240, 226, 138, 18, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, inner[0], inner[1], 0, 0, Math.PI * 2);
       ctx.stroke();
       // runes: small marks orbiting between the two rings
       ctx.fillStyle = ctx.strokeStyle;
       for (let i = 0; i < 12; i++) {
         const a = spin + (i / 12) * Math.PI * 2;
-        ctx.fillRect(Math.round(240 + Math.cos(a) * 144), Math.round(226 + Math.sin(a) * 20), 2, 1);
+        ctx.fillRect(Math.round(cx + Math.cos(a) * orbit[0]), Math.round(cy + Math.sin(a) * orbit[1]), 2, 1);
       }
       ctx.globalAlpha = 1;
     }

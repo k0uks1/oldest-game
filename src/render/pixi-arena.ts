@@ -12,6 +12,7 @@
  */
 import { autoDetectRenderer, BlurFilter, Container, Graphics, Rectangle, RenderTexture, Sprite, Texture, type Renderer } from "pixi.js";
 import type { Ontology } from "../engine/ontology/ontology.ts";
+import type { StageLayout } from "./stage.ts";
 import { ArenaSim, easeOut, FLOOR_Y, GROUND_Y, HEIGHT, SIDE_X, TORCH_X, UPSCALE, WIDTH, type Fighter, type Side } from "./arena.ts";
 
 /** "#rgb", "#rrggbb", "rgb(r,g,b)" → 0xrrggbb (cached – particles ask every frame). */
@@ -101,8 +102,9 @@ export class PixiArena extends ArenaSim {
   constructor(
     private readonly target: HTMLCanvasElement,
     onto: Ontology,
+    stage?: StageLayout,
   ) {
-    super(onto);
+    super(onto, stage);
     target.width = WIDTH * UPSCALE;
     target.height = HEIGHT * UPSCALE;
     this.radial = radialTexture();
@@ -362,13 +364,14 @@ export class PixiArena extends ArenaSim {
     const pulse = 0.22 + Math.sin(this.time * 1.5) * 0.06 + this.thinking * 0.5;
     const spin = this.time * (0.3 + this.thinking * 2.5);
     const runeColor = this.thinking > 0.2 ? 0xc8a0ff : 0x8a62b0;
+    const { cx, cy, outer, inner, orbit } = this.stage.rune;
     both((x, isGlow) => {
       const a = isGlow ? pulse * 0.8 : pulse;
-      x.ellipse(240, 226, 150, 22).stroke({ width: 1, color: runeColor, alpha: a });
-      x.ellipse(240, 226, 138, 18).stroke({ width: 1, color: runeColor, alpha: a });
+      x.ellipse(cx, cy, outer[0], outer[1]).stroke({ width: 1, color: runeColor, alpha: a });
+      x.ellipse(cx, cy, inner[0], inner[1]).stroke({ width: 1, color: runeColor, alpha: a });
       for (let i = 0; i < 12; i++) {
         const ang = spin + (i / 12) * Math.PI * 2;
-        x.rect(Math.round(240 + Math.cos(ang) * 144), Math.round(226 + Math.sin(ang) * 20), 2, 1).fill({ color: runeColor, alpha: a });
+        x.rect(Math.round(cx + Math.cos(ang) * orbit[0]), Math.round(cy + Math.sin(ang) * orbit[1]), 2, 1).fill({ color: runeColor, alpha: a });
       }
     });
     // light pools under the fighters
