@@ -1164,3 +1164,11 @@ input,
     grid-template-columns: 1fr;
   }
 }
+
+/* spectators in the room */
+.crown .watchers {
+  font-size: 14px;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  min-height: 0;
+}

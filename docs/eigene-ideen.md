@@ -269,3 +269,12 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Beitreten erst mit gültigem Code** | Der Knopf wird aktiv, sobald fünf gültige Zeichen dastehen; Kleinbuchstaben werden groß. Der Einladungslink öffnet direkt den Online-Reiter mit eingetragenem Code. | `updateJoin` |
 | **Name wird gemerkt** | Der eigene Name steht beim nächsten Mal schon da, der Zugangscode nur für diese Sitzung. | `rememberName` |
 | **Großzügigere Limits** | Freunde teilen oft eine Adresse (Router). Pro Adresse sind jetzt 24 Verbindungen und 60 Räume pro Stunde erlaubt, und das Server-Log weist darauf hin, wenn ein Proxy ohne `TRUST_PROXY` der Grund sein dürfte. | `server/online.ts` |
+
+## Zuschauen (Nutzerwunsch: „einem Raum beitreten, aber nur den 2 Spielern zuschauen“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Zuschauen mit dem Raum-Code** | Unter „Eingeladen?“ steht neben „Beitreten“ jetzt „Zuschauen“. Wer zuschaut, sieht alles live – Züge, Erzählung, Epilog –, kann aber weder ziehen noch aufgeben noch eine Revanche starten. Das prüft der Server, nicht der Browser. Bis zu 20 Zuschauer pro Raum. | `watch` in `server/online.ts`, `spectating` in `app.ts` |
+| **Auch volle Räume** | Ist ein Raum schon voll, sagt die Meldung beim Beitreten, dass man noch zuschauen kann. | ebd. |
+| **Auge in der Kopfzeile** | Die Spieler sehen unter der Runde „👁 2“ und bekommen kurz Bescheid, wenn jemand dazukommt. | `showWatchers` |
+| **Neuladen geht** | Auch Zuschauer bekommen ein Token und kehren nach dem Neuladen in den Raum zurück, mit der bisherigen Chronik. | `resume` |

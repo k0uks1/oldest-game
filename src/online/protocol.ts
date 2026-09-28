@@ -23,6 +23,8 @@ export type ClientMsg =
   /** Open a room. With `name2`, both seats belong to this client (one device, server-side Claude). */
   | { readonly t: "create"; readonly name: string; readonly name2?: string; readonly code?: string }
   | { readonly t: "join"; readonly room: string; readonly name: string; readonly code?: string }
+  /** Enter a room only to watch – no seat, no moves. */
+  | { readonly t: "watch"; readonly room: string; readonly code?: string }
   /** Reconnect with the seat token from `welcome`. */
   | { readonly t: "resume"; readonly room: string; readonly token: string }
   | { readonly t: "move"; readonly text: string }
@@ -64,16 +66,18 @@ export type ServerMsg =
       readonly t: "welcome";
       readonly room: string;
       readonly token: string;
-      /** Seats this client may play (both on one device). */
+      /** Seats this client may play (both on one device; none for a spectator). */
       readonly seats: readonly PlayerId[];
       readonly players: readonly [SeatInfo | null, SeatInfo | null];
+      /** How many spectators are in the room. */
+      readonly watchers: number;
       /** null while waiting for the second player. */
       readonly state: GameState | null;
       readonly chronicle: readonly ChronicleEntry[];
       readonly epilogue: string | null;
       readonly learned: ContentPack;
     }
-  | { readonly t: "presence"; readonly players: readonly [SeatInfo | null, SeatInfo | null] }
+  | { readonly t: "presence"; readonly players: readonly [SeatInfo | null, SeatInfo | null]; readonly watchers: number }
   | { readonly t: "start"; readonly state: GameState }
   | { readonly t: "thinking"; readonly seat: PlayerId }
   | { readonly t: "rejected"; readonly reason: string }
@@ -126,6 +130,10 @@ export function parseClientMsg(raw: string): ClientMsg | undefined {
       const room = normalizeRoom(m["room"]);
       const name = cleanName(m["name"]);
       return room === undefined || name === undefined ? undefined : { t: "join", room, name, ...withCode };
+    }
+    case "watch": {
+      const room = normalizeRoom(m["room"]);
+      return room === undefined ? undefined : { t: "watch", room, ...withCode };
     }
     case "resume": {
       const room = normalizeRoom(m["room"]);
