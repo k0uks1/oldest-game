@@ -6,7 +6,7 @@
   {"id": "freund", "name": "Freund", "archetype": "humanoid", "scale": 3, "plane": "leben", "tags": ["mensch", "fuehlt"], "verbs": ["befreundet"], "weak": ["fuehlt"], "aliases": ["freundin", "kumpel"]},
   {"id": "feind", "name": "Feind", "archetype": "humanoid", "scale": 3, "plane": "leben", "tags": ["mensch", "rachsuechtig"], "verbs": ["zerschlaegt", "aengstigt"], "weak": ["rachsuechtig"], "aliases": ["gegner", "erzfeind"]},
   {"id": "chef", "name": "Chef", "archetype": "humanoid", "scale": 3, "plane": "leben", "tags": ["mensch", "stolz", "geordnet"], "verbs": ["befiehlt", "langweilt"], "weak": ["stolz"], "aliases": ["vorgesetzter"]},
-  {"id": "raeuber", "name": "Räuber", "archetype": "humanoid", "scale": 3, "plane": "leben", "tags": ["mensch", "gierig"], "verbs": ["taeuscht", "zerschlaegt"], "weak": ["gierig"], "aliases": ["räuber", "bandit", "einbrecher"]},
+  {"id": "raeuber", "name": "Räuber", "archetype": "humanoid", "scale": 3, "plane": "leben", "tags": ["mensch", "gierig"], "verbs": ["taeuscht", "zerschlaegt"], "weak": ["gierig"], "aliases": ["räuber", "bandit", "einbrecher"], "look": {"holds": "dolch"}},
   {"id": "boesewicht", "name": "Bösewicht", "archetype": "humanoid", "scale": 3, "plane": "leben", "tags": ["mensch", "stolz", "rachsuechtig"], "verbs": ["aengstigt", "taeuscht"], "weak": ["stolz"], "aliases": ["bösewicht"]},
   {"id": "astronaut", "name": "Astronaut", "archetype": "humanoid", "scale": 3, "plane": "materie", "tags": ["mensch", "gepanzert", "fliegt"], "verbs": ["trotzt"], "weak": ["mensch"], "aliases": ["raumfahrer", "kosmonaut"]},
   {"id": "welpe", "name": "Welpe", "archetype": "beast", "scale": 1, "plane": "leben", "tags": ["saeugetier", "neugierig"], "verbs": ["befreundet"], "weak": ["neugierig"], "aliases": ["hundebaby"]},
@@ -118,5 +118,5 @@
   {"id": "harfe", "name": "Harfe", "archetype": "book", "scale": 2, "plane": "materie", "tags": ["holz", "gold"], "verbs": ["einschlaefern", "verfuehrt"], "weak": ["holz"]},
   {"id": "pilz", "name": "Pilz", "archetype": "plant", "scale": 1, "plane": "leben", "tags": ["pflanze", "gift"], "verbs": ["vergiftet", "verzaubert"], "weak": ["pflanze"], "aliases": ["pilze"]},
   {"id": "lamm", "name": "Lamm", "archetype": "beast", "scale": 1, "plane": "leben", "tags": ["saeugetier", "furchtsam", "heilig"], "verbs": ["befreundet", "erloest"], "weak": ["furchtsam"], "aliases": ["lämmchen"]},
-  {"id": "kaiser", "name": "Kaiser", "archetype": "humanoid", "scale": 4, "plane": "leben", "tags": ["mensch", "stolz", "geordnet"], "verbs": ["befiehlt"], "weak": ["stolz"], "aliases": ["kaiserin", "imperator"]}
+  {"id": "kaiser", "name": "Kaiser", "archetype": "humanoid", "scale": 4, "plane": "leben", "tags": ["mensch", "stolz", "geordnet"], "verbs": ["befiehlt"], "weak": ["stolz"], "aliases": ["kaiserin", "imperator"], "look": {"holds": "zepter"}}
 ]

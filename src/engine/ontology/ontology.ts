@@ -403,6 +403,7 @@ export class Ontology {
       weak: spec.weak ?? [],
       origin: "lexikon",
       ...(spec.qualities === undefined ? {} : { qualities: spec.qualities }),
+      ...(spec.look === undefined ? {} : { look: spec.look }),
       ...(spec.flavor === undefined ? {} : { flavor: spec.flavor }),
       ...spriteOf(spec),
     };

@@ -52,6 +52,25 @@ export interface Form {
   readonly sprite?: readonly string[];
   /** SVG sketch (see render/svgsprite.ts) – rasterized to a 32×32 sprite when there is no `sprite`. */
   readonly sketch?: string;
+  /** How it looks, assembled from library parts (render/look.ts). Presentation only – rules never see it. */
+  readonly look?: FormLook;
+}
+
+/**
+ * "Bauplan": a sprite assembled from the part library instead of drawn freehand –
+ * a person holding a rake, a concept shown as a money bag with a crown badge.
+ * Ids refer to `content/core/items.json` and the symbol library (sketches + symbols); unknown ids are ignored.
+ */
+export interface FormLook {
+  /** Held item (people and giants). */
+  readonly holds?: string;
+  /** Main symbol – the whole sprite for a thing or concept without its own drawing. */
+  readonly emblem?: string;
+  /** Small second symbol in the corner (money on a crown: corruption). */
+  readonly badge?: string;
+  /** Colour overrides (#rrggbb) for the main and second colour roles. */
+  readonly main?: string;
+  readonly second?: string;
 }
 
 export type PlayerId = 0 | 1;

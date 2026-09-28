@@ -3,6 +3,7 @@ import { hash32, rng } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 import { ATTIRE, FIGURES, VARIANTS, type VariantWhen } from "./figures.ts";
 import { MASKS } from "./masks.ts";
+import { heldItem, itemRows, sketchOf } from "./look.ts";
 import { rasterizeSketch } from "./svgsprite.ts";
 import { hexToRgb, paletteFor, type SpritePalette } from "./palette.ts";
 
@@ -107,9 +108,12 @@ export function spriteSize(scale: number): number {
  */
 export function buildGrid(onto: Ontology, form: Form): Grid {
   // Claude-drawn pixel art wins – it was made for exactly this form.
-  const drawn = form.sprite ?? sketchRows(form.sketch);
+  const drawn = form.sprite ?? sketchRows(sketchOf(form));
   const figure = drawn === undefined ? (variantFor(onto, form) ?? FIGURES[form.archetype]) : undefined;
   let grid = drawn !== undefined ? toGrid(drawn) : figure === undefined ? toGrid(MASKS[form.archetype]) : dress(onto, form, toGrid(figure));
+  const held = heldItem(form);
+  const itemGrid = held === undefined || figure === undefined ? undefined : itemRows(held.id);
+  if (itemGrid !== undefined) grid = overlay(grid, itemGrid);
   const target = spriteSize(form.scale);
   while (grid.length < target) grid = epx(grid);
   return grid;
@@ -141,6 +145,14 @@ export function variantFor(onto: Ontology, form: Form): readonly string[] | unde
     !(w.noVerb ?? []).some((v) => verbs.has(v)) &&
     form.scale >= (w.minScale ?? 0);
   return list.find((v) => ok(v.when))?.rows;
+}
+
+/** Paint every non-empty cell of `top` over `base` (same frame). */
+function overlay(base: Grid, top: readonly string[]): Grid {
+  return base.map((row, y) => row.map((c, x) => {
+    const t = top[y]?.[x] ?? ".";
+    return t === "." ? c : t;
+  }));
 }
 
 /** Apply every attire overlay whose tag condition the form's closure satisfies. */
@@ -178,6 +190,9 @@ export function renderGrid(grid: Grid, pal: SpritePalette, seed: number, roughne
   const rand = rng(seed);
   const main = pal.main.map(hexToRgb);
   const second = pal.second.map(hexToRgb);
+  const itemMain = pal.item?.main.map(hexToRgb) ?? main;
+  const itemSecond = pal.item?.second.map(hexToRgb) ?? second;
+  const rampOfSymbol = (c: string | null): typeof main => (c === "+" ? second : c === "m" ? itemMain : c === "n" ? itemSecond : main);
   const glow = hexToRgb(pal.glow);
   const outline = hexToRgb(pal.outline);
   const blockNoise = new Map<number, number>();
@@ -236,7 +251,7 @@ export function renderGrid(grid: Grid, pal: SpritePalette, seed: number, roughne
         put(x, y, glow);
         continue;
       }
-      const ramp = c === "+" ? second : main;
+      const ramp = rampOfSymbol(c);
       if (c === ",") {
         put(x, y, main[0] ?? outline);
         continue;
@@ -266,7 +281,7 @@ export function renderGrid(grid: Grid, pal: SpritePalette, seed: number, roughne
       const shadowFrom = filled(x - 1, y) || filled(x, y - 1);
       if (litFrom === null && !shadowFrom) continue;
       if (litFrom !== null && !shadowFrom) {
-        const ramp = litFrom === "+" ? second : main;
+        const ramp = rampOfSymbol(litFrom);
         put(x, y, ramp[0] ?? outline);
       } else put(x, y, outline);
     }

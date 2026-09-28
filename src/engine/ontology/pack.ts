@@ -1,3 +1,5 @@
+import type { FormLook } from "../types.ts";
+
 /**
  * Content pack format. Packs are plain JSON so they can be generated,
  * shipped separately or dropped in by players. Everything is referenced
@@ -142,6 +144,8 @@ export interface FormSpec {
   readonly sprite?: readonly string[];
   /** SVG sketch in the sketch colour roles (core content: `content/core/sketches.json`). */
   readonly sketch?: string;
+  /** Sprite assembled from library parts – see {@link FormLook}. */
+  readonly look?: FormLook;
   /** Live learning: who first summoned this form and when (ISO date). Purely informational. */
   readonly discoveredBy?: string;
   readonly discoveredAt?: string;
@@ -235,6 +239,31 @@ class ShapeChecker {
       return [];
     }
     return v;
+  }
+
+  /** Sprite blueprint: short ids and #rrggbb colours only. */
+  look(o: Obj, key: string, where: string): FormLook | undefined {
+    const v = o[key];
+    if (v === undefined) return undefined;
+    if (!isObj(v)) {
+      this.errors.push(`${where}: "${key}" muss ein Objekt sein`);
+      return undefined;
+    }
+    const id = (k: string): string | undefined => {
+      const x = v[k];
+      if (x === undefined) return undefined;
+      if (typeof x === "string" && /^[a-z0-9_]{1,40}$/.test(x)) return x;
+      this.errors.push(`${where}.${key}.${k}: Bauteil-ID erwartet`);
+      return undefined;
+    };
+    const hex = (k: string): string | undefined => {
+      const x = v[k];
+      if (x === undefined) return undefined;
+      if (typeof x === "string" && /^#[0-9a-f]{6}$/i.test(x)) return x.toLowerCase();
+      this.errors.push(`${where}.${key}.${k}: Farbe #rrggbb erwartet`);
+      return undefined;
+    };
+    return { ...opt("holds", id("holds")), ...opt("emblem", id("emblem")), ...opt("badge", id("badge")), ...opt("main", hex("main")), ...opt("second", hex("second")) };
   }
 
   /** `{ id: number }` map, e.g. quality levels. */
@@ -343,6 +372,7 @@ export function parsePack(input: unknown): PackResult {
         ...opt("flavor", c.optStr(o, "flavor", w)),
         ...opt("sprite", c.list(o, "sprite", w)),
         ...opt("sketch", c.optStr(o, "sketch", w)),
+        ...opt("look", c.look(o, "look", w)),
         ...opt("discoveredBy", c.optStr(o, "discoveredBy", w)),
         ...opt("discoveredAt", c.optStr(o, "discoveredAt", w)),
       };
