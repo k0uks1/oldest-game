@@ -7,7 +7,7 @@
  *   display (1920×1080) = base ×4 nearest + bloom + crisp glow core + impact flash
  */
 import type { Ontology } from "../engine/ontology/ontology.ts";
-import { canvas, ctx2d, easeOut, GROUND_Y, HEIGHT, UPSCALE, WIDTH, type Fighter, type Side } from "./arena.ts";
+import { canvas, ctx2d, easeOut, HEIGHT, UPSCALE, WIDTH, type Fighter, type Side } from "./arena.ts";
 import { CanvasPen } from "./pen.ts";
 import { ArenaScene } from "./scene.ts";
 import type { StageLayout } from "./stage.ts";
@@ -101,9 +101,9 @@ export class CanvasArena extends ArenaScene {
     this.glow.globalAlpha = f.alpha * (1 - f.stone);
     if (f.squash < 1) {
       for (const ctx of [this.base, this.glow]) {
-        ctx.translate(0, GROUND_Y);
+        ctx.translate(0, this.gy(side));
         ctx.scale(1, Math.max(0.02, f.squash));
-        ctx.translate(0, -GROUND_Y);
+        ctx.translate(0, -this.gy(side));
       }
     }
     this.drawFighterBody(side, f);

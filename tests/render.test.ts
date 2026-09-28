@@ -56,3 +56,23 @@ describe("isometric room details", () => {
     assert.ok(ISO.floorEdge(240, isoFloorY(240)) === 0 && ISO.floorEdge(240, 250) > 0.9);
   });
 });
+
+describe("depth and animated props", () => {
+  it("the iso duellists stand at different depths, the flat ones on one line", () => {
+    assert.ok(ISO.ground[0] < ISO.ground[1], "challenger further back");
+    for (const g of ISO.ground) assert.ok(g > isoFloorY(132) && g < 270);
+    assert.equal(FLAT.ground[0], FLAT.ground[1]);
+  });
+
+  it("banners flutter over time but stay on their rod", () => {
+    const frame = (t: number): string[] => {
+      const out: string[] = [];
+      ISO.drawProps?.((x, y, w, h, c) => out.push(`${String(x)},${String(y)},${String(w)},${String(h)},${c}`), t);
+      return out;
+    };
+    assert.ok(frame(0).length > 40);
+    assert.notDeepEqual(frame(0), frame(0.7), "the cloth moves");
+    const tops = (f: string[]): number => Math.min(...f.map((r) => Number(r.split(",")[1])));
+    assert.equal(tops(frame(0)), tops(frame(0.7)), "the top edge hangs still");
+  });
+});

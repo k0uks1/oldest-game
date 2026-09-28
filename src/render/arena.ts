@@ -183,6 +183,9 @@ export interface Bolt {
 export interface Projectile {
   from: number;
   to: number;
+  /** Ground line under the start and the end (the fighters may stand at different depths). */
+  readonly groundFrom: number;
+  readonly groundTo: number;
   t: number;
   duration: number;
   color: string;
@@ -278,6 +281,9 @@ export abstract class ArenaSim {
   protected readonly fieldFx = new Map<string, { level: number; target: number }>();
   /** Discovery star floating above a fighter. */
   protected discoveryGlow: { side: Side; life: number } | null = null;
+  /** Night life of the room: bats crossing the vault, now and then a rat along the wall. */
+  protected readonly bats: { x: number; y: number; vx: number; readonly phase: number }[] = [];
+  protected rat: { x: number; readonly dir: 1 | -1; pause: number } | null = null;
   /** Water drops falling from the vault (where the stage says it drips). */
   protected readonly drops: { x: number; y: number; vy: number; readonly land: number }[] = [];
 
@@ -341,10 +347,11 @@ export abstract class ArenaSim {
       case "nuke": {
         this.onCue?.("boom");
         const gx = 240;
+        const mid = (this.gy(0) + this.gy(1)) / 2;
         this.flash = 1;
         this.flashColor = "#ffffff";
         this.shake = rm ? 0 : 14;
-        for (let k = 0; k < 4; k++) this.rings.push({ x: gx, y: GROUND_Y, r: 4, life: -k * 0.12, max: 1.4, color: k % 2 === 0 ? "#fff3a0" : "#ff8a30", grow: 260 });
+        for (let k = 0; k < 4; k++) this.rings.push({ x: gx, y: mid, r: 4, life: -k * 0.12, max: 1.4, color: k % 2 === 0 ? "#fff3a0" : "#ff8a30", grow: 260 });
         // stem and cap of the mushroom cloud
         for (let i = 0; i < 760; i++) {
           const stem = i < 260;
@@ -352,13 +359,13 @@ export abstract class ArenaSim {
           const ang = r() * Math.PI * 2;
           const rad = Math.sqrt(r());
           const px = stem ? gx + (r() - 0.5) * (10 + t * 16) : gx + Math.cos(ang) * rad * 85;
-          const py = stem ? GROUND_Y - t * 110 : GROUND_Y - 125 + Math.sin(ang) * rad * 32;
+          const py = stem ? mid - t * 110 : mid - 125 + Math.sin(ang) * rad * 32;
           const c = t < 0.15 ? "#ffffff" : t < 0.45 ? "#ffc64a" : t < 0.75 ? "#ff6a20" : "#7a3a2a";
           this.particles.push({ x: px, y: py, vx: (r() - 0.5) * (stem ? 6 : 24), vy: stem ? -10 - r() * 14 : -6 - r() * 10, life: -r() * 0.5, max: 2.8 + r() * 1.4, color: c, size: r() < 0.5 ? 3 : 2, gravity: 0, glow: t < 0.7 });
         }
         for (let i = 0; i < 160; i++) {
           const a = r() * Math.PI;
-          this.particles.push({ x: gx, y: GROUND_Y - 2, vx: Math.cos(a) * (120 + r() * 120), vy: -Math.sin(a) * 30, life: 0, max: 1 + r(), color: "#6a5040", size: 2, gravity: 40, glow: false });
+          this.particles.push({ x: gx, y: mid - 2, vx: Math.cos(a) * (120 + r() * 120), vy: -Math.sin(a) * 30, life: 0, max: 1 + r(), color: "#6a5040", size: 2, gravity: 40, glow: false });
         }
         this.cosmicTarget = Math.max(this.cosmicTarget, 0.35); // bricks blown out of the wall
         await wait(rm ? 200 : 1600);
@@ -370,15 +377,15 @@ export abstract class ArenaSim {
         for (let i = 0; i < steps; i++) {
           const t = i / steps;
           const px = tx - 160 + 160 * t;
-          const py = -10 + (GROUND_Y + 10) * t;
+          const py = -10 + (this.gy(side) + 10) * t;
           this.particles.push({ x: px, y: py, vx: -20, vy: -10, life: -t * 0.6, max: 0.5, color: t > 0.8 ? "#ffffff" : "#ff8a30", size: 3, gravity: 0, glow: true });
         }
         await wait(rm ? 100 : 620);
         this.flash = 0.4;
         this.flashColor = "#ffc64a";
         this.shake = rm ? 0 : 7;
-        this.burst(tx, GROUND_Y - 6, "#ff8a30", 70);
-        this.rings.push({ x: tx, y: GROUND_Y, r: 4, life: 0, max: 0.8, color: "#ffc64a" });
+        this.burst(tx, this.gy(side) - 6, "#ff8a30", 70);
+        this.rings.push({ x: tx, y: this.gy(side), r: 4, life: 0, max: 0.8, color: "#ffc64a" });
         await wait(300);
         return;
       }
@@ -395,7 +402,7 @@ export abstract class ArenaSim {
         return;
       }
       case "vortex":
-        this.vortex = { x, y: GROUND_Y - 40, life: 0 };
+        this.vortex = { x, y: this.gy(side) - 40, life: 0 };
         await wait(rm ? 100 : 900);
         return;
     }
@@ -413,13 +420,13 @@ export abstract class ArenaSim {
     this.onCue?.("discovery");
     this.discoveryGlow = { side, life: 0 };
     const cx = SIDE_X[side];
-    const top = GROUND_Y - f.sprite.pixels.height;
+    const top = this.gy(side) - f.sprite.pixels.height;
     for (let i = 0; i < 70; i++) {
       const a = (i / 70) * Math.PI * 6;
       const rr = 6 + (i / 70) * f.sprite.pixels.width * 0.6;
       this.particles.push({
         x: cx + Math.cos(a) * rr,
-        y: GROUND_Y - (i / 70) * f.sprite.pixels.height,
+        y: this.gy(side) - (i / 70) * f.sprite.pixels.height,
         vx: -Math.sin(a) * 18,
         vy: -18 - this.rand() * 20,
         life: -i * 0.008,
@@ -534,11 +541,11 @@ export abstract class ArenaSim {
     };
     const color = sprite.palette.glow;
     this.onCue?.("summon");
-    this.rings.push({ x: SIDE_X[side], y: GROUND_Y, r: 4, life: 0, max: 0.8, color });
+    this.rings.push({ x: SIDE_X[side], y: this.gy(side), r: 4, life: 0, max: 0.8, color });
     for (let i = 0; i < 50; i++) {
       this.particles.push({
         x: SIDE_X[side] + (this.rand() - 0.5) * sprite.pixels.width,
-        y: GROUND_Y,
+        y: this.gy(side),
         vx: (this.rand() - 0.5) * 20,
         vy: -30 - this.rand() * 70,
         life: 0,
@@ -556,7 +563,7 @@ export abstract class ArenaSim {
   async reveal(side: Side): Promise<void> {
     const f = this.fighters[side];
     if (f === null) return;
-    const cy = GROUND_Y - f.sprite.pixels.height / 2;
+    const cy = this.gy(side) - f.sprite.pixels.height / 2;
     this.onCue?.("reveal");
     this.rings.push({ x: SIDE_X[side], y: cy, r: 4, life: 0, max: 0.6, color: f.sprite.palette.glow });
     this.burst(SIDE_X[side], cy, f.sprite.palette.glow, 60);
@@ -581,8 +588,8 @@ export abstract class ArenaSim {
     this.shake = weaknessHit ? 8 : 5;
     this.flash = weaknessHit ? 0.55 : 0.35;
     this.flashColor = attacker.sprite.palette.glow;
-    this.burst(SIDE_X[other], GROUND_Y - target.sprite.pixels.height / 2, attacker.sprite.palette.glow, weaknessHit ? 90 : 50);
-    this.rings.push({ x: SIDE_X[other], y: GROUND_Y - target.sprite.pixels.height / 2, r: 6, life: 0, max: 0.5, color: attacker.sprite.palette.glow });
+    this.burst(SIDE_X[other], this.gy(other) - target.sprite.pixels.height / 2, attacker.sprite.palette.glow, weaknessHit ? 90 : 50);
+    this.rings.push({ x: SIDE_X[other], y: this.gy(other) - target.sprite.pixels.height / 2, r: 6, life: 0, max: 0.5, color: attacker.sprite.palette.glow });
     await wait(260);
     if (outcome === "destroy") await this.defeat(other, style);
     else await this.depart(other, outcome);
@@ -596,14 +603,14 @@ export abstract class ArenaSim {
     const away = side === 0 ? -1 : 1;
     if (outcome === "flee") {
       f.facing = -1;
-      for (let k = 0; k < 12; k++) this.particles.push({ x: SIDE_X[side], y: GROUND_Y - 2, vx: -away * (10 + this.rand() * 20), vy: -10 - this.rand() * 20, life: 0, max: 0.5, color: "#6a6080", size: 2, gravity: 40, glow: false });
+      for (let k = 0; k < 12; k++) this.particles.push({ x: SIDE_X[side], y: this.gy(side) - 2, vx: -away * (10 + this.rand() * 20), vy: -10 - this.rand() * 20, life: 0, max: 0.5, color: "#6a6080", size: 2, gravity: 40, glow: false });
       await this.tween(this.reducedMotion ? 50 : 750, (t) => {
         f.offsetX = away * 240 * t * t;
         f.offsetY = -Math.abs(Math.sin(t * 20)) * 3;
       });
     } else if (outcome === "sleep") {
       for (let k = 0; k < 3; k++) {
-        this.particles.push({ x: SIDE_X[side] + 8, y: GROUND_Y - f.sprite.pixels.height, vx: 8, vy: -14, life: -k * 0.35, max: 1.2, color: "#c8d8ff", size: 2, gravity: 0, glow: true });
+        this.particles.push({ x: SIDE_X[side] + 8, y: this.gy(side) - f.sprite.pixels.height, vx: 8, vy: -14, life: -k * 0.35, max: 1.2, color: "#c8d8ff", size: 2, gravity: 0, glow: true });
       }
       await this.tween(this.reducedMotion ? 50 : 1300, (t) => {
         f.offsetY = 4 * t;
@@ -612,12 +619,12 @@ export abstract class ArenaSim {
     } else if (outcome === "seal") {
       // pulled into a shrinking rune circle
       const cx = SIDE_X[side];
-      for (let k = 0; k < 3; k++) this.rings.push({ x: cx, y: GROUND_Y - 2, r: 40 - k * 10, life: -k * 0.1, max: 1, color: "#c8a0ff" });
+      for (let k = 0; k < 3; k++) this.rings.push({ x: cx, y: this.gy(side) - 2, r: 40 - k * 10, life: -k * 0.1, max: 1, color: "#c8a0ff" });
       await this.tween(this.reducedMotion ? 50 : 900, (t) => {
         f.squash = 1 - t;
         f.alpha = 1 - t * t;
       });
-      this.burst(cx, GROUND_Y - 4, "#c8a0ff", 30);
+      this.burst(cx, this.gy(side) - 4, "#c8a0ff", 30);
     } else if (outcome === "petrify") {
       await this.tween(this.reducedMotion ? 50 : 700, (t) => (f.stone = t));
       await wait(500);
@@ -627,7 +634,7 @@ export abstract class ArenaSim {
       const gold = outcome === "peace";
       for (let k = 0; k < 24; k++) {
         const c = gold ? (this.rand() < 0.5 ? "#ffe890" : "#fffbe0") : this.rand() < 0.5 ? "#ff9ad0" : "#ffe0f0";
-        this.particles.push({ x: SIDE_X[side] + (this.rand() - 0.5) * f.sprite.pixels.width, y: GROUND_Y - this.rand() * f.sprite.pixels.height, vx: 0, vy: -12 - this.rand() * 10, life: -this.rand() * 0.5, max: 1, color: c, size: 1, gravity: 0, glow: true });
+        this.particles.push({ x: SIDE_X[side] + (this.rand() - 0.5) * f.sprite.pixels.width, y: this.gy(side) - this.rand() * f.sprite.pixels.height, vx: 0, vy: -12 - this.rand() * 10, life: -this.rand() * 0.5, max: 1, color: c, size: 1, gravity: 0, glow: true });
       }
       await this.tween(this.reducedMotion ? 50 : 1100, (t) => {
         f.alpha = 1 - t;
@@ -645,8 +652,8 @@ export abstract class ArenaSim {
     await this.suspense(other);
     const x = SIDE_X[other] + (side === 0 ? -1 : 1) * ((target?.sprite.pixels.width ?? 40) / 2 + 6);
     this.onCue?.("fizzle");
-    this.rings.push({ x, y: GROUND_Y - 30, r: 3, life: 0, max: 0.45, color: "#e8e0f0" });
-    this.burst(x, GROUND_Y - 30, "#e8e0f0", 24);
+    this.rings.push({ x, y: this.gy(other) - 30, r: 3, life: 0, max: 0.45, color: "#e8e0f0" });
+    this.burst(x, this.gy(other) - 30, "#e8e0f0", 24);
     this.shake = 3;
     await wait(250);
     const me = this.fighters[side];
@@ -673,7 +680,7 @@ export abstract class ArenaSim {
     const r = this.rand;
     switch (style) {
       case "water": {
-        for (let k = 0; k < 60; k++) this.particles.push({ x: cx - away * 30 + r() * 20, y: GROUND_Y - r() * 14, vx: away * (80 + r() * 60), vy: -20 - r() * 30, life: -r() * 0.3, max: 0.8, color: r() < 0.6 ? "#3f8fc9" : "#bff0ff", size: 2, gravity: 90, glow: r() < 0.4 });
+        for (let k = 0; k < 60; k++) this.particles.push({ x: cx - away * 30 + r() * 20, y: this.gy(side) - r() * 14, vx: away * (80 + r() * 60), vy: -20 - r() * 30, life: -r() * 0.3, max: 0.8, color: r() < 0.6 ? "#3f8fc9" : "#bff0ff", size: 2, gravity: 90, glow: r() < 0.4 });
         await this.tween(rm ? 50 : 800, (t) => {
           f.offsetX = away * 90 * t;
           f.offsetY = -Math.sin(t * Math.PI) * 6;
@@ -686,16 +693,16 @@ export abstract class ArenaSim {
           f.flash = 0.6 * (1 - t);
           f.squash = 1 - 0.6 * t;
           f.alpha = 1 - t * t;
-          if (r() < 0.8) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.pixels.width, y: GROUND_Y - r() * h * (1 - 0.6 * t), vx: (r() - 0.5) * 10, vy: -30 - r() * 30, life: 0, max: 0.7, color: r() < 0.5 ? "#ff6a20" : "#ffc64a", size: 2, gravity: -10, glow: true });
+          if (r() < 0.8) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.pixels.width, y: this.gy(side) - r() * h * (1 - 0.6 * t), vx: (r() - 0.5) * 10, vy: -30 - r() * 30, life: 0, max: 0.7, color: r() < 0.5 ? "#ff6a20" : "#ffc64a", size: 2, gravity: -10, glow: true });
         });
-        for (let k = 0; k < 20; k++) this.particles.push({ x: cx + (r() - 0.5) * 20, y: GROUND_Y - 2, vx: (r() - 0.5) * 8, vy: -8 - r() * 10, life: 0, max: 1.6, color: "#3a3440", size: 2, gravity: -3, glow: false });
+        for (let k = 0; k < 20; k++) this.particles.push({ x: cx + (r() - 0.5) * 20, y: this.gy(side) - 2, vx: (r() - 0.5) * 8, vy: -8 - r() * 10, life: 0, max: 1.6, color: "#3a3440", size: 2, gravity: -3, glow: false });
         return;
       }
       case "earth": {
         await this.tween(rm ? 50 : 800, (t) => {
           f.offsetY = h * t;
           f.alpha = 1 - t * 0.7;
-          if (r() < 0.6) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.pixels.width, y: GROUND_Y - 2, vx: (r() - 0.5) * 30, vy: -30 - r() * 40, life: 0, max: 0.6, color: "#6a5040", size: 2, gravity: 160, glow: false });
+          if (r() < 0.6) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.pixels.width, y: this.gy(side) - 2, vx: (r() - 0.5) * 30, vy: -30 - r() * 40, life: 0, max: 0.6, color: "#6a5040", size: 2, gravity: 160, glow: false });
         });
         return;
       }
@@ -704,7 +711,7 @@ export abstract class ArenaSim {
         f.flash = 0.8;
         await wait(250);
         this.disintegrate(side);
-        this.burst(cx, GROUND_Y - h / 2, "#e6fbff", 40);
+        this.burst(cx, this.gy(side) - h / 2, "#e6fbff", 40);
         await wait(500);
         return;
       }
@@ -723,7 +730,7 @@ export abstract class ArenaSim {
         await this.tween(rm ? 50 : 1000, (t) => {
           f.squash = 1 - t;
           f.alpha = 1 - t * t;
-          if (r() < 0.7) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.pixels.width, y: GROUND_Y - r() * h * (1 - t), vx: 0, vy: -6 - r() * 8, life: 0, max: 0.9, color: c, size: 2, gravity: 0, glow: style !== "dark" });
+          if (r() < 0.7) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.pixels.width, y: this.gy(side) - r() * h * (1 - t), vx: 0, vy: -6 - r() * 8, life: 0, max: 0.9, color: c, size: 2, gravity: 0, glow: style !== "dark" });
         });
         return;
       }
@@ -732,7 +739,7 @@ export abstract class ArenaSim {
       case "cosmic": {
         f.flash = 1;
         await this.tween(rm ? 50 : 600, (t) => (f.alpha = 1 - t));
-        this.burst(cx, GROUND_Y - h / 2, "#ffffff", 50);
+        this.burst(cx, this.gy(side) - h / 2, "#ffffff", 50);
         return;
       }
       case "slash":
@@ -762,7 +769,7 @@ export abstract class ArenaSim {
     if (target !== null) await this.strike(other, targetStyle, true);
     await dodge;
     this.onCue?.("fizzle");
-    this.burst(SIDE_X[side], GROUND_Y - 30 + dy, evader.sprite.palette.glow, 20);
+    this.burst(SIDE_X[side], this.gy(side) - 30 + dy, evader.sprite.palette.glow, 20);
     await wait(250);
     await this.tween(this.reducedMotion ? 50 : 500, (t) => {
       if (direction === "hide") evader.alpha = 0.15 + 0.85 * t;
@@ -796,7 +803,7 @@ export abstract class ArenaSim {
     const [color, glow] = STYLE_COLORS[style];
     const tx = SIDE_X[other];
     const reachX = stopShort ? SIDE_X[side] + (tx - SIDE_X[side]) * 0.72 : tx;
-    const ty = GROUND_Y - (target?.sprite.pixels.height ?? 40) / 2;
+    const ty = this.gy(other) - (target?.sprite.pixels.height ?? 40) / 2;
     await this.tween(180, (t) => (attacker.offsetX = -dir * 6 * t));
     this.onCue?.("strike");
     const back = (): void => void this.tween(250, (t) => (attacker.offsetX = attacker.offsetX * (1 - t)));
@@ -814,12 +821,12 @@ export abstract class ArenaSim {
       }
       case "bolt": {
         const x = stopShort ? tx - dir * 26 : tx;
-        this.bolts.push(makeBolt(x, stopShort ? GROUND_Y - 4 : ty, this.rand, glow));
+        this.bolts.push(makeBolt(x, stopShort ? this.gy(other) - 4 : ty, this.rand, glow));
         this.flash = 0.3;
         this.flashColor = glow;
         await wait(90);
-        this.bolts.push(makeBolt(x + 2, stopShort ? GROUND_Y - 4 : ty, this.rand, color));
-        this.burst(x, stopShort ? GROUND_Y - 4 : ty, glow, 30);
+        this.bolts.push(makeBolt(x + 2, stopShort ? this.gy(other) - 4 : ty, this.rand, color));
+        this.burst(x, stopShort ? this.gy(other) - 4 : ty, glow, 30);
         await wait(160);
         back();
         return;
@@ -838,7 +845,7 @@ export abstract class ArenaSim {
         for (let k = 0; k < 7; k++) {
           const x = x0 + (k - 3) * 6 + (this.rand() - 0.5) * 3;
           for (let j = 0; j < 8; j++) {
-            this.particles.push({ x, y: GROUND_Y, vx: (this.rand() - 0.5) * 6, vy: -60 - this.rand() * 70 - j * 6, life: -k * 0.04, max: 0.7, color: this.rand() < 0.6 ? color : glow, size: 2, gravity: 180, glow: false });
+            this.particles.push({ x, y: this.gy(other), vx: (this.rand() - 0.5) * 6, vy: -60 - this.rand() * 70 - j * 6, life: -k * 0.04, max: 0.7, color: this.rand() < 0.6 ? color : glow, size: 2, gravity: 180, glow: false });
           }
         }
         this.shake = 3;
@@ -851,7 +858,7 @@ export abstract class ArenaSim {
         for (let k = 0; k < 60; k++) {
           const from = { x: reachX + (this.rand() - 0.5) * 20, y: ty + (this.rand() - 0.5) * 30 };
           const dur = 0.5 + this.rand() * 0.3;
-          this.particles.push({ x: from.x, y: from.y, vx: (SIDE_X[side] - from.x) / dur, vy: (GROUND_Y - 30 - from.y) / dur - 20, life: -k * 0.008, max: dur, color: this.rand() < 0.5 ? color : glow, size: 1, gravity: 40, glow: true });
+          this.particles.push({ x: from.x, y: from.y, vx: (SIDE_X[side] - from.x) / dur, vy: (this.gy(side) - 30 - from.y) / dur - 20, life: -k * 0.008, max: dur, color: this.rand() < 0.5 ? color : glow, size: 1, gravity: 40, glow: true });
         }
         await wait(650);
         back();
@@ -859,7 +866,7 @@ export abstract class ArenaSim {
       }
       case "rune": {
         const x = reachX;
-        for (let k = 0; k < 3; k++) this.rings.push({ x, y: GROUND_Y - 2, r: 30 - k * 8, life: -k * 0.12, max: 0.8, color: k === 1 ? glow : color });
+        for (let k = 0; k < 3; k++) this.rings.push({ x, y: this.gy(other) - 2, r: 30 - k * 8, life: -k * 0.12, max: 0.8, color: k === 1 ? glow : color });
         for (let k = 0; k < 16; k++) {
           const ang = (k / 16) * Math.PI * 2;
           this.particles.push({ x: x + Math.cos(ang) * 26, y: ty + Math.sin(ang) * 18, vx: -Math.cos(ang) * 30, vy: -Math.sin(ang) * 22, life: -0.2, max: 0.8, color: glow, size: 2, gravity: 0, glow: true });
@@ -900,6 +907,8 @@ export abstract class ArenaSim {
       this.projectiles.push({
         from: SIDE_X[side] + dir * 20,
         to: tx,
+        groundFrom: this.gy(side),
+        groundTo: this.gy(other),
         t: 0,
         duration: duration[style] ?? 0.5,
         color,
@@ -931,7 +940,7 @@ export abstract class ArenaSim {
     if (f === null) return;
     const { width, height, data } = f.sprite.pixels;
     const x0 = SIDE_X[side] - width / 2;
-    const y0 = GROUND_Y - height;
+    const y0 = this.gy(side) - height;
     const step = width > 64 ? 3 : 2;
     for (let y = 0; y < height; y += step) {
       for (let x = 0; x < width; x += step) {
@@ -1025,6 +1034,7 @@ export abstract class ArenaSim {
       if (f.alpha > 0 && f.aura.kind !== "none" && this.rand() < dt * 18) this.emitAura(side as Side, f);
     }
     this.updateDrops(dt);
+    this.updateCritters(dt);
     for (const tx of TORCH_X) {
       if (this.rand() < 0.15) this.particles.push({ x: tx, y: 80, vx: (this.rand() - 0.5) * 8, vy: -20, life: 0, max: 0.8, color: "#ffb040", size: 1, gravity: -5, glow: true });
     }
@@ -1071,6 +1081,37 @@ export abstract class ArenaSim {
 
   }
 
+  private updateCritters(dt: number): void {
+    if (!this.stage.critters || this.reducedMotion) return;
+    const r = this.rand;
+    if (this.bats.length === 0 && r() < dt / 11) {
+      // a small flock crosses the vault
+      const dir = r() < 0.5 ? 1 : -1;
+      const y = 10 + r() * 70;
+      for (let k = 0; k < 1 + Math.floor(r() * 3); k++) {
+        this.bats.push({ x: (dir > 0 ? -10 : WIDTH + 10) - dir * k * (12 + r() * 10), y: y + (r() - 0.5) * 14, vx: dir * (60 + r() * 30), phase: r() * 10 });
+      }
+    }
+    for (let i = this.bats.length - 1; i >= 0; i--) {
+      const b = this.bats[i];
+      if (b === undefined) continue;
+      b.x += b.vx * dt;
+      b.y += Math.sin(this.time * 5 + b.phase) * 16 * dt;
+      if (b.x < -40 || b.x > WIDTH + 40) this.bats.splice(i, 1);
+    }
+    // a rat scurries along the foot of the right wall, stopping to sniff
+    if (this.rat === null && r() < dt / 23) this.rat = r() < 0.5 ? { x: WIDTH - 4, dir: -1, pause: 0 } : { x: 262, dir: 1, pause: 0 };
+    const rat = this.rat;
+    if (rat !== null) {
+      if (rat.pause > 0) rat.pause -= dt;
+      else {
+        rat.x += rat.dir * 75 * dt;
+        if (r() < dt * 0.9) rat.pause = 0.25 + r() * 0.7;
+      }
+      if (rat.x < 258 || rat.x > WIDTH) this.rat = null;
+    }
+  }
+
   /** Drops fall from the dark vault and ring out on the floor. */
   private updateDrops(dt: number): void {
     if (!this.reducedMotion) for (const [x, land] of this.stage.drips) if (this.rand() < dt * 0.3) this.drops.push({ x, y: -2, vy: 0, land });
@@ -1091,7 +1132,8 @@ export abstract class ArenaSim {
     const r = this.rand;
     const x = pr.from + (pr.to - pr.from) * t;
     const dir = Math.sign(pr.to - pr.from);
-    const air = GROUND_Y - 40 - Math.sin(t * Math.PI) * 14;
+    const ground = pr.groundFrom + (pr.groundTo - pr.groundFrom) * t;
+    const air = ground - 40 - Math.sin(t * Math.PI) * 14;
     const push = (px: number, py: number, vx: number, vy: number, max: number, size: number, gravity: number, color: string, glow = true): void => {
       this.particles.push({ x: px, y: py, vx, vy, life: 0, max, color, size, gravity, glow });
     };
@@ -1101,7 +1143,7 @@ export abstract class ArenaSim {
         push(x, air, 0, 0, 0.06, 4, 0, pr.glow);
         break;
       case "water":
-        for (let k = 0; k < 5; k++) push(x + (r() - 0.5) * 10, GROUND_Y - 2 - r() * 10, dir * 10, -30 - r() * 50, 0.4 + r() * 0.3, r() < 0.5 ? 2 : 1, 160, r() < 0.6 ? pr.color : pr.glow, r() < 0.5);
+        for (let k = 0; k < 5; k++) push(x + (r() - 0.5) * 10, ground - 2 - r() * 10, dir * 10, -30 - r() * 50, 0.4 + r() * 0.3, r() < 0.5 ? 2 : 1, 160, r() < 0.6 ? pr.color : pr.glow, r() < 0.5);
         break;
       case "ice":
         for (let k = 0; k < 3; k++) push(x - dir * k * 3, air + (r() - 0.5) * 8, dir * 40, 0, 0.12, 1, 0, r() < 0.5 ? pr.color : pr.glow);
@@ -1117,7 +1159,7 @@ export abstract class ArenaSim {
         if (r() < 0.6) push(x + (r() - 0.5) * 8, air + (r() - 0.5) * 8, 0, -6, 0.5, 1, 0, pr.glow);
         break;
       case "poison":
-        if (r() < 0.8) push(x + (r() - 0.5) * 12, GROUND_Y - 2, (r() - 0.5) * 6, -8 - r() * 16, 0.7 + r() * 0.5, r() < 0.3 ? 2 : 1, -6, r() < 0.6 ? pr.color : pr.glow);
+        if (r() < 0.8) push(x + (r() - 0.5) * 12, ground - 2, (r() - 0.5) * 6, -8 - r() * 16, 0.7 + r() * 0.5, r() < 0.3 ? 2 : 1, -6, r() < 0.6 ? pr.color : pr.glow);
         break;
       case "sound":
         if (r() < dt * 22) this.rings.push({ x, y: air, r: 3, life: 0, max: 0.35, color: pr.glow });
@@ -1163,7 +1205,7 @@ export abstract class ArenaSim {
     const w = f.sprite.pixels.width;
     const h = f.sprite.pixels.height;
     const x = SIDE_X[side] + (this.rand() - 0.5) * w * 0.8;
-    const y = GROUND_Y - this.rand() * h;
+    const y = this.gy(side) - this.rand() * h;
     const k = f.aura.kind;
     this.particles.push({
       x,
@@ -1181,11 +1223,16 @@ export abstract class ArenaSim {
 
   // ── Drawing ─────────────────────────────────────────────────────────────
 
+  /** The ground line a side stands on – the stage may place the duellists at different depths. */
+  protected gy(side: Side): number {
+    return this.stage.ground[side];
+  }
+
   protected fighterRect(side: Side, f: Fighter): { x: number; y: number; w: number; h: number } {
     const { width, height } = f.sprite.pixels;
     const bob = this.reducedMotion ? 0 : Math.round(Math.sin(this.time * (f.flying ? 2.2 : 1.6) + (f.seed % 7)) * (f.flying ? 3 : 1));
     const lift = f.flying ? 10 : 0;
-    return { x: Math.round(SIDE_X[side] - width / 2 + f.offsetX), y: Math.round(GROUND_Y - height - lift + bob + f.offsetY), w: width, h: height };
+    return { x: Math.round(SIDE_X[side] - width / 2 + f.offsetX), y: Math.round(this.gy(side) - height - lift + bob + f.offsetY), w: width, h: height };
   }
 
   /** Open bricks one by one as the cosmic factor rises; each falls away as dust. */

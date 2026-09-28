@@ -249,3 +249,12 @@ Alles, was die Arena rund um die Gestalten zeigt (Licht, Sterne, Bodeneffekte, A
 | **Mehr Tiefe** | Der Boden dunkelt zum Wandfuß hin ab (gerastert), und unter jeder Fackel liegt ein warmer Lichtfleck auf dem Boden. | `paintFloor` in `stage-iso.ts`, `drawLights` |
 
 Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfer), `stage-flat.ts` und `stage-iso.ts` verteilt; `stageFor` steht in `arenas.ts`.
+
+## Tiefe und Leben im Hintergrund (Nutzerwunsch: „mehr Tiefe, versetzte Kontrahenten, wehende Banner“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Versetzt in der Tiefe** | Im Iso-Raum steht, wer herausfordert, weiter hinten links, und die Antwort tritt vorne rechts auf. Alles richtet sich nach der Bodenlinie der jeweiligen Seite: Geschosse fliegen schräg durch den Raum, dazu Ringe, Schatten, Lichtkegel, Staub und Untergänge. Die flache Kulisse bleibt auf einer Linie. | `StageLayout.ground`, `ArenaSim.gy()` |
+| **Wehende Banner** | Die Banner hängen still an ihrer Stange, darunter atmet der Stoff im Luftzug: Der Schwalbenschwanz flattert, und die Falten wandern durchs Tuch. Das Sigil sitzt oben, wo der Stoff ruhig bleibt. Bei reduzierter Bewegung hängen sie still. | `drawBanners` in `stage-iso.ts`, `StageLayout.drawProps` |
+| **Fledermäuse** | Ab und zu zieht ein kleiner Schwarm durchs Gewölbe: dunkle Silhouetten mit Flügelschlag in zwei Bildern und hellen Flügelkanten. Vor der schwarzen Decke sieht man oft nur die roten Augen wandern. | `updateCritters`, `drawCritters` |
+| **Eine Ratte** | Gelegentlich huscht eine Ratte am Fuß der rechten Wand entlang, bleibt stehen, schnuppert und trippelt weiter. | ebd. |

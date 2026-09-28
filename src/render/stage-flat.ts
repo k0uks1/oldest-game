@@ -1,6 +1,6 @@
 /** The original straight-on dungeon wall with two pillars (`?flat`). */
 import { rng } from "../engine/text.ts";
-import { FLOOR_Y, HEIGHT, WIDTH, type Brick, type StageLayout } from "./stage.ts";
+import { FLOOR_Y, GROUND_Y, HEIGHT, WIDTH, type Brick, type StageLayout } from "./stage.ts";
 
 /** Procedural dungeon backdrop, painted once. */
 function paintFlat(): HTMLCanvasElement {
@@ -114,5 +114,7 @@ export const FLAT: StageLayout = {
   floorTop: () => FLOOR_Y,
   floorEdge: (x) => Math.min(x, WIDTH - x) / (WIDTH / 2),
   drips: [],
+  ground: [GROUND_Y, GROUND_Y],
   fog: false,
+  critters: false,
 };
