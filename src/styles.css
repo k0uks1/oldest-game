@@ -1120,3 +1120,47 @@ input,
   word-break: break-all;
   user-select: all;
 }
+
+/* ── Start dialog ───────────────────────────────────────────────────────── */
+.modal .start-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.modal .start-pane[hidden],
+.modal .form-error[hidden] {
+  display: none;
+}
+.modal .form-error {
+  color: var(--bad);
+  border-left: 2px solid var(--bad);
+  padding: 4px 10px;
+  margin: 4px 0;
+}
+.modal .online-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.modal .online-choices .choice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--line);
+  padding: 10px 12px 12px;
+}
+.modal .online-choices .choice h3 {
+  margin: 0;
+}
+.modal .online-choices .choice .hint {
+  flex: 1;
+  margin: 0;
+}
+.modal .online-choices .room-code {
+  width: 100%;
+}
+@media (max-width: 640px) {
+  .modal .online-choices {
+    grid-template-columns: 1fr;
+  }
+}

@@ -258,3 +258,14 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Wehende Banner** | Die Banner hängen still an ihrer Stange, darunter atmet der Stoff im Luftzug: Der Schwalbenschwanz flattert, und die Falten wandern durchs Tuch. Das Sigil sitzt oben, wo der Stoff ruhig bleibt. Bei reduzierter Bewegung hängen sie still. | `drawBanners` in `stage-iso.ts`, `StageLayout.drawProps` |
 | **Fledermäuse** | Ab und zu zieht ein kleiner Schwarm durchs Gewölbe: dunkle Silhouetten mit Flügelschlag in zwei Bildern und hellen Flügelkanten. Vor der schwarzen Decke sieht man oft nur die roten Augen wandern. | `updateCritters`, `drawCritters` |
 | **Eine Ratte** | Gelegentlich huscht eine Ratte am Fuß der rechten Wand entlang, bleibt stehen, schnuppert und trippelt weiter. | ebd. |
+
+## Online-Start ohne Rätsel (Nutzerfeedback: „mega verwirrend, springt nach 2 Sekunden zurück ins Menü“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Zwei Reiter** | „Hier zu zweit“ und „Online“ sind getrennt. Online gibt es nur „Dein Name“, bei Bedarf „Zugangscode des Servers“ und zwei Kästen: „Neues Duell → Raum eröffnen“ und „Eingeladen? → Raum-Code → Beitreten“. Raum-Code und Zugangscode sind klar benannt. | `showStart` |
+| **Fehler bleiben im Dialog** | Vorher schloss sich das Menü, die Verbindung scheiterte (falscher Zugangscode, unbekannter Raum, Limit), und das Menü öffnete sich wieder – die Meldung blitzte nur dahinter auf. Jetzt steht der Grund rot im Dialog, der Cursor sitzt im Feld, das korrigiert werden muss, und alles Eingetippte bleibt erhalten. | `StartOptions.error`, `onServer("error")` |
+| **„Verbinde …“ statt leerer Arena** | Bis der Server den Raum bestätigt, zeigt der Dialog „Verbinde …“ mit „Abbrechen“; ist der Server nicht erreichbar, sagt er das. | `showConnecting` |
+| **Beitreten erst mit gültigem Code** | Der Knopf wird aktiv, sobald fünf gültige Zeichen dastehen; Kleinbuchstaben werden groß. Der Einladungslink öffnet direkt den Online-Reiter mit eingetragenem Code. | `updateJoin` |
+| **Name wird gemerkt** | Der eigene Name steht beim nächsten Mal schon da, der Zugangscode nur für diese Sitzung. | `rememberName` |
+| **Großzügigere Limits** | Freunde teilen oft eine Adresse (Router). Pro Adresse sind jetzt 24 Verbindungen und 60 Räume pro Stunde erlaubt, und das Server-Log weist darauf hin, wenn ein Proxy ohne `TRUST_PROXY` der Grund sein dürfte. | `server/online.ts` |
