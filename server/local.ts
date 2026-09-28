@@ -54,7 +54,7 @@ export function envFrom(vars: Record<string, string | undefined>): ProxyEnv {
   return {
     apiKey: vars["ANTHROPIC_API_KEY"] ?? "",
     model: vars["CLAUDE_MODEL"] ?? DEFAULT_PROXY_MODEL,
-    maxTokens: Number(vars["CLAUDE_MAX_TOKENS"] ?? 800),
+    maxTokens: Number(vars["CLAUDE_MAX_TOKENS"] ?? 1500),
     ...(vars["ACCESS_CODE"] === undefined || vars["ACCESS_CODE"] === "" ? {} : { accessCode: vars["ACCESS_CODE"] }),
   };
 }
