@@ -11,6 +11,11 @@ import { ArenaSim, GROUND_Y, SIDE_X, type Side } from "./arena.ts";
 import type { Pen } from "./pen.ts";
 import { HEIGHT, TORCH_X, TORCH_Y, WIDTH } from "./stage.ts";
 
+/** Bat frames (9×4): dark silhouettes; `o` = glowing eye. */
+const BAT_UP = ["++.....++", ".#+...+#.", "..##o##..", "...#.#..."];
+const BAT_DOWN = ["...#.#...", "..##o##..", ".#+...+#.", "++.....++"];
+/** Rat facing right (7×3): body, lighter back, snout, eye. */
+const RAT = [".+++...", "#####s,", "#.#.#.."];
 const RAINBOW = ["#ff5a5a", "#ffa040", "#ffe060", "#70e060", "#60a0ff", "#9a6aff"];
 
 export abstract class ArenaScene extends ArenaSim {
@@ -21,6 +26,10 @@ export abstract class ArenaScene extends ArenaSim {
     this.drawFieldFloor(base);
     this.drawEyes(base, glow);
     this.drawTorchFlames(base, glow);
+    this.stage.drawProps?.((x, y, w, h, color) => {
+      base.rect(x, y, w, h, color);
+    }, this.reducedMotion ? 0 : this.time);
+    this.drawCritters(base, glow);
     this.drawMotes(base);
     this.drawDrops(base, glow);
     this.drawRainbow(base, glow);
@@ -64,12 +73,13 @@ export abstract class ArenaScene extends ArenaSim {
       if (f === null || f.alpha <= 0) continue;
       const w = f.sprite.pixels.width;
       const x = SIDE_X[side as Side] + f.offsetX;
-      base.light(x, GROUND_Y, w * 0.9, w * 0.9 * 0.35, f.sprite.palette.glow, (f.sprite.palette.emissive ? 0.35 : 0.12) * f.appear);
+      const gy = this.gy(side as Side);
+      base.light(x, gy, w * 0.9, w * 0.9 * 0.35, f.sprite.palette.glow, (f.sprite.palette.emissive ? 0.35 : 0.12) * f.appear);
       // what glows lights up the wall behind it
       if (f.sprite.palette.emissive) base.light(x, this.stage.floorTop(x) - 26, w * 0.9, 44, f.sprite.palette.glow, 0.13 * f.appear * f.reveal * f.alpha);
       // contact shadow: smaller and fainter under whatever hovers
       const k = f.flying ? 0.7 : 1;
-      base.light(x, GROUND_Y + 1, w * 0.5 * k, (w * 0.12 + 3) * k, "#000000", 0.6 * k * f.alpha * f.appear * f.squash);
+      base.light(x, gy + 1, w * 0.5 * k, (w * 0.12 + 3) * k, "#000000", 0.6 * k * f.alpha * f.appear * f.squash);
     }
   }
 
@@ -81,6 +91,43 @@ export abstract class ArenaScene extends ArenaSim {
       const y = 176 + ((i * 37) % 84);
       const a = 0.09 + 0.04 * Math.sin(this.time * 0.3 + i);
       base.light(x, y, 60 + ((i * 13) % 30), 9 + (i % 4) * 2, "#3c3354", a);
+    }
+  }
+
+  /** Bats (two wing frames, glowing eyes) and the rat. */
+  private drawCritters(base: Pen, glow: Pen): void {
+    for (const b of this.bats) {
+      const up = Math.floor(this.time * 12 + b.phase) % 2 === 0;
+      const frame = up ? BAT_UP : BAT_DOWN;
+      const x0 = Math.round(b.x) - 4;
+      const y0 = Math.round(b.y) - 2;
+      for (const [j, row] of frame.entries()) {
+        for (const [i, ch] of Array.from(row).entries()) {
+          if (ch === "#") base.rect(x0 + i, y0 + j, 1, 1, "#150f1e");
+          else if (ch === "+") base.rect(x0 + i, y0 + j, 1, 1, "#5a4a70");
+          else if (ch === "o") {
+            base.rect(x0 + i, y0 + j, 1, 1, "#ff5a3c");
+            glow.rect(x0 + i, y0 + j, 1, 1, "#ff5a3c", 0.9);
+          }
+        }
+      }
+    }
+    const rat = this.rat;
+    if (rat !== null) {
+      const x = Math.round(rat.x);
+      const y = this.stage.floorTop(x) + 3;
+      const d = rat.dir;
+      const colors: Readonly<Record<string, string>> = { "#": "#6a5e6a", "+": "#8a7e8a", s: "#a89aa6", ",": "#ff9a6a" };
+      for (const [j, row] of RAT.entries()) {
+        for (const [i, ch] of Array.from(row).entries()) {
+          const color = colors[ch];
+          // legs trot while it runs
+          if (color === undefined || (j === 2 && rat.pause <= 0 && Math.floor(this.time * 18 + i) % 2 === 0)) continue;
+          base.rect(d > 0 ? x - 6 + i : x + 6 - i, y + j, 1, 1, color);
+        }
+      }
+      // tail
+      for (let k = 1; k <= 5; k++) base.rect(d > 0 ? x - 6 - k : x + 6 + k, y + 1 + (k > 3 ? 1 : 0), 1, 1, "#6a5058");
     }
   }
 
@@ -172,7 +219,7 @@ export abstract class ArenaScene extends ArenaSim {
   private drawMotes(base: Pen): void {
     const lights: { x: number; y: number; r: number }[] = TORCH_X.map((x) => ({ x, y: TORCH_Y, r: 70 }));
     for (const [side, f] of this.fighters.entries()) {
-      if (f !== null && f.sprite.palette.emissive && f.reveal > 0.5) lights.push({ x: SIDE_X[side as Side], y: GROUND_Y - f.sprite.pixels.height / 2, r: 60 });
+      if (f !== null && f.sprite.palette.emissive && f.reveal > 0.5) lights.push({ x: SIDE_X[side as Side], y: this.gy(side as Side) - f.sprite.pixels.height / 2, r: 60 });
     }
     for (const m of this.motes) {
       let lit = 0;

@@ -214,33 +214,43 @@ function paintDoor(px: Px): void {
 /** The game's sigil (ring, triangle, eye), 9×9. */
 const SIGIL = ["..#####..", ".#.....#.", "#...#...#", "#..#.#..#", "#.#.o.#.#", "#.#####.#", "#.......#", ".#.....#.", "..#####.."];
 
-function paintBanners(px: Px): void {
+/**
+ * The banners, drawn every frame: fixed at the rod, the cloth below it breathes in a draught –
+ * the hem flutters, folds wander across the fabric. `t` frozen = still banners.
+ */
+function drawBanners(px: Px, t: number): void {
   for (const b of BANNERS) {
     const [dark, main, light] = b.cloth;
     const mid = (b.u0 + b.u1 - 1) / 2;
+    const drift = Math.round(Math.sin(t * 1.3) * 2);
     for (let x = b.u0; x < b.u1; x++) {
-      // swallow-tail hem
-      const len = b.len - Math.round(Math.max(0, 5 - Math.abs(x - mid)) * 1.6);
-      const edge = x === b.u0 || x === b.u1 - 1;
-      const fold = (x - b.u0) % 7 === 5;
-      px(x, wallY(x, b.top), 1, len, edge ? dark : fold ? dark : main);
-      if (x === b.u0 + 1) px(x, wallY(x, b.top), 1, len, light);
-      // gold border stripes
-      if (x === b.u0 + 2 || x === b.u1 - 3) px(x, wallY(x, b.top) + 3, 1, len - 6, "#9a6e14");
-      px(x, wallY(x, b.top) + 3, 1, 1, "#9a6e14");
+      const i = x - b.u0;
+      // swallow-tail hem, fluttering more towards the tips
+      const tail = Math.max(0, 5 - Math.abs(x - mid));
+      const flutter = Math.sin(t * 3.1 + i * 0.8) * (1 + (5 - tail) * 0.25);
+      const len = b.len - Math.round(tail * 1.6) + Math.round(flutter);
+      const top = wallY(x, b.top);
+      const edge = i === 0 || i === b.u1 - b.u0 - 1;
+      const fold = (((i + drift) % 7) + 7) % 7 === 5;
+      px(x, top, 1, len, edge || fold ? dark : i === 1 ? light : main);
+      // gold border stripes follow the hem
+      if (i === 2 || x === b.u1 - 3) px(x, top + 3, 1, len - 6, "#9a6e14");
+      px(x, top + 3, 1, 1, "#9a6e14");
     }
-    // rod
-    for (let x = b.u0 - 2; x < b.u1 + 2; x++) px(x, wallY(x, b.top) - 1, 1, 2, "#3a2210");
-    // sigil, sheared onto the cloth
+    // the sigil hangs high, where the cloth is calm
     const sx = Math.round(mid) - 4;
     for (const [j, row] of SIGIL.entries()) {
-      for (const [i, ch] of Array.from(row).entries()) {
+      for (const [k, ch] of Array.from(row).entries()) {
         if (ch === ".") continue;
-        const x = sx + i;
+        const x = sx + k;
         px(x, wallY(x, b.top) + 12 + j, 1, 1, ch === "o" ? "#ffd86a" : "#e0b030");
       }
     }
   }
+}
+
+function paintBannerRods(px: Px): void {
+  for (const b of BANNERS) for (let x = b.u0 - 2; x < b.u1 + 2; x++) px(x, wallY(x, b.top) - 1, 1, 2, "#3a2210");
 }
 
 function paintChains(px: Px): void {
@@ -347,7 +357,7 @@ function paintIso(): HTMLCanvasElement {
   paintWalls(px, rand);
   paintFloor(px, rand, ISO_RUNE);
   paintDoor(px);
-  paintBanners(px);
+  paintBannerRods(px);
   paintChains(px);
   paintPillar(px);
   for (const tx of TORCH_X) {
@@ -394,6 +404,10 @@ export const ISO: StageLayout = {
     [288, 150],
     [420, 236],
   ],
+  // the challenger waits further back, the answer steps forward
+  ground: [206, 238],
+  drawProps: drawBanners,
+  critters: true,
   fog: true,
   // the first witness stares from behind the portcullis, the others from the black vault
   eyes: [

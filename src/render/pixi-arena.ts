@@ -11,7 +11,7 @@
  */
 import { autoDetectRenderer, BlurFilter, Container, Graphics, Rectangle, RenderTexture, Sprite, Texture, type Renderer } from "pixi.js";
 import type { Ontology } from "../engine/ontology/ontology.ts";
-import { easeOut, GROUND_Y, HEIGHT, UPSCALE, WIDTH, type Fighter, type Side } from "./arena.ts";
+import { easeOut, HEIGHT, UPSCALE, WIDTH, type Fighter, type Side } from "./arena.ts";
 import { colorNum, PixiPen, radialTexture } from "./pixi-pen.ts";
 import { ArenaScene } from "./scene.ts";
 import type { StageLayout } from "./stage.ts";
@@ -214,8 +214,8 @@ export class PixiArena extends ArenaScene {
       if (f.alpha <= 0) continue;
       // squash towards the ground
       for (const c of [v.base, v.glow]) {
-        c.pivot.set(0, GROUND_Y);
-        c.position.set(0, GROUND_Y);
+        c.pivot.set(0, this.gy(s));
+        c.position.set(0, this.gy(s));
         c.scale.set(1, f.squash < 1 ? Math.max(0.02, f.squash) : 1);
       }
       v.base.alpha = f.alpha;

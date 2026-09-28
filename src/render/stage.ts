@@ -54,6 +54,12 @@ export interface StageLayout {
   floorEdge(x: number, y: number): number;
   /** Where water drips from the vault: [x, y where it lands]. */
   readonly drips: readonly (readonly [number, number])[];
+  /** Ground line of each side: equal on a flat stage, staggered in depth in the iso room. */
+  readonly ground: readonly [number, number];
+  /** Animated scenery drawn every frame behind the fighters (banners in a draught), time in s. */
+  drawProps?(px: (x: number, y: number, w: number, h: number, color: string) => void, time: number): void;
+  /** Bats in the vault, a rat along the walls. */
+  readonly critters: boolean;
   /** Low mist drifting over the floor. */
   readonly fog: boolean;
   /** Dark places for the watching eyes (left eye of each pair), in order of appearance. */
