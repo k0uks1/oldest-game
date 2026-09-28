@@ -34,7 +34,7 @@ src/
                      → ArenaScene (what surrounds the fighters, drawn once through the Pen interface, scene.ts)
                      → PixiArena (WebGL, pixi-arena.ts + pixi-pen.ts) or CanvasArena (2D fallback, canvas-arena.ts);
                      createArena() picks (hardware WebGL → Pixi; ?pixi / ?canvas force);
-                     stage.ts = scenery (ISO room by default, FLAT wall with ?flat)
+                     stage.ts = scenery types; stage-iso.ts (default) / stage-flat.ts (?flat)
   ui/                hot-seat UI, no framework; sound.ts = WebAudio synth (no audio files)
   game/resolver.ts   one turn, text → classification/learning → engine → referee → narration (DOM-free)
   online/            WebSocket protocol (shared) + browser link with reconnect

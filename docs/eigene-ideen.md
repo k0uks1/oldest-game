@@ -246,3 +246,6 @@ Alles, was die Arena rund um die Gestalten zeigt (Licht, Sterne, Bodeneffekte, A
 | **Licht an der Wand** | Leuchtende Gestalten (Feuer, Blitz, Heiliges …) werfen ihr Licht auch auf die Wand hinter sich. | `drawLights` |
 | **Bodennebel und Tropfen** | Flache Nebelbänke ziehen langsam über den Boden. Aus dem Gewölbe fallen Tropfen, die auf den Fliesen Ringe schlagen und kurz spritzen. Beides entfällt bei reduzierter Bewegung. | `drawFog`, `updateDrops` |
 | **Bodeneffekte folgen dem Boden** | Nässe und Frost halten sich an die tatsächliche Bodenfläche der Kulisse; im Iso-Raum kriecht der Frost von den Wandfüßen her. | `floorTop`, `floorEdge` |
+| **Mehr Tiefe** | Der Boden dunkelt zum Wandfuß hin ab (gerastert), und unter jeder Fackel liegt ein warmer Lichtfleck auf dem Boden. | `paintFloor` in `stage-iso.ts`, `drawLights` |
+
+Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfer), `stage-flat.ts` und `stage-iso.ts` verteilt; `stageFor` steht in `arenas.ts`.

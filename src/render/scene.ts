@@ -56,6 +56,8 @@ export abstract class ArenaScene extends ArenaSim {
     for (const tx of TORCH_X) {
       const r = 50 + this.flicker(tx) * 4;
       base.light(tx, TORCH_Y, r, r, "#ffaa46", 0.32);
+      // and a warm patch on the floor below
+      base.light(tx, this.stage.floorTop(tx) + 8, r * 0.8, r * 0.22, "#ffaa46", 0.1);
     }
     if (this.stage.fog) this.drawFog(base);
     for (const [side, f] of this.fighters.entries()) {

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { colorNum } from "../src/render/pixi-pen.ts";
+import { FLAT } from "../src/render/stage-flat.ts";
+import { ISO, isoFloorY } from "../src/render/stage-iso.ts";
+import { scatterStars, TORCH_X } from "../src/render/stage.ts";
 
 describe("PixiJS arena helpers", () => {
   it("parses the colour strings the simulation uses", () => {
@@ -14,8 +17,7 @@ describe("PixiJS arena helpers", () => {
 });
 
 describe("arena scenery (stage)", () => {
-  it("isometric wall bricks stay on the walls, spare pillar and torches, crumble top-down", async () => {
-    const { ISO, FLAT, TORCH_X, scatterStars } = await import("../src/render/stage.ts");
+  it("isometric wall bricks stay on the walls, spare pillar and torches, crumble top-down", () => {
     const bricks = ISO.wallBricks();
     assert.ok(bricks.length > 150, `only ${String(bricks.length)} bricks`);
     for (const b of bricks) {
@@ -42,8 +44,7 @@ describe("arena scenery (stage)", () => {
 });
 
 describe("isometric room details", () => {
-  it("door, banners and chains survive the crumbling wall; eyes sit in the dark", async () => {
-    const { ISO, isoFloorY } = await import("../src/render/stage.ts");
+  it("door, banners and chains survive the crumbling wall; eyes sit in the dark", () => {
     const bricks = ISO.wallBricks();
     const hits = (x0: number, x1: number, y0: number, y1: number): boolean => bricks.some((b) => b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0);
     assert.ok(!hits(72, 112, isoFloorY(72) - 58, isoFloorY(72)), "the doorway stays");

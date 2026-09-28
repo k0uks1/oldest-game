@@ -8,9 +8,16 @@ import type { Ontology } from "../engine/ontology/ontology.ts";
 import type { ArenaSim } from "./arena.ts";
 import { CanvasArena } from "./canvas-arena.ts";
 import { PixiArena } from "./pixi-arena.ts";
-import { stageFor } from "./stage.ts";
+import { FLAT } from "./stage-flat.ts";
+import { ISO } from "./stage-iso.ts";
+import type { StageLayout } from "./stage.ts";
 
 export type Arena = ArenaSim;
+
+/** The scenery: the isometric room, or the old flat wall with `?flat`. */
+export function stageFor(search: string): StageLayout {
+  return new URLSearchParams(search).has("flat") ? FLAT : ISO;
+}
 
 /** Hardware-accelerated WebGL? (`failIfMajorPerformanceCaveat` refuses software rendering) */
 export function hardwareWebgl(): boolean {
