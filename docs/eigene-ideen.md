@@ -409,3 +409,12 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Präzedenz nur, wo nötig** | Widerspricht die Engine trotzdem, wird das Urteil als Präzedenzfall für genau dieses Paar gespeichert – Reichweite und Größen-Deckel gelten weiter. Jedes Paar wird nur einmal verhandelt. | `resolver.ts` (`judge`) |
 | **Sichtbar** | Die Warum-Zeile zeigt „⚖ Urteil: …“ und was gelernt wurde; die Gestalt auf der Bühne ist danach die besser verstandene. | `verdict` |
 
+## Neue Siegwege aus Präzedenzfällen (Nutzerwunsch: „die Engine soll kontinuierlich neue Wege lernen, wie man gewinnen kann“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Aus Einzelfällen wird eine Regel** | Jeder Schiedsspruch und jedes Urteil gilt erst nur für genau ein Paar. Sagen zwei unabhängige Fälle dasselbe – Wasser lässt die Seifenblase *und* die Kaugummiblase platzen –, lernt die Engine den Grund: „löscht“ wirkt jetzt auf alles, was leicht platzt. Die dritte Blase ist dann ohne Claude erreichbar. | `game/insight.ts` |
+| **Auch das Gegenteil** | Verneinen zwei Urteile einen Sieg, den die Engine gegeben hätte (die ewige Flamme erlischt nicht), wird die Eigenschaft zum Blocker – nur, wenn danach nichts unbesiegbar wird. | `learnInsights` |
+| **Vorsichtig verallgemeinern** | Nur mit mindestens zwei Belegen auf verschiedenen Zielen, nur mit einer Eigenschaft, die ein Ziel ausdrücklich hat (nicht einem vagen Oberbegriff), die seltenste gemeinsame (keine, die 3 % des Lexikons öffnen würde); Mechanismen werden nur erweitert, nie beschnitten. | `findInsights` |
+| **Sichtbar und geteilt** | Die Warum-Zeile meldet „neuer Siegweg: …“, das Grimoire listet alle gelernten Siegwege; online reisen sie in den Pack-Deltas mit. | `Resolver.generalize`, Grimoire, `PackDelta.extensions` |
+

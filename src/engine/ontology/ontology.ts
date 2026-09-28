@@ -173,6 +173,18 @@ export class Ontology {
         if (v.targets.length === 0) errors.push(`Mechanismus ${v.id} hat keine Ziele.`);
       }
     }
+    // learned widenings ("Siegwege") only ever add targets or blockers to an existing mechanism
+    for (const p of packs) {
+      for (const x of p.extensions ?? []) {
+        const v = verbs.get(x.verb);
+        if (v === undefined) {
+          errors.push(`Erweiterung: unbekannter Mechanismus „${x.verb}“.`);
+          continue;
+        }
+        const more = (ids: readonly string[] | undefined, part: string): number[] => (ids ?? []).map((t) => ref(t, `Erweiterung ${x.verb}.${part}`)).filter(isNum);
+        verbs.set(x.verb, { ...v, targets: union([v.targets, fromIterable(more(x.targets, "targets"))]), blocked: union([v.blocked, fromIterable(more(x.blockedBy, "blockedBy"))]) });
+      }
+    }
     this.verbs = verbs;
     const verbRef = (id: string, where: string): boolean => {
       if (verbs.has(id)) return true;
@@ -642,6 +654,11 @@ export class Ontology {
   }
 
   /** Stored precedent for exactly this pair, if any. */
+  /** Every stored precedent (for generalising them into mechanism widenings). */
+  allRulings(): readonly RulingSpec[] {
+    return [...this.rulings.values()];
+  }
+
   rulingFor(attackerId: string, targetId: string): RulingSpec | undefined {
     return this.rulings.get(`${attackerId}>${targetId}`);
   }

@@ -31,6 +31,7 @@ import { Music } from "./music.ts";
 import { addReport, clearReports, loadReports, reportsText } from "./reports.ts";
 import { ArtClient, httpTransport, socketTransport } from "./art-client.ts";
 import { formCard, SCALE_NAMES } from "../game/card.ts";
+import { describeInsight } from "../game/insight.ts";
 import { artFor } from "../render/art.ts";
 import { renderSprite, type PixelImage } from "../render/sprite.ts";
 import { cardView } from "./card-view.ts";
@@ -1602,6 +1603,13 @@ export class App {
             this.learned.tags.map((t) => t.label).join(" · "),
           ),
         );
+      }
+      const ways = (this.learned.extensions ?? []).flatMap((x) => [
+        ...(x.targets ?? []).map((tag) => describeInsight(this.onto, { verb: x.verb, kind: "hits", tag })),
+        ...(x.blockedBy ?? []).map((tag) => describeInsight(this.onto, { verb: x.verb, kind: "spares", tag })),
+      ]);
+      if (onlyDiscovered && needle === "" && ways.length > 0) {
+        list.append(h("div", { class: "learned-tags" }, h("span", { class: "label" }, "Neue Siegwege (aus Schiedssprüchen verallgemeinert): "), ways.join(" · ")));
       }
       const forms = this.onto.lexicon
         .filter((f) => (!onlyDiscovered || learnedIds.has(f.id)) && (needle === "" || f.name.toLowerCase().includes(needle) || (this.debug && this.onto.formTags(f).some((t) => t.includes(needle)))))

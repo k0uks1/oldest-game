@@ -100,6 +100,10 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
   shifted by combos, overridden per form (`FormSpec.qualities`); unset `kraft` falls back to its default.
 - **Combos** (`combos.json`): if the closure has all `if` tags and no `unless` tag → add/remove tags, shift
   qualities (wet wood is not `brennbar`). Applied to fixpoint in `compileForm`, before grants.
+- **Siegwege** (`extensions` in a pack, `game/insight.ts`): learned widenings of a mechanism – more `targets` or more
+  `blockedBy`, never less. Generalised from precedents: ≥ 2 rulings on distinct targets that the engine decides differently
+  and that share a *declared* property → the rarest such property (≤ 3 % of the lexicon) is added; a blocker must leave
+  every form a counter (`learnInsights`). Runs after every new ruling (referee or judge).
 - Containers of fire are not fire: an oven has `hitze 3`, not the `feuer` tag (so water finds nothing to quench).
 
 ### Resolution (`checkCounter`)
