@@ -1,10 +1,7 @@
-import { attempt, type AttemptOutcome } from "../engine/attempt.ts";
 import { APP_VERSION } from "../version.ts";
-import { validPixelArt } from "../engine/pixelart.ts";
 import { rasterizeSketch } from "../render/svgsprite.ts";
 import { arenaMinScale, createGame, currentTarget, pass, roundNumber } from "../engine/game.ts";
 import { activeFields } from "../engine/fields.ts";
-import { parseForm } from "../engine/parse.ts";
 import { ESCAPE, reaches } from "../engine/rules.ts";
 import type { CounterCheck, Form, GameState, PlayerId } from "../engine/types.ts";
 import {
@@ -18,13 +15,12 @@ import {
   type LlmSettings,
 } from "../llm/client.ts";
 import { browserStore, serverStore, type LearnedStore } from "../llm/learned-store.ts";
-import { addRuling, emptyLearnedPack, findLearned, learn, reconcileLearned } from "../llm/learning.ts";
-import { refereeWithClaude } from "../llm/referee.ts";
-import { brief, narrateEpilogueWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
+import { emptyLearnedPack, reconcileLearned } from "../llm/learning.ts";
+import { brief, narrateEpilogueWithClaude } from "../llm/narrator.ts";
 import { Ontology } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
-import { parseWithClaude } from "../llm/parser.ts";
-import { narrateEnd, narrateFailure, narrateMove } from "../narrate/offline.ts";
+import { narrateEnd } from "../narrate/offline.ts";
+import { Resolver, type Novelty, type PlayedOutcome, type Turn } from "../game/resolver.ts";
 import { Arena, attackOutcome, attackStyle, easterEggFor, type AttackStyle } from "../render/arena.ts";
 import { clear, h } from "./dom.ts";
 import { Music } from "./music.ts";
@@ -32,11 +28,6 @@ import { Sound } from "./sound.ts";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-function sameShape(a: Form, b: Form): boolean {
-  const eq = (x: readonly string[], y: readonly string[]): boolean => x.length === y.length && x.every((v) => y.includes(v));
-  return a.scale === b.scale && eq(a.tags, b.tags) && eq(a.not, b.not) && eq(a.verbs, b.verbs);
 }
 
 /** Banner suffix per victory kind ("Es genügt – in die Flucht geschlagen."). */
@@ -143,9 +134,16 @@ export class App {
     modal: HTMLElement;
   };
 
-  /** The "Gelernt" pack – grows while playing. */
-  private learned: ContentPack = emptyLearnedPack();
   private store: LearnedStore = browserStore();
+  /** Text → resolved turn; owns the "Gelernt" pack (grows while playing). */
+  private readonly resolver: Resolver;
+  /** Set while playing online – the server resolves turns, this client only shows them. */
+  private online: OnlineLink | null = null;
+
+  /** The "Gelernt" pack. */
+  private get learned(): ContentPack {
+    return this.resolver.learned;
+  }
 
   constructor(
     root: HTMLElement,
@@ -156,6 +154,17 @@ export class App {
   ) {
     if (forceDebug) this.settings = { ...this.settings, debugOffline: true };
     this.state = createGame(["Morpheus", "Choronzon"]);
+    this.resolver = new Resolver(onto, basePacks, emptyLearnedPack(), {
+      llm: () => this.llm,
+      debug: () => this.debug,
+      rasterize: rasterizeSketch,
+      saveLearned: (pack) => {
+        void this.store.save(pack).catch(() => {
+          this.flashBanner("Gelerntes konnte nicht gespeichert werden.", "bad");
+        });
+      },
+      today: () => new Date().toISOString().slice(0, 10),
+    });
     const canvas = h("canvas", { class: "arena", "aria-label": "Arena" });
     this.arena = new Arena(canvas, onto);
     this.arena.onCue = (cue) => {
@@ -373,8 +382,8 @@ export class App {
       console.warn("Gelerntes Pack passt nicht mehr zum Kern – ignoriert.");
       return;
     }
-    this.setOntology(Ontology.compile([...this.basePacks, pack]));
-    this.learned = pack;
+    this.resolver.setLearned(pack);
+    this.setOntology(this.resolver.onto);
   }
 
   /** Arena floor last shown in the HUD – a rise gets a short pulse. */
@@ -405,7 +414,7 @@ export class App {
   }
 
   private learnedSpec(id: string): FormSpec | undefined {
-    return this.learned.forms.find((f) => f.id === id);
+    return this.resolver.learnedSpec(id);
   }
 
   /** Enter: classify (Claude, or the mechanical parser in debug) and play at once. */
@@ -413,64 +422,33 @@ export class App {
     const text = this.els.input.value.trim();
     if (text === "" || this.busy || this.state.phase === "finished") return;
     this.unlockAudio();
-    if (this.debug) {
-      const r = parseForm(this.onto, text);
-      if (!r.ok) {
-        this.flashBanner(`${r.error}${r.suggestions.length > 0 ? ` Meintest du: ${r.suggestions.slice(0, 3).join(", ")}?` : ""}`, "bad");
-        return;
-      }
-      await this.execute(r.form, null);
+    if (this.online !== null) {
+      this.sendOnlineMove(text);
       return;
     }
-    if (!isClaudeReady(this.llm)) {
+    if (!this.debug && !isClaudeReady(this.llm)) {
       this.showSettings("Claude ist nicht verbunden. Starte das Spiel mit `npm start` (Key in .env) oder trage einen API-Key ein.");
       return;
     }
     this.setBusy(true);
     try {
-      // Already learned this exact phrase? Then it is the same form as last time.
-      const known = findLearned(this.onto, text);
-      if (known !== undefined) {
-        const spec = this.learnedSpec(known.id);
-        const by = spec?.discoveredBy;
-        await this.execute(known, null, true, { kind: "remembered", by: by ?? null });
+      const r = await this.resolver.resolve(this.state, text);
+      this.syncOntology();
+      if (r.kind === "rejected") {
+        this.flashBanner(r.reason, "bad");
         return;
       }
-      const r = await parseWithClaude(this.onto, this.llm, text);
-      if (r === undefined) {
-        this.flashBanner("Diese Gestalt lässt sich nicht fassen. Beschreibe sie anders.", "bad");
-        return;
-      }
-      // A plain lexicon entry (no changes, nothing new) is not worth remembering – play the original.
-      if (r.base !== null && r.delta.tags.length === 0 && r.delta.verbs.length === 0 && sameShape(r.form, r.base)) {
-        await this.execute(r.base, r.intendedVerb, true);
-        return;
-      }
-      const discoverer = this.state.players[this.state.active].name;
-      // Claude's SVG sketch → 32×32 sprite (invalid or missing: the archetype stays the fallback)
-      const rows = r.sketch === undefined ? undefined : validPixelArt(await rasterizeSketch(r.sketch));
-      const drawn = rows === undefined ? r.form : { ...r.form, sprite: rows };
-      const l = learn(this.basePacks, this.learned, text, drawn, r.delta, { by: discoverer, at: new Date().toISOString().slice(0, 10) });
-      if (!l.ok) {
-        this.flashBanner(l.reason, "bad");
-        return;
-      }
-      if (l.value.isNew) {
-        this.setOntology(l.value.onto);
-        this.learned = l.value.pack;
-        void this.store.save(l.value.pack).catch(() => {
-          this.flashBanner("Gelerntes konnte nicht gespeichert werden.", "bad");
-        });
-      }
-      const extra = [...l.value.newTags, ...l.value.newVerbs];
-      // A true discovery: something the lexicon had no anchor for, or that needed new properties.
-      const isDiscovery = l.value.isNew && (extra.length > 0 || r.base === null);
-      await this.execute(l.value.form, r.intendedVerb, true, isDiscovery ? { kind: "discovery", extra } : null);
+      await this.playTurn(r.turn, this.resolver.narrate(r.turn));
     } catch (e) {
       this.flashBanner(e instanceof Error ? e.message : "Claude antwortet nicht.", "bad");
     } finally {
       this.setBusy(false);
     }
+  }
+
+  /** Adopt the resolver's ontology after it learned something (or got a ruling). */
+  private syncOntology(): void {
+    if (this.resolver.onto !== this.onto) this.setOntology(this.resolver.onto);
   }
 
   private setBusy(on: boolean): void {
@@ -481,44 +459,15 @@ export class App {
     if (!on) this.els.input.focus();
   }
 
-  /** Run an attempt through the engine and play it out in the arena. */
-  private async execute(
-    form: Form,
-    intendedVerb: string | null,
-    alreadyBusy = false,
-    novelty: { kind: "discovery"; extra: readonly string[] } | { kind: "remembered"; by: string | null } | null = null,
-  ): Promise<void> {
-    const actor = this.state.active;
-    const isDiscovery = novelty?.kind === "discovery";
-    let outcome = attempt(this.onto, this.state, form, intendedVerb, isDiscovery);
-    let verdict: string | null = null;
-    // The engine is unsure → ask the referee once; the ruling becomes a precedent for this pair.
-    if (outcome.kind === "failure" && outcome.failure.uncertain !== undefined && !this.debug && isClaudeReady(this.llm)) {
-      if (!alreadyBusy) this.setBusy(true);
-      const v = await refereeWithClaude(this.onto, this.llm, outcome.failure);
-      if (!alreadyBusy) this.setBusy(false);
-      const stored = v === undefined ? undefined : addRuling(this.basePacks, this.learned, v.ruling);
-      if (v !== undefined && stored !== undefined) {
-        this.setOntology(stored.onto);
-        this.learned = stored.pack;
-        void this.store.save(stored.pack).catch(() => undefined);
-        outcome = attempt(this.onto, this.state, form, v.ruling.valid ? v.ruling.verb : intendedVerb, isDiscovery);
-        verdict = `⚖ ${v.ruling.reason}`;
-      }
-    }
-    if (outcome.kind === "rejected") {
-      this.flashBanner(outcome.reason, "bad");
-      return;
-    }
-    if (!alreadyBusy) this.setBusy(true);
-    this.state = outcome.state;
-    if (isDiscovery) this.discoveries.push({ name: form.name, player: actor });
+  /** Show a resolved turn (local or from the server) in the arena. */
+  private async playTurn(turn: Turn, narration: Promise<string>): Promise<void> {
+    this.state = turn.state;
+    if (turn.novelty?.kind === "discovery") this.discoveries.push({ name: turn.form.name, player: turn.actor });
     this.resetInput();
     this.hideCaption();
     try {
-      await this.animate(actor, form, outcome, novelty, verdict);
+      await this.animate(turn.actor, turn.form, turn.outcome, turn.novelty, turn.verdict, narration);
     } finally {
-      if (!alreadyBusy) this.setBusy(false);
       this.render();
       if (this.state.phase === "finished") void this.showEnd();
     }
@@ -531,12 +480,11 @@ export class App {
   private async animate(
     actor: PlayerId,
     form: Form,
-    outcome: Exclude<AttemptOutcome, { kind: "rejected" }>,
-    novelty: { kind: "discovery"; extra: readonly string[] } | { kind: "remembered"; by: string | null } | null,
-    verdict: string | null = null,
+    outcome: PlayedOutcome,
+    novelty: Novelty,
+    verdict: string | null,
+    narration: Promise<string>,
   ): Promise<void> {
-    const index = this.state.history.length - 1;
-    const narration = this.narrate(outcome, index);
     this.arena.setThinking(false);
     this.els.plates[actor].textContent = "";
     await this.arena.summon(actor, form, true);
@@ -685,20 +633,6 @@ export class App {
   }
 
   /** Start narration immediately (runs in parallel with the animation). */
-  private narrate(outcome: Exclude<AttemptOutcome, { kind: "rejected" }>, index: number): Promise<string> {
-    const useClaude = !this.debug && isClaudeReady(this.llm);
-    if (outcome.kind === "success") {
-      const offline = narrateMove(this.onto, this.state, outcome.move, index);
-      return useClaude ? narrateWithClaude(this.onto, this.llm, this.state, outcome.move, index, offline) : Promise.resolve(offline);
-    }
-    const f = outcome.failure;
-    const answerVerb = this.onto.compileForm(f.target).verbs.find((v) => reaches(this.onto, v, f.form));
-    const answerSpec = answerVerb === undefined ? undefined : this.onto.verbs.get(answerVerb)?.spec;
-    const answer = answerSpec === undefined ? undefined : (answerSpec.phrase ?? `${answerSpec.label} {B}`).replace("{B}", f.form.name);
-    const offline = narrateFailure(f.form.name, f.target.name, `${f.form.id}#${String(index)}`, answer);
-    return useClaude ? narrateFailureWithClaude(this.onto, this.llm, f, offline) : Promise.resolve(offline);
-  }
-
   private onPass(): void {
     if (this.busy || this.state.phase === "finished") return;
     this.state = pass(this.state);
@@ -1024,8 +958,8 @@ export class App {
             resetBtn.textContent = `Wirklich alle ${String(this.learned.forms.length)} vergessen?`;
             return;
           }
-          this.learned = emptyLearnedPack();
-          this.setOntology(Ontology.compile([...this.basePacks]));
+          this.resolver.setLearned(emptyLearnedPack());
+          this.setOntology(this.resolver.onto);
           void this.store.save(this.learned);
           this.closeModal();
           this.flashBanner("Das Grimoire ist leer.", "info");
