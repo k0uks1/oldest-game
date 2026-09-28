@@ -3,7 +3,8 @@ import { describe, it } from "node:test";
 import { coreOntology } from "../src/content/index.ts";
 import { validPixelArt } from "../src/engine/pixelart.ts";
 import { formFromLlm } from "../src/llm/parser.ts";
-import { fitSketch, opaqueBounds, pixelsToRows, sanitizeSketch, SKETCH_EXAMPLES } from "../src/render/svgsprite.ts";
+import { paletteFor } from "../src/render/palette.ts";
+import { fitSketch, opaqueBounds, pixelsToRows, rasterizeSketch, sanitizeSketch, SKETCH_EXAMPLES, tintOf } from "../src/render/svgsprite.ts";
 
 const onto = coreOntology();
 
@@ -70,5 +71,66 @@ describe("SVG sketches for new things", () => {
     const beast = formFromLlm(onto, { name: "Glitzerotter", base: null, scale: 2, plane: "leben", archetype: "beast", properties: ["saeugetier"], mechanisms: ["zerreisst"], skizze: SKETCH_EXAMPLES.kuehlschrank }, "Glitzerotter");
     assert.ok(beast);
     assert.equal(beast.sketch, undefined);
+  });
+});
+
+describe("hand-drawn sketches for everyday things (core content)", () => {
+  it("every sketch belongs to a core form, rasterizes to a valid sprite and wins over the archetype mask", async () => {
+    const { default: sketches } = await import("../src/content/core/sketches.json", { with: { type: "json" } });
+    const { buildGrid } = await import("../src/render/sprite.ts");
+    const { MASKS } = await import("../src/render/masks.ts");
+    const entries = Object.entries(sketches as Record<string, string>);
+    assert.ok(entries.length >= 150);
+    for (const [id, svg] of entries) {
+      const form = onto.formById(id);
+      assert.ok(form, `${id}: no such core form`);
+      assert.equal(form.sketch, svg, `${id}: sketch reaches the form`);
+      assert.equal(form.sprite, undefined, `${id}: has pixel art already`);
+      const rows = validPixelArt(rasterizeSketch(svg));
+      assert.ok(rows, `${id}: sketch does not rasterize`);
+      const grid = buildGrid(onto, form);
+      const { sketch: drawn, ...plain } = form;
+      assert.ok(drawn);
+      const mask = buildGrid(onto, plain);
+      assert.notDeepEqual(grid, mask, `${id}: still drawn as the ${form.archetype} mask`);
+      assert.ok(MASKS[form.archetype]);
+    }
+  });
+
+  it("colour hints survive sanitizing and only accept hex", () => {
+    const svg = sanitizeSketch('<svg viewBox="0 0 32 32" data-main="#C83028" data-second="red" onload="x()"><rect width="9" height="9"/></svg>');
+    assert.ok(svg);
+    assert.deepEqual(tintOf(svg), { main: "#c83028" });
+    assert.ok(!svg.includes("onload"));
+    assert.deepEqual(tintOf("<svg>"), {});
+  });
+
+  it("a tint colours the sprite (a tomato is red although it is a plant)", () => {
+    const tomate = onto.formById("tomate");
+    assert.ok(tomate?.sketch);
+    const pal = paletteFor(onto, tomate);
+    assert.equal(pal.main[2], "#d83020");
+    const { sketch: drawn, ...plain } = tomate;
+    assert.ok(drawn);
+    assert.notEqual(paletteFor(onto, plain).main[2], "#d83020");
+  });
+});
+
+describe("learned things keep their colour hints", () => {
+  it("pixel art draws, the stored sketch still tints", async () => {
+    const { learn, emptyLearnedPack } = await import("../src/llm/learning.ts");
+    const { CORE_PACK_RAW, loadPack } = await import("../src/content/index.ts");
+    const core = loadPack(CORE_PACK_RAW);
+    const svg = sanitizeSketch(SKETCH_EXAMPLES.kuehlschrank.replace("<svg ", '<svg data-main="#3070c0" '));
+    assert.ok(svg);
+    const rows = validPixelArt(rasterizeSketch(svg));
+    assert.ok(rows);
+    const r = formFromLlm(onto, { name: "Blauer Zahnseide-Automat", base: null, scale: 1, plane: "materie", archetype: "box", properties: ["metall", "maschine"], mechanisms: ["fesselt"], skizze: svg }, "Blauer Zahnseide-Automat");
+    assert.ok(r);
+    const l = learn([core], emptyLearnedPack(), "Blauer Zahnseide-Automat", { ...r.form, sprite: rows, sketch: svg }, r.delta);
+    assert.ok(l.ok);
+    const form = l.value.onto.formById(l.value.form.id);
+    assert.ok(form?.sprite && form.sketch);
+    assert.equal(paletteFor(l.value.onto, form).main[2], "#3070c0");
   });
 });

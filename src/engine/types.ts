@@ -48,6 +48,8 @@ export interface Form {
   readonly flavor?: string;
   /** Custom 16×16 pixel art (validated, see engine/pixelart.ts) – drawn by Claude for brand-new forms. */
   readonly sprite?: readonly string[];
+  /** SVG sketch (see render/svgsprite.ts) – rasterized to a 32×32 sprite when there is no `sprite`. */
+  readonly sketch?: string;
 }
 
 export type PlayerId = 0 | 1;

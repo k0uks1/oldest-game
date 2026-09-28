@@ -546,7 +546,10 @@ function findCycles(parents: readonly (readonly number[])[], tags: readonly TagS
 }
 
 
-function spriteOf(spec: FormSpec): { sprite?: readonly string[] } {
+function spriteOf(spec: FormSpec): { sprite?: readonly string[]; sketch?: string } {
   const sprite = spec.sprite === undefined ? undefined : validPixelArt(spec.sprite);
-  return sprite === undefined ? {} : { sprite };
+  // Only plain SVG of bounded size; the renderer sanitizes again before drawing. With pixel art
+  // present the sketch only lends its colour hints.
+  const sketch = spec.sketch !== undefined && spec.sketch.length <= 6000 && spec.sketch.startsWith("<svg") ? spec.sketch : undefined;
+  return { ...(sprite === undefined ? {} : { sprite }), ...(sketch === undefined ? {} : { sketch }) };
 }

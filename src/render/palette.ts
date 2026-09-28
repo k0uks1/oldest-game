@@ -1,6 +1,7 @@
 import type { Ontology } from "../engine/ontology/ontology.ts";
 import { hash32 } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
+import { tintOf } from "./svgsprite.ts";
 
 /** Four-step ramp: shadow, base, light, highlight. */
 export type Ramp = readonly [string, string, string, string];
@@ -81,12 +82,19 @@ function mix(a: string, b: string, t: number): string {
   return `#${c(ar, br)}${c(ag, bg)}${c(ab, bb)}`;
 }
 
+/** Shadow, base, light, highlight around one colour. */
+export function rampOf(hex: string): Ramp {
+  return [mix(hex, "#000000", 0.62), mix(hex, "#000000", 0.3), hex, mix(hex, "#ffffff", 0.55)];
+}
+
 export function paletteFor(onto: Ontology, form: Form): SpritePalette {
   const matches = SWATCHES.filter(([tag]) => onto.formHas(form, tag)).map(([, s]) => s);
   const fallback = PLANE_DEFAULT[form.plane];
-  const main = matches[0] ?? fallback;
+  const tint = form.sketch === undefined ? {} : tintOf(form.sketch);
+  const main: Swatch = tint.main === undefined ? (matches[0] ?? fallback) : { ramp: rampOf(tint.main), glow: (matches[0] ?? fallback).glow };
   const secondRamp: Ramp =
-    matches[1]?.ramp ??
+    (tint.second === undefined ? undefined : rampOf(tint.second)) ??
+    (tint.main === undefined ? matches[1]?.ramp : undefined) ??
     (form.archetype === "humanoid" || form.archetype === "giant" ? (CLOTH[hash32(form.id) % CLOTH.length] ?? main.ramp) : lighter(main.ramp));
   const emissive =
     ["feuer", "licht", "heilig", "blitz"].some((t) => onto.formHas(form, t)) ||
