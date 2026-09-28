@@ -141,8 +141,9 @@ describe("online rooms (authoritative server)", () => {
     ca.receive(JSON.stringify({ t: "move", text: "Seife" }));
     await settle();
     const lost = b.last("turn");
-    assert.equal(lost?.turn.form.name, "Seife", "a failed attempt reaches the opponent too");
-    assert.equal(lost?.turn.outcome.kind, "failure");
+    assert.ok(lost);
+    assert.equal(lost.turn.form.name, "Seife", "a failed attempt reaches the opponent too");
+    assert.equal(lost.turn.outcome.kind, "failure");
   });
 
   it("reconnect with the seat token restores state and chronicle", async () => {
