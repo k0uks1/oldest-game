@@ -137,7 +137,8 @@ export class PixiArena extends ArenaScene {
 
   private layer(c: HTMLCanvasElement): Layer {
     const full = this.texture(c);
-    const tex = new Texture({ source: full.source, frame: new Rectangle(0, 0, full.width, full.height) });
+    // dynamic: the sprite re-measures itself whenever the frame changes (see `place` in syncFighters)
+    const tex = new Texture({ source: full.source, frame: new Rectangle(0, 0, full.width, full.height), dynamic: true });
     return { sprite: new Sprite(tex), tex, h: full.height };
   }
 
@@ -230,9 +231,9 @@ export class PixiArena extends ArenaScene {
         if (frame.height !== visible) {
           frame.y = l.h - visible;
           frame.height = visible;
-          l.tex.updateUvs();
-          // the sprite takes its size from the frame
-          l.sprite.texture = l.tex;
+          // emits "update" → the sprite takes its new size from the frame. (Re-assigning the same
+          // texture is a no-op in Pixi 8 – that left a sprite shown mid-materialise squashed for good.)
+          l.tex.update();
         }
         l.sprite.alpha = alpha;
         l.sprite.scale.x = mirrored ? -1 : 1;
