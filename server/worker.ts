@@ -32,7 +32,7 @@ export default {
     const res = await handleProxy(req, {
       apiKey: env.ANTHROPIC_API_KEY ?? "",
       model: env.CLAUDE_MODEL ?? DEFAULT_PROXY_MODEL,
-      maxTokens: 800,
+      maxTokens: 1500,
       ...(env.ACCESS_CODE === undefined ? {} : { accessCode: env.ACCESS_CODE }),
     });
     const headers = new Headers(res.headers);

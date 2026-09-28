@@ -369,3 +369,14 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Claude bekommt eine zweite Chance** | Im Vokabular steht hinter jedem Mechanismus „braucht: …“. Gibt Claude trotzdem nur Unmögliches an, fragt der Parser einmal nach: Fähigkeit nennen, wenn die Gestalt sie wirklich hat – sonst andere Mechanismen. Erfinden, nur damit es passt, ist ausdrücklich verboten. | `parser.ts` (`abilityCorrection`) |
 | **Migration mit Augenmaß** | Alle 1.228 Gestalten per Skript und Tabelle je Mechanismus umgestellt: wo die Fähigkeit stimmt, wurde sie ergänzt (Ritter spitz, Python bindend), wo nicht, flog der Mechanismus raus (Hut täuscht, Kopf zerschlägt, Löffel verschlingt, Stille übertönt). Prüfstand: 2,7 % → 1,8 % verdächtige Siege, „Begriff prügelt“ 3 972 → 392; Balance laut 2000 Selbstspielen unverändert. | `src/content/core/forms/*.json` |
 
+## Offenes Eigenschaftsmodell (Nutzerwunsch: „die Engine muss komplett neue Eigenschaften von Claude unterstützen, mit gescheitem Format“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Ist, kann, hat** | Neue Eigenschaften sagen, was sie sind: Stoff/Art („Käse ist fest“), Fähigkeit („Zwiebel-Atem kann reizen“) oder Merkmal („achtarmig“). Fähigkeiten hängen unter bestehenden Fähigkeiten und erben deren Mechanismen – der Zwiebel-Atem blendet, weil er reizend ist. | `parser.ts` (`new_properties.art`) |
+| **Neue Kräfte und Schutz** | Claude darf abgestufte Größen erfinden, auf die es im Kampf ankommt (Gestank gegen Geruchsfestigkeit) – mit Beispielstufen, Stufen 0–6, Standard 0. | `new_qualities`, `QualitySpec` |
+| **Mechanismen mit Voraussetzung** | Ein neuer Mechanismus sagt, wer ihn nutzen kann (`braucht`) und woran er sich misst (`kraft` gegen `gegen`). Die Fähigkeit, die ihn verleiht, und der Mechanismus kommen im selben Zug – ab dann hat jeder Träger ihn, sonst niemand. | `new_mechanism` → `requires`, `needs` |
+| **Eine Instanz entscheidet** | `sanitizeDelta` prüft alles, was Claude liefert: Mengen, Bezüge, kleine Hebel, gedeckelte Kräfte – und eine gelernte Fähigkeit verleiht nur, was ein nackter Träger davon auch wirklich kann (eine Flötenton-Fähigkeit schneidet nicht). | `learning.ts` |
+| **Schon vor dem Lernen richtig** | Der Parser rechnet neue Eigenschaften beim Fähigkeiten-Check bereits mit (Schattenform aus Eltern, Folgerungen, Verleihungen) – nichts fliegt raus, nur weil es neu ist. | `shadowOf` |
+| **Online geteilt** | Gelernte Qualitäten reisen in den Pack-Deltas mit; ältere Server und Clients ignorieren das Feld einfach. | `protocol.ts` |
+
