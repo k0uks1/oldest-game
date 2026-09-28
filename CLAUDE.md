@@ -106,6 +106,9 @@ symbols `m`/`n`), `emblem` + `badge` (library symbols composed into one sketch â
 freehand drawings), `main`/`second` colours. Claude picks ids from closed enums (`aussehen` in the parser);
 a freehand `skizze` only when no part fits. Unknown ids are dropped (`knownLook`).
 
+> **Planned:** a fundamental engine rebuild (derived mechanisms/affordances, several axes instead of one scale,
+> context-aware modifiers). Collected absurd wins and directions: `docs/engine-neubau.md`. Add new cases there.
+
 ## UI principles
 
 - As little as possible on screen: the arena, one glowing input line, a sigil (menu, also `Esc`).
