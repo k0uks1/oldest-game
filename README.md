@@ -31,8 +31,10 @@ API-Key nie; Modell und `max_tokens` legt der Server fest.
 und einen eigenen API-Key eintragen („bring your own key“, bleibt in deinem Browser). `index.html?debug` spielt
 ganz ohne Claude (mechanischer Debug-Modus).
 
-**Online zu zweit:** Mit `npm start` (oder dem eigenen Server unten) steht im Startbildschirm „Raum eröffnen“.
-Den Link bzw. fünfstelligen Code an den Gegner schicken – das Duell beginnt, sobald er beitritt. Der Server hält
+**Online zu zweit:** Mit `npm start` (oder dem eigenen Server unten) hat der Startbildschirm den Reiter „Online“:
+einer tippt „Raum eröffnen“ und schickt den Link bzw. den fünfstelligen Raum-Code, der andere öffnet den Link oder
+trägt den Code unter „Eingeladen?“ ein. Das Duell beginnt, sobald er beitritt. Verlangt der Server einen
+Zugangscode, tragen ihn beide ein – der ist etwas anderes als der Raum-Code. Der Server hält
 Spielzustand und API-Key; die Browser schicken nur Text und zeigen, was zurückkommt. Verbindungsabbrüche
 (Neuladen, Handy im Standby) holen den Platz automatisch zurück. Zum Ausprobieren reichen zwei Browser-Tabs.
 
@@ -53,6 +55,8 @@ docker compose up -d     # → http://<server>:8080
   und `GAME_PORT=127.0.0.1:8080` setzen, DNS auf den Server zeigen lassen, dann `docker compose up -d`.
   Caddy holt das Zertifikat selbst (Ports 80/443 müssen frei sein).
 - Aktualisieren: `git pull && docker compose up -d --build`. Logs: `docker compose logs -f game`.
+- **Hinter einem anderen Reverse-Proxy** (nginx, Traefik …): `TRUST_PROXY=1` setzen, sonst zählen alle Spieler als
+  eine Adresse und die Limits pro Adresse greifen viel zu früh (im Log steht dann „behind a proxy?“).
 
 **Gehostet (optional):** Spiel statisch hosten (z. B. GitHub Pages) + `server/worker.ts` als Cloudflare Worker
 mit dem Key als Secret und einem Zugangscode; die Worker-URL in den Claude-Einstellungen eintragen.

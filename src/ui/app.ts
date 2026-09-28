@@ -26,7 +26,7 @@ import { attackOutcome, attackStyle, easterEggFor, type AttackStyle } from "../r
 import { createArena, type Arena } from "../render/arenas.ts";
 import { clear, h } from "./dom.ts";
 import { OnlineLink, savedSeat, type LinkStatus } from "../online/link.ts";
-import { applyPackDelta, type ChronicleEntry, type ClientMsg, type SeatInfo, type ServerMsg } from "../online/protocol.ts";
+import { applyPackDelta, normalizeRoom, type ChronicleEntry, type ClientMsg, type SeatInfo, type ServerMsg } from "../online/protocol.ts";
 import { Music } from "./music.ts";
 import { Sound } from "./sound.ts";
 
@@ -94,6 +94,35 @@ function sigil(): SVGSVGElement {
   return svg;
 }
 
+type StartTab = "local" | "online";
+
+interface StartOptions {
+  readonly tab?: StartTab;
+  /** Shown in the dialog, next to what needs fixing. */
+  readonly error?: string;
+  readonly focus?: "access" | "room";
+  /** Arrived through an invite link. */
+  readonly room?: string;
+}
+
+const NAME_KEY = "oldest-game:name";
+
+function rememberedName(): string {
+  try {
+    return localStorage.getItem(NAME_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberName(name: string): void {
+  try {
+    if (name !== "") localStorage.setItem(NAME_KEY, name);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 interface DuelDiscovery {
   readonly name: string;
   readonly player: PlayerId;
@@ -152,6 +181,12 @@ export class App {
   private onlineQueue: Promise<void> = Promise.resolve();
   private readonly narrations = new Map<number, (text: string) => void>();
   private readonly earlyNarrations = new Map<number, string>();
+  /** Start dialog: last tab, typed values (kept across a failed attempt), access code (memory only). */
+  private startTab: StartTab = "local";
+  private draft = { name0: rememberedName(), name1: "", room: "" };
+  private accessCode = "";
+  /** The server has welcomed us into the current room. */
+  private joined = false;
   /** The server's epilogue for the finished online duel. */
   private epilogue: string | null = null;
   private epilogueEl: HTMLElement | null = null;
@@ -398,8 +433,10 @@ export class App {
         this.goOnline(null);
         return;
       }
-      if (invite !== null) {
-        this.showJoin(invite);
+      const room = invite === null ? undefined : normalizeRoom(invite);
+      if (room !== undefined) {
+        history.replaceState(null, "", location.pathname);
+        this.showStart({ tab: "online", room });
         return;
       }
     }
@@ -821,9 +858,12 @@ export class App {
   }
 
   /** Connect to the server's rooms; `hello` = create/join, null = resume the saved seat. */
-  private goOnline(hello: ClientMsg | null): void {
+  private goOnline(hello: ClientMsg | null, from: StartTab = "online"): void {
     this.online?.close();
     this.seats = [];
+    this.joined = false;
+    this.startTab = from;
+    this.showConnecting();
     this.online = new OnlineLink(
       hello,
       (m) => {
@@ -840,6 +880,7 @@ export class App {
     this.online.close();
     this.online = null;
     this.seats = [];
+    this.joined = false;
     this.narrations.clear();
     this.earlyNarrations.clear();
     this.setBusy(false);
@@ -847,6 +888,10 @@ export class App {
 
   private linkLost = false;
   private onLinkStatus(st: LinkStatus): void {
+    if (!this.joined) {
+      if (st === "lost") this.showConnecting(true);
+      return;
+    }
     if (st === "lost" && !this.linkLost) {
       this.linkLost = true;
       this.arena.setThinking(false);
@@ -908,6 +953,7 @@ export class App {
   private onServer(m: ServerMsg): void {
     switch (m.t) {
       case "welcome": {
+        this.joined = true;
         this.seats = m.seats;
         this.players = m.players;
         this.adoptLearned(m.learned);
@@ -994,12 +1040,14 @@ export class App {
         }
         return;
       case "error":
-        if (m.code === "noroom" || m.code === "access" || m.code === "full") {
-          this.online = null;
-          this.seats = [];
-          this.setBusy(false);
-          this.showStart();
-        } else if (this.busy && m.code !== "busy") this.setBusy(false);
+        // Not (or no longer) in a room: back to the start dialog, the reason next to the field.
+        if (!this.joined || m.code === "noroom" || m.code === "access" || m.code === "full") {
+          const tab = this.startTab;
+          this.leaveOnline();
+          this.showStart({ tab, error: m.message, ...(m.code === "access" ? { focus: "access" as const } : m.code === "noroom" || m.code === "full" ? { focus: "room" as const } : {}) });
+          return;
+        }
+        if (this.busy && m.code !== "busy") this.setBusy(false);
         this.flashBanner(m.message, m.code === "busy" ? "info" : "bad");
         return;
     }
@@ -1044,110 +1092,138 @@ export class App {
     );
   }
 
-  /** Opened through an invite link. */
-  private showJoin(room: string): void {
-    const name = h("input", { class: "form-input", id: "join-name", placeholder: "Dein Name", value: "" });
-    const access = h("input", { class: "form-input", id: "join-access", type: "password", placeholder: "vom Betreiber des Servers", autocomplete: "off" });
-    const go = (): void => {
-      const code = access.value.trim();
-      this.unlockAudio();
-      this.closeModal();
-      this.goOnline({ t: "join", room: room.toUpperCase(), name: name.value.trim() || "Gast", ...(code === "" ? {} : { code }) });
-    };
-    for (const inp of [name, access]) {
-      inp.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") go();
-      });
-    }
-    this.modal(
-      "Eine Herausforderung",
-      h("p", { class: "lore" }, "Jemand erwartet dich in der Arena."),
-      h("label", { for: "join-name" }, "Dein Name", name),
-      this.server?.accessCode === true ? h("label", { for: "join-access" }, "Zugangscode", access) : null,
-      h(
-        "div",
-        { class: "actions" },
-        h("button", { class: "btn primary", onclick: go }, "Beitreten"),
-        h("button", { class: "btn ghost", onclick: () => {
-              history.replaceState(null, "", location.pathname);
-              this.showStart();
-            } }, "Lieber hier zu zweit"),
-      ),
-    );
-    name.focus();
-  }
 
-  private showStart(): void {
-    const n0 = h("input", { class: "form-input", value: this.state.players[0].name, placeholder: "Spieler 1" });
-    const n1 = h("input", { class: "form-input", value: this.state.players[1].name, placeholder: "Spieler 2" });
+
+  /**
+   * The start dialog. Two tabs when the server hosts rooms: "Hier zu zweit" (one device) and
+   * "Online" (open a room or join one by code). Errors from a failed attempt come back into
+   * this dialog, next to the field that needs fixing – never as a flash behind it.
+   */
+  private showStart(opts: StartOptions = {}): void {
     const rooms = this.server?.online === true;
+    let tab: StartTab = rooms ? (opts.tab ?? this.startTab) : "local";
+    const draft = this.draft;
     // On a public server even a one-device duel is played in a room (the server holds the key).
     const viaRoom = this.roomsOnly && !this.debug;
     const needsKey = !this.debug && !viaRoom && !isClaudeReady(this.llm);
-    const key = h("input", { class: "form-input", id: "start-key", type: "password", placeholder: "sk-ant-… (Claude API-Key)", autocomplete: "off" });
-    const access = h("input", { class: "form-input", id: "start-access", type: "password", placeholder: "vom Betreiber des Servers", autocomplete: "off" });
-    const roomCode = h("input", { class: "form-input room-code", id: "start-room", placeholder: "Code", autocomplete: "off" });
-    roomCode.maxLength = 5;
-    const withCode = (m: Extract<ClientMsg, { t: "create" | "join" }>): ClientMsg => (access.value.trim() === "" ? m : { ...m, code: access.value.trim() });
-    const me = (): string => n0.value.trim() || "Spieler 1";
+    const needsAccess = rooms && this.server?.accessCode === true;
+    const field = (id: string, value: string, placeholder: string, extra: { type?: string; class?: string } = {}): HTMLInputElement =>
+      h("input", { class: "form-input", id, value, placeholder, autocomplete: "off", ...extra });
+    const n0 = field("start-p1", draft.name0, "Spieler 1");
+    const n1 = field("start-p2", draft.name1, "Spieler 2");
+    const me = field("start-me", draft.name0, "Dein Name");
+    const key = field("start-key", "", "sk-ant-… (Claude API-Key)", { type: "password" });
+    const accessLocal = field("start-access-local", this.accessCode, "vom Betreiber des Servers", { type: "password" });
+    const accessOnline = field("start-access", this.accessCode, "vom Betreiber des Servers", { type: "password" });
+    const room = field("start-room", opts.room ?? draft.room, "z. B. K7M2Q", { class: "form-input room-code" });
+    room.maxLength = 5;
     const remember = h("input", { type: "checkbox", id: "start-remember" });
     remember.checked = this.settings.rememberSecrets;
-    const go = (): void => {
+    const error = h("p", { class: "form-error", role: "alert" }, opts.error ?? "");
+    error.hidden = opts.error === undefined;
+    const fail = (msg: string, el: HTMLInputElement): void => {
+      error.textContent = msg;
+      error.hidden = false;
+      el.focus();
+    };
+    // keep what was typed – and the access code for this session only
+    const sync = (): void => {
+      this.draft = { name0: (tab === "online" ? me : n0).value.trim(), name1: n1.value.trim(), room: room.value.trim().toUpperCase() };
+      this.accessCode = (tab === "online" ? accessOnline : accessLocal).value.trim();
+      rememberName(this.draft.name0);
+    };
+    const access = (): string | undefined => (needsAccess ? this.accessCode || undefined : undefined);
+
+    const startLocal = (): void => {
+      sync();
       if (needsKey) {
         const k = key.value.trim();
         if (k === "") {
-          key.focus();
-          this.flashBanner("Bitte einen API-Key eintragen – oder den Debug-Modus nutzen.", "bad");
+          fail("Bitte einen API-Key eintragen – oder ohne Claude testen.", key);
           return;
         }
         this.settings = { ...this.settings, apiKey: k, rememberSecrets: remember.checked };
         saveSettings(this.settings);
       }
+      if (viaRoom && needsAccess && this.accessCode === "") {
+        fail("Dieser Server verlangt einen Zugangscode.", accessLocal);
+        return;
+      }
       this.unlockAudio();
-      this.closeModal();
+      const [a, b] = [this.draft.name0 || "Spieler 1", this.draft.name1 || "Spieler 2"];
       if (viaRoom) {
-        this.goOnline(withCode({ t: "create", name: me(), name2: n1.value.trim() || "Spieler 2" }));
+        const code = access();
+        this.goOnline({ t: "create", name: a, name2: b, ...(code === undefined ? {} : { code }) }, "local");
         return;
       }
+      this.closeModal();
       this.leaveOnline();
-      this.newGame([me(), n1.value.trim() || "Spieler 2"]);
+      this.newGame([a, b]);
     };
-    const openRoom = (): void => {
-      this.unlockAudio();
-      this.closeModal();
-      this.goOnline(withCode({ t: "create", name: me() }));
-    };
-    const joinRoom = (): void => {
-      const room = roomCode.value.trim().toUpperCase();
-      if (room.length !== 5) {
-        roomCode.focus();
-        this.flashBanner("Der Raum-Code hat fünf Zeichen.", "bad");
-        return;
-      }
-      this.unlockAudio();
-      this.closeModal();
-      this.goOnline(withCode({ t: "join", room, name: me() }));
-    };
-    roomCode.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") joinRoom();
-    });
     const debugStart = (): void => {
+      sync();
       this.settings = { ...this.settings, debugOffline: true };
       this.closeModal();
-      this.newGame([n0.value.trim() || "Spieler 1", n1.value.trim() || "Spieler 2"]);
+      this.newGame([this.draft.name0 || "Spieler 1", this.draft.name1 || "Spieler 2"]);
     };
-    for (const inp of [n0, n1, key]) {
-      inp.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") go();
+    const checkOnline = (): string | undefined => {
+      sync();
+      if (needsAccess && this.accessCode === "") {
+        fail("Dieser Server verlangt einen Zugangscode – den bekommt ihr vom Betreiber.", accessOnline);
+        return undefined;
+      }
+      return this.draft.name0 || "Gast";
+    };
+    const openRoom = (): void => {
+      const name = checkOnline();
+      if (name === undefined) return;
+      this.unlockAudio();
+      const code = access();
+      this.goOnline({ t: "create", name, ...(code === undefined ? {} : { code }) }, "online");
+    };
+    const join = h("button", { class: "btn primary", onclick: () => {
+          joinRoom();
+        } }, "Beitreten");
+    const validRoom = (): string | undefined => normalizeRoom(room.value);
+    const joinRoom = (): void => {
+      const code6 = validRoom();
+      if (code6 === undefined) {
+        fail("Der Raum-Code hat fünf Zeichen (Buchstaben und Ziffern), z. B. K7M2Q.", room);
+        return;
+      }
+      const name = checkOnline();
+      if (name === undefined) return;
+      this.unlockAudio();
+      const code = access();
+      this.goOnline({ t: "join", room: code6, name, ...(code === undefined ? {} : { code }) }, "online");
+    };
+    const updateJoin = (): void => {
+      room.value = room.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      join.disabled = validRoom() === undefined;
+    };
+    room.addEventListener("input", updateJoin);
+    updateJoin();
+    const onEnter = (el: HTMLInputElement, fn: () => void): void => {
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") fn();
       });
-    }
-    const d = this.discoveredCount();
-    this.modal(
-      "Das älteste Spiel",
-      h("p", { class: "lore" }, "Zwei Willen. Eine Arena. Jeder wird zu etwas, das den anderen besiegt – bis einer keine Antwort mehr findet."),
-      d > 0 ? h("p", { class: "hint" }, `Das Grimoire kennt ${String(d)} Gestalten, die vor euch niemand kannte.`) : null,
+    };
+    for (const el of [n0, n1, key, accessLocal]) onEnter(el, startLocal);
+    onEnter(me, () => {
+      if (validRoom() === undefined) openRoom();
+      else joinRoom();
+    });
+    onEnter(accessOnline, () => {
+      if (validRoom() === undefined) openRoom();
+      else joinRoom();
+    });
+    onEnter(room, joinRoom);
+
+    const local = h(
+      "div",
+      { class: "start-pane" },
       h("div", { class: "names" }, h("label", {}, "Spieler 1", n0), h("label", {}, "Spieler 2", n1)),
-      rooms && this.server?.accessCode === true ? h("label", { for: "start-access" }, "Zugangscode", access) : null,
+      viaRoom && needsAccess ? h("label", { for: "start-access-local" }, "Zugangscode des Servers", accessLocal) : null,
       needsKey ? h("label", { for: "start-key" }, "Claude API-Key", key) : null,
       needsKey ? this.rememberBox(remember) : null,
       needsKey ? h("p", { class: "hint" }, "Tipp: Nutze einen eigenen Key nur für dieses Spiel, mit Ausgabenlimit. Ganz ohne Key im Browser: lokal mit `npm start`.") : null,
@@ -1155,28 +1231,77 @@ export class App {
       h(
         "div",
         { class: "actions" },
-        h("button", { class: "btn primary", onclick: go }, "Duell beginnen"),
-        needsKey ? h("button", { class: "btn ghost", title: "Ohne Claude – nur zum Testen", onclick: debugStart }, "Debug ohne Claude") : null,
+        h("button", { class: "btn primary", onclick: startLocal }, "Duell beginnen"),
+        needsKey ? h("button", { class: "btn ghost", title: "Ohne Claude – nur zum Testen", onclick: debugStart }, "Ohne Claude testen") : null,
       ),
-      rooms
-        ? h(
-            "div",
-            { class: "online-start" },
-            h("h3", {}, "Online"),
-            h("p", { class: "hint" }, "Gegen jemanden an einem anderen Gerät – Spieler 1 ist dein Name."),
-            h(
-              "div",
-              { class: "actions" },
-              h("button", { class: "btn", onclick: openRoom }, "Raum eröffnen"),
-              roomCode,
-              h("button", { class: "btn ghost", onclick: joinRoom }, "Beitreten"),
-            ),
-          )
-        : null,
+    );
+    const online = h(
+      "div",
+      { class: "start-pane" },
+      h("p", { class: "hint" }, "Zwei Geräte, ein Duell: Einer eröffnet einen Raum und schickt Code oder Link, der andere tritt bei."),
+      h("label", { for: "start-me" }, "Dein Name", me),
+      needsAccess ? h("label", { for: "start-access" }, "Zugangscode des Servers", accessOnline) : null,
+      h(
+        "div",
+        { class: "online-choices" },
+        h("div", { class: "choice" }, h("h3", {}, "Neues Duell"), h("p", { class: "hint" }, "Du bekommst einen Code zum Weitergeben."), h("button", { class: "btn primary", onclick: openRoom }, "Raum eröffnen")),
+        h("div", { class: "choice" }, h("h3", {}, "Eingeladen?"), h("label", { for: "start-room" }, "Raum-Code", room), join),
+      ),
+    );
+    const tabLocal = h("button", { class: "tab" }, "Hier zu zweit");
+    const tabOnline = h("button", { class: "tab" }, "Online");
+    const show = (t: StartTab): void => {
+      sync();
+      tab = t;
+      this.startTab = t;
+      local.hidden = t !== "local";
+      online.hidden = t !== "online";
+      tabLocal.classList.toggle("on", t === "local");
+      tabOnline.classList.toggle("on", t === "online");
+      me.value = this.draft.name0;
+      n0.value = this.draft.name0;
+    };
+    tabLocal.onclick = () => {
+      error.hidden = true;
+      show("local");
+    };
+    tabOnline.onclick = () => {
+      error.hidden = true;
+      show("online");
+    };
+    const d = this.discoveredCount();
+    this.modal(
+      "Das älteste Spiel",
+      h("p", { class: "lore" }, opts.room === undefined ? "Zwei Willen. Eine Arena. Jeder wird zu etwas, das den anderen besiegt – bis einer keine Antwort mehr findet." : "Jemand erwartet dich in der Arena."),
+      d > 0 ? h("p", { class: "hint" }, `Das Grimoire kennt ${String(d)} Gestalten, die vor euch niemand kannte.`) : null,
+      rooms ? h("div", { class: "tabs" }, tabLocal, tabOnline) : null,
+      error,
+      local,
+      online,
       h("p", { class: "version" }, `v${APP_VERSION}`),
     );
-    n0.focus();
+    show(tab);
+    const focus = opts.focus === "access" ? (tab === "online" ? accessOnline : accessLocal) : opts.focus === "room" ? room : tab === "online" ? (opts.room === undefined ? me : me.value === "" ? me : join) : n0;
+    focus.focus();
   }
+
+  /** While the connection to a room is being made – instead of an empty arena. */
+  private showConnecting(trouble = false): void {
+    this.modal(
+      "Verbinde …",
+      h("p", { class: "lore" }, trouble ? "Der Server antwortet gerade nicht – neuer Versuch läuft …" : "Die Arena wird bereitet."),
+      h(
+        "div",
+        { class: "actions" },
+        h("button", { class: "btn ghost", onclick: () => {
+              this.leaveOnline();
+              this.showStart();
+            } }, "Abbrechen"),
+      ),
+    );
+  }
+
+
 
   private showChronicle(): void {
     const empty = this.els.chronicle.childElementCount === 0;

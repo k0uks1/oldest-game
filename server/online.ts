@@ -56,8 +56,9 @@ export interface HubLimits {
 
 export const DEFAULT_LIMITS: HubLimits = {
   maxRooms: 200,
-  connectionsPerIp: 12,
-  roomsPerIpPerHour: 20,
+  // generous: friends often share one address (home router, office NAT)
+  connectionsPerIp: 24,
+  roomsPerIpPerHour: 60,
   messagesPerBurst: 30,
   burstWindowMs: 10_000,
   moveGapMs: 1_500,
@@ -258,7 +259,10 @@ export class OnlineHub {
     const now = this.now();
     const recent = (this.roomsByIp.get(c.peer.ip) ?? []).filter((t) => now - t < 3_600_000);
     if (recent.length >= this.limits.roomsPerIpPerHour || this.rooms.size >= this.limits.maxRooms) {
-      this.error(c, "limit", "Gerade können keine weiteren Räume eröffnet werden.");
+      const full = this.rooms.size >= this.limits.maxRooms;
+      // Behind a reverse proxy without TRUST_PROXY=1 every player shares the proxy's address.
+      this.opts.log?.(`room limit hit (${full ? "server full" : `address ${c.peer.ip}`})${full ? "" : " – behind a proxy? set TRUST_PROXY=1"}`);
+      this.error(c, "limit", full ? "Der Server ist voll – bitte später noch einmal." : "Von dieser Adresse wurden in der letzten Stunde zu viele Räume eröffnet. Bitte später noch einmal.");
       return;
     }
     this.roomsByIp.set(c.peer.ip, [...recent, now]);
