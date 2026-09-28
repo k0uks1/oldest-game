@@ -33,7 +33,13 @@ Dieses Dokument sammelt Fälle und Ursachen, bis der Neubau beginnt. **Nichts am
 5. **Claude hat zu viel Spielraum beim Einordnen.** Es wählt „1–3 passende Mechanismen“ – genau dort entstehen
    kreative, aber physikalisch unsinnige Fähigkeiten, die danach als gelernte Wahrheit gespeichert werden.
 
-## Richtungen für den Neubau (Ideen, nichts entschieden)
+## Entscheidung (28.9.)
+
+> „Von den Richtungen klingt eigentlich alles gut – sollte alles umgesetzt werden.“
+
+Alle sechs Richtungen unten sind beschlossen. Offen ist nur noch das *Wie* im Detail.
+
+## Richtungen für den Neubau (beschlossen)
 
 - **Affordanzen**: Jeder Mechanismus nennt, was der Angreifer haben muss (Eigenschaften und Intensitäten).
   `zerschneidet` ⇒ `scharf` und Härte ≥ Härte des Ziels. Mechanismen einer Gestalt = alle, deren Voraussetzungen
@@ -49,7 +55,18 @@ Dieses Dokument sammelt Fälle und Ursachen, bis der Neubau beginnt. **Nichts am
 - **„Das war Quatsch!“ im Spiel**: Ein Knopf nach einem Sieg speichert das Paar samt Begründung als Fall für den
   Prüfstand. So liefern Testrunden wie die mit Kiki direkt Material.
 
-## Vorgehen, wenn es losgeht
+## Fahrplan
+
+| Schritt | Inhalt | Warum in dieser Reihenfolge |
+|---|---|---|
+| 1 | **Prüfstand** + „Das war Quatsch!“-Knopf | Ohne Messung kein Fortschritt; eure Testrunden liefern ab sofort Fälle. |
+| 2 | **„ist / enthält / erzeugt“** im Tag-Modell | Grundlage für Affordanzen (wer *erzeugt* Feuer, kann verbrennen). |
+| 3 | **Affordanzen** – Mechanismen werden abgeleitet | Der größte Hebel gegen „Kaugummi schneidet“. Claude ordnet danach nur noch Eigenschaften ein. |
+| 4 | **Achsen statt einer Stufe** (Größe, Masse, Härte, Energie, Geist …) | Baut auf den Affordanzen auf: jeder Mechanismus vergleicht seine Achsen. |
+| 5 | **Modifikatoren als Operatoren** mit Kontext | Verschieben Achsen und Intensitäten statt blind Tags anzuhängen. |
+| 6 | Migration gelernter Packs, Balancing, Aufräumen | Zum Schluss, gegen Prüfstand und Simulation. |
+
+## Vorgehen je Schritt
 
 1. Prüfstand zuerst: alle Fälle oben plus ein Stichproben-Bot → Zahl der absurden Siege messen.
 2. Modell entwerfen (Affordanzen, Achsen, Modifikator-Operatoren), an 20–30 Kernpaaren durchrechnen.
