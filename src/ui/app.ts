@@ -162,6 +162,7 @@ export class App {
     why: HTMLElement;
     round: HTMLElement;
     fields: HTMLElement;
+    watchers: HTMLElement;
     banner: HTMLElement;
     menu: HTMLElement;
     modal: HTMLElement;
@@ -263,6 +264,7 @@ export class App {
       why: h("div", { class: "why-line" }),
       round: h("div", { class: "round", role: "button", onclick: () => { this.showInfo("runde"); } }),
       fields: h("div", { class: "fields", role: "button", onclick: () => { this.showInfo("arena"); } }),
+      watchers: h("div", { class: "watchers", title: "Zuschauer" }),
       banner: h("div", { class: "banner", role: "alert" }),
       menu: h("div", { class: "menu-layer" }),
       modal: h("div", { class: "modal-layer" }),
@@ -280,7 +282,7 @@ export class App {
           canvas,
           els.hud[0],
           els.hud[1],
-          h("div", { class: "crown" }, sigilBtn, els.round, els.fields),
+          h("div", { class: "crown" }, sigilBtn, els.round, els.fields, els.watchers),
           els.plates[0],
           els.plates[1],
           els.revealName,
@@ -385,7 +387,7 @@ export class App {
           this.leaveOnline();
           this.showStart();
         }),
-        playing ? giveUp : null,
+        playing && !this.spectating ? giveUp : null,
         h("div", { class: "version" }, `v${APP_VERSION}`),
       ),
     );
@@ -761,7 +763,13 @@ export class App {
       const full =
         target === null ? `${active.name}, wer bist du?` : this.retry ? `${target.name} steht noch, ${active.name} …` : `${active.name} – gegen ${target.name}`;
       const short = target === null ? "Wer bist du?" : this.retry ? `${target.name} steht noch …` : `Gegen ${target.name}`;
-      this.els.input.placeholder = !this.myTurn() ? `${active.name} ist am Zug …` : full.length <= 34 ? full : short;
+      this.els.input.placeholder = this.spectating
+        ? `Du schaust zu · ${active.name} ist am Zug`
+        : !this.myTurn()
+          ? `${active.name} ist am Zug …`
+          : full.length <= 34
+            ? full
+            : short;
     }
   }
 
@@ -853,6 +861,17 @@ export class App {
 
   // ── Online ──────────────────────────────────────────────────────────────
 
+  /** In a room without a seat: watching only. */
+  private get spectating(): boolean {
+    return this.online !== null && this.joined && this.seats.length === 0;
+  }
+
+  private watcherCount = 0;
+  private showWatchers(n: number): void {
+    this.watcherCount = n;
+    this.els.watchers.textContent = n > 0 ? `👁 ${String(n)}` : "";
+  }
+
   private myTurn(): boolean {
     return this.online === null || this.seats.includes(this.state.active);
   }
@@ -881,6 +900,7 @@ export class App {
     this.online = null;
     this.seats = [];
     this.joined = false;
+    this.showWatchers(0);
     this.narrations.clear();
     this.earlyNarrations.clear();
     this.setBusy(false);
@@ -956,18 +976,22 @@ export class App {
         this.joined = true;
         this.seats = m.seats;
         this.players = m.players;
+        this.showWatchers(m.watchers);
         this.adoptLearned(m.learned);
         // A reload should resume the seat, not join again.
         if (location.search.includes("room=")) history.replaceState(null, "", location.pathname);
         this.closeModal();
         if (m.state === null) {
-          this.showInvite(m.room, true);
+          if (m.seats.length === 0) this.modal("Gleich geht es los", h("p", { class: "lore" }, "Du schaust zu. Das Duell beginnt, sobald der zweite Spieler da ist."));
+          else this.showInvite(m.room, true);
           return;
         }
         this.adoptState(m.state, m.chronicle, m.epilogue);
         return;
       }
       case "presence": {
+        if (m.watchers > this.watcherCount) this.flashBanner(m.watchers === 1 ? "Jemand schaut jetzt zu." : `${String(m.watchers)} schauen jetzt zu.`, "info");
+        this.showWatchers(m.watchers);
         for (const p of [0, 1] as const) {
           const before = this.players[p];
           const now = m.players[p];
@@ -1077,7 +1101,7 @@ export class App {
       waiting ? "Warte auf Gegner" : "Einladen",
       h("p", { class: "invite-code", "aria-label": "Raum-Code" }, room),
       h("p", { class: "invite-link" }, url),
-      h("p", { class: "hint" }, "Schick den Link oder nenne den Code. Das Duell beginnt, sobald jemand beitritt."),
+      h("p", { class: "hint" }, "Schick den Link oder nenne den Code. Das Duell beginnt, sobald jemand beitritt – wer den Code hat, kann auch nur zuschauen."),
       h(
         "div",
         { class: "actions" },
@@ -1185,6 +1209,21 @@ export class App {
           joinRoom();
         } }, "Beitreten");
     const validRoom = (): string | undefined => normalizeRoom(room.value);
+    const watch = h("button", { class: "btn", title: "Nur zuschauen – ohne mitzuspielen", onclick: () => {
+          const target = validRoom();
+          if (target === undefined) {
+            fail("Der Raum-Code hat fünf Zeichen (Buchstaben und Ziffern), z. B. K7M2Q.", room);
+            return;
+          }
+          sync();
+          if (needsAccess && this.accessCode === "") {
+            fail("Dieser Server verlangt einen Zugangscode – den bekommt ihr vom Betreiber.", accessOnline);
+            return;
+          }
+          this.unlockAudio();
+          const code = access();
+          this.goOnline({ t: "watch", room: target, ...(code === undefined ? {} : { code }) }, "online");
+        } }, "Zuschauen");
     const joinRoom = (): void => {
       const code6 = validRoom();
       if (code6 === undefined) {
@@ -1200,6 +1239,7 @@ export class App {
     const updateJoin = (): void => {
       room.value = room.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
       join.disabled = validRoom() === undefined;
+      watch.disabled = join.disabled;
     };
     room.addEventListener("input", updateJoin);
     updateJoin();
@@ -1245,7 +1285,7 @@ export class App {
         "div",
         { class: "online-choices" },
         h("div", { class: "choice" }, h("h3", {}, "Neues Duell"), h("p", { class: "hint" }, "Du bekommst einen Code zum Weitergeben."), h("button", { class: "btn primary", onclick: openRoom }, "Raum eröffnen")),
-        h("div", { class: "choice" }, h("h3", {}, "Eingeladen?"), h("label", { for: "start-room" }, "Raum-Code", room), join),
+        h("div", { class: "choice" }, h("h3", {}, "Eingeladen?"), h("label", { for: "start-room" }, "Raum-Code", room), h("div", { class: "actions" }, join, watch)),
       ),
     );
     const tabLocal = h("button", { class: "tab" }, "Hier zu zweit");
@@ -1547,8 +1587,9 @@ export class App {
       legend.classList.toggle("pending", this.epilogue === null);
       this.epilogueEl = legend;
     }
-    const again =
-      this.online === null
+    const again = this.spectating
+      ? null
+      : this.online === null
         ? h("button", { class: "btn primary", onclick: () => {
               this.showStart();
             } }, "Neues Duell")

@@ -80,6 +80,7 @@ describe("online protocol", () => {
     assert.equal(parseClientMsg('{"t":"join","room":"AB0DE","name":"x"}'), undefined, "0 is not in the alphabet");
     assert.equal(parseClientMsg("[1]"), undefined);
     assert.equal(parseClientMsg("nope"), undefined);
+    assert.deepEqual(parseClientMsg('{"t":"watch","room":"abcde"}'), { t: "watch", room: "ABCDE" });
     assert.equal(parseClientMsg('{"t":"hack"}'), undefined);
     assert.equal(normalizeRoom(" abcde "), "ABCDE");
   });
@@ -232,6 +233,40 @@ describe("online rooms (authoritative server)", () => {
     await settle();
     assert.equal(b.last("error")?.code, "limit");
     assert.equal(a.last("turn")?.turn.form.name, "Ritter", "the second move was not played");
+  });
+
+  it("spectators see everything, change nothing, and come back after a reload", async () => {
+    const { hub } = setup({ limits: { watchersPerRoom: 1 } });
+    const { a, ca, code } = openRoom(hub);
+    const w = new FakePeer("10.0.0.9");
+    const cw = hub.attach(w);
+    cw?.receive(JSON.stringify({ t: "watch", room: code }));
+    const welcome = w.last("welcome");
+    assert.ok(welcome?.state, "a running duel is shown at once");
+    assert.deepEqual(welcome.seats, [], "no seat");
+    assert.equal(a.last("presence")?.watchers, 1, "the players see the spectator");
+    ca.receive(JSON.stringify({ t: "move", text: "Ritter" }));
+    await settle();
+    assert.equal(w.last("turn")?.turn.form.name, "Ritter");
+    assert.ok(w.last("narration"));
+    const turns = a.inbox.filter((m) => m.t === "turn").length;
+    cw?.receive(JSON.stringify({ t: "move", text: "Drache" }));
+    await settle();
+    assert.equal(w.last("error")?.code, "turn", "spectators cannot move");
+    cw?.receive(JSON.stringify({ t: "pass" }));
+    cw?.receive(JSON.stringify({ t: "rematch" }));
+    assert.equal(a.last("resigned"), undefined, "nor give up for someone");
+    assert.equal(a.inbox.filter((m) => m.t === "turn").length, turns);
+    // a second spectator is over the limit
+    const w2 = new FakePeer("10.0.0.10");
+    hub.attach(w2)?.receive(JSON.stringify({ t: "watch", room: code }));
+    assert.equal(w2.last("error")?.code, "full");
+    // reload: resume with the spectator token
+    cw?.closed();
+    const w3 = new FakePeer("10.0.0.9");
+    hub.attach(w3)?.receive(JSON.stringify({ t: "resume", room: code, token: welcome.token }));
+    assert.deepEqual(w3.last("welcome")?.seats, []);
+    assert.equal(w3.last("welcome")?.chronicle[0]?.name, "Ritter");
   });
 
   it("learned things reach every connected client as a delta", () => {

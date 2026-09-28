@@ -37,6 +37,8 @@ export interface Peer {
 
 export interface HubLimits {
   readonly maxRooms: number;
+  /** Spectators per room. */
+  readonly watchersPerRoom: number;
   readonly connectionsPerIp: number;
   readonly roomsPerIpPerHour: number;
   /** Messages per connection within `burstWindowMs`. */
@@ -56,6 +58,7 @@ export interface HubLimits {
 
 export const DEFAULT_LIMITS: HubLimits = {
   maxRooms: 200,
+  watchersPerRoom: 20,
   // generous: friends often share one address (home router, office NAT)
   connectionsPerIp: 24,
   roomsPerIpPerHour: 60,
@@ -92,6 +95,8 @@ interface Room {
   /** Both seats played from one device. */
   readonly sameDevice: boolean;
   readonly conns: Set<Conn>;
+  /** Tokens of spectators (so a reload brings them back). */
+  readonly watchers: Set<string>;
   state: GameState | null;
   busy: boolean;
   seq: number;
@@ -205,6 +210,9 @@ export class OnlineHub {
       case "join":
         this.join(c, msg);
         return;
+      case "watch":
+        this.watch(c, msg);
+        return;
       case "resume":
         this.resume(c, msg);
         return;
@@ -275,6 +283,7 @@ export class OnlineHub {
       seats: [{ name: msg.name, token }, sameDevice ? { name: msg.name2 ?? "", token } : null],
       sameDevice,
       conns: new Set(),
+      watchers: new Set(),
       state: sameDevice ? createGame([msg.name, msg.name2 ?? ""]) : null,
       busy: false,
       seq: 0,
@@ -298,7 +307,7 @@ export class OnlineHub {
       return;
     }
     if (room.seats[1] !== null) {
-      this.error(c, "full", "Dieser Raum ist schon voll.");
+      this.error(c, "full", "Dieser Raum ist schon voll – du kannst aber zuschauen.");
       return;
     }
     this.leave(c);
@@ -312,9 +321,27 @@ export class OnlineHub {
     this.broadcast(room, { t: "start", state: room.state }, c);
   }
 
+  /** A spectator: sees everything, changes nothing. */
+  private watch(c: Conn, msg: Extract<ClientMsg, { t: "watch" }>): void {
+    if (!this.checkCode(c, msg.code)) return;
+    const room = this.rooms.get(msg.room);
+    if (room === undefined) {
+      this.error(c, "noroom", "Diesen Raum gibt es nicht (mehr).");
+      return;
+    }
+    if (room.watchers.size >= this.limits.watchersPerRoom) {
+      this.error(c, "full", "In diesem Raum schauen schon genug zu.");
+      return;
+    }
+    this.leave(c);
+    const token = `w-${randomUUID()}`;
+    room.watchers.add(token);
+    this.enter(c, room, token);
+  }
+
   private resume(c: Conn, msg: Extract<ClientMsg, { t: "resume" }>): void {
     const room = this.rooms.get(msg.room);
-    if (room?.seats.some((s) => s?.token === msg.token) !== true) {
+    if (room?.seats.some((s) => s?.token === msg.token) !== true && room?.watchers.has(msg.token) !== true) {
       this.error(c, "noroom", "Diesen Raum gibt es nicht mehr.");
       return;
     }
@@ -329,7 +356,7 @@ export class OnlineHub {
     room.emptySince = null;
     room.lastActive = this.now();
     this.sendWelcome(c, room);
-    this.broadcast(room, { t: "presence", players: this.presence(room) }, c);
+    this.broadcast(room, { t: "presence", players: this.presence(room), watchers: this.watcherCount(room) }, c);
   }
 
   private leave(c: Conn): void {
@@ -340,7 +367,7 @@ export class OnlineHub {
     c.token = null;
     c.seats = [];
     if (room.conns.size === 0) room.emptySince = this.now();
-    this.broadcast(room, { t: "presence", players: this.presence(room) });
+    this.broadcast(room, { t: "presence", players: this.presence(room), watchers: this.watcherCount(room) });
   }
 
   // ── play ────────────────────────────────────────────────────────────────
@@ -448,7 +475,7 @@ export class OnlineHub {
     const room = c.room;
     const state = room?.state ?? null;
     const [a, b] = room?.seats ?? [null, null];
-    if (room === null || state?.phase !== "finished" || a === null || b === null || room.busy) return;
+    if (room === null || c.seats.length === 0 || state?.phase !== "finished" || a === null || b === null || room.busy) return;
     // The loser opens the next duel (seat 0 moves first).
     if (state.winner === 0) {
       room.seats[0] = b;
@@ -471,6 +498,7 @@ export class OnlineHub {
       token,
       seats: c.seats,
       players: this.presence(room),
+      watchers: this.watcherCount(room),
       state: room.state,
       chronicle: room.chronicle,
       epilogue: room.epilogue,
@@ -479,6 +507,11 @@ export class OnlineHub {
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────
+
+  /** Spectators currently connected. */
+  private watcherCount(room: Room): number {
+    return [...room.conns].filter((c) => c.token !== null && room.watchers.has(c.token)).length;
+  }
 
   private presence(room: Room): [SeatInfo | null, SeatInfo | null] {
     const online = (s: Seat): boolean => [...room.conns].some((c) => c.token === s.token);
