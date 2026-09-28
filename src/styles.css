@@ -1093,3 +1093,30 @@ input,
     animation: none !important;
   }
 }
+
+/* ── Online ─────────────────────────────────────────────────────────────── */
+.modal .online-start {
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+  padding-top: 6px;
+}
+.modal .room-code {
+  width: 6.5ch;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  text-align: center;
+}
+.modal .invite-code {
+  font-size: 56px;
+  letter-spacing: 0.3em;
+  text-align: center;
+  color: var(--gold);
+  text-shadow: 0 0 18px rgba(240, 200, 80, 0.45);
+  margin: 4px 0;
+}
+.modal .invite-link {
+  text-align: center;
+  color: var(--muted);
+  word-break: break-all;
+  user-select: all;
+}

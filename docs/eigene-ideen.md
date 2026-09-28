@@ -192,3 +192,16 @@ Erzählung und Warum-Zeile verschwinden nicht mehr nach einer festen Zeit. Sie b
 | **Gleiche Skizze, gleiches Sprite** | Skizzen werden nicht mehr über das Browser-Canvas gerastert, sondern von einem kleinen, reinen Rasterizer ohne Abhängigkeiten. Browser und Server machen so aus derselben SVG exakt dasselbe Sprite. Gegen Chromium verglichen weicht er bei den Beispielskizzen in 0–3 von 1024 Zellen ab. | `src/render/svgraster.ts`, `rasterizeSketch` |
 | **Striche wie im Browser** | Linienenden sind wie in SVG standardmäßig stumpf (`butt`), `round` und `square` gehen auf Wunsch. Überlappende Strichteile löschen sich nicht mehr gegenseitig aus. | `strokePolys` |
 | **Zug-Auflösung ohne DOM** | Der Weg Text → Klassifizierung/Lernen → Engine → Schiedsrichter → Erzählung steckt jetzt in einer eigenen Klasse ohne Oberfläche, damit später der Server dieselbe Logik spielen kann. | `src/game/resolver.ts` |
+
+## Online zu zweit (Nutzerwunsch: Mehrspieler mit maßgeblichem Server)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Ein Gerät = ein Raum** | Auf einem öffentlichen Server (Docker) gibt es keinen Claude-Proxy für den Browser. Auch ein Duell zu zweit an einem Gerät läuft dort als Raum, in dem ein Browser beide Plätze hält. So bleibt der Key auf dem Server, und alles Gelernte landet im gemeinsamen Grimoire. | `create` mit `name2`, `roomsOnly` |
+| **Der Verlierer eröffnet die Revanche** | „Revanche“ startet im selben Raum ein neues Duell; wer verloren hat, beginnt. | `OnlineHub.rematch` |
+| **Platz pro Tab** | Das Platz-Token liegt in `sessionStorage`: zwei Tabs sind zwei Spieler, ein Neuladen oder ein aufwachendes Handy kehrt auf denselben Platz zurück, mit Chronik und Erzählung. | `src/online/link.ts` |
+| **Nur die stehende Gestalt** | Nach einem Wiederverbinden zeigt die Arena ohne Animation nur die Gestalt, die gerade steht; alle früheren wurden ja beantwortet. | `adoptState` |
+| **Gelerntes als Differenz** | Lernt ein Raum etwas, bekommen alle verbundenen Browser nur die geänderten Einträge (Gestalt, Eigenschaft, Schiedsspruch mit Sprite), nicht das ganze Pack. Passt eine Differenz nicht, holt sich der Browser einmal das ganze Pack. | `packDelta`, `applyPackDelta`, `sync` |
+| **Hot-Seat verliert nichts** | Lädt der lokale Hot-Seat sein Pack hoch, während ein Raum etwas gelernt hat, wird zusammengeführt statt überschrieben. | `learnedEndpoint.put` in `server/local.ts` |
+| **Räume ohne Key** | Ohne `ANTHROPIC_API_KEY` spielen die Räume mit dem mechanischen Parser. Damit lässt sich Online-Spiel mit zwei Tabs kostenlos testen. | `debug: () => !claude()` |
+| **Kostendeckel** | Höchstens `CLAUDE_MOVES_PER_HOUR` Züge mit Claude pro Stunde über alle Räume, dazu Grenzen pro Verbindung, IP und Raum, 8-KB-Nachrichten, Herzschlag gegen tote Verbindungen und Aufräumen verlassener Räume. | `HubLimits`, `server/online.ts` |

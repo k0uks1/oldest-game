@@ -32,7 +32,10 @@ src/
   narrate/offline.ts template narration (debug / fallback)
   render/            sprite generation (pure) + canvas arena (DOM, bloom, cosmos dissolve, ambience)
   ui/                hot-seat UI, no framework; sound.ts = WebAudio synth (no audio files)
-server/              Claude proxy core (Web Request/Response) + local Node server + Cloudflare Worker
+  game/resolver.ts   one turn, text → classification/learning → engine → referee → narration (DOM-free)
+  online/            WebSocket protocol (shared) + browser link with reconnect
+server/              Claude proxy core + Node game server (local.ts) + online rooms (online.ts) + Cloudflare Worker
+Dockerfile, compose.yml, Caddyfile   self-hosting (public mode: HOST=0.0.0.0 → rooms only, no browser proxy)
 scripts/             build (esbuild → single HTML), simulate, gen-pack (stress data)
 tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k forms)
 ```
@@ -100,6 +103,15 @@ non-physical one may, and the target must be ≤ `maxEscapeScale`. Echo applies;
 - Workflow: feature branch → PR (CI must be green: typecheck, lint, tests, build) → squash merge.
   CI posts a PR comment with the playable build; `pages.yml` deploys `main` to GitHub Pages and every PR
   to `pr-preview/pr-<n>/` (gh-pages branch).
+
+## Online
+
+- The server is authoritative: it holds game state and key, resolves moves with the same `Resolver`
+  as the hot-seat UI and broadcasts `turn` / `narration` / `learned` (pack delta) messages
+  (`src/online/protocol.ts`). Clients never resolve online moves.
+- One shared learned pack per server; every room learns into it. Local `PUT /api/learned` merges into it,
+  public servers refuse uploads.
+- Abuse limits live in `server/online.ts` (`HubLimits`); `tests/online.test.ts` covers rooms, reconnect and limits.
 
 ## Claude integration
 

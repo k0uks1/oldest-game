@@ -1,27 +1,74 @@
 /**
- * /api/learned – persists the "Gelernt" content pack of the local server to a
- * JSON file (default: learned/pack.json). Every write is validated exactly like
+ * The server's "Gelernt" content pack: one file (default learned/pack.json) shared by the local
+ * hot-seat (`/api/learned`) and all online rooms. Every write is validated exactly like
  * hand-written content: shape, pack id, and a full compile together with the core.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { CORE_PACK_RAW, loadPack } from "../src/content/index.ts";
 import { Ontology, OntologyError } from "../src/engine/ontology/ontology.ts";
-import { parsePack } from "../src/engine/ontology/pack.ts";
-import { LEARNED_PACK_ID, emptyLearnedPack } from "../src/llm/learning.ts";
+import { parsePack, type ContentPack } from "../src/engine/ontology/pack.ts";
+import { LEARNED_PACK_ID, emptyLearnedPack, reconcileLearned } from "../src/llm/learning.ts";
 
-const MAX_BYTES = 2_000_000;
+const MAX_BYTES = 4_000_000;
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-export async function handleLearned(req: Request, file: string): Promise<Response> {
-  if (req.method === "GET") {
-    if (!existsSync(file)) return json(200, emptyLearnedPack());
-    return new Response(readFileSync(file, "utf8"), { status: 200, headers: { "content-type": "application/json" } });
+/** One entry per line, like the core content – reviewable diffs when committed. */
+export function formatPack(p: ContentPack): string {
+  const list = (xs: readonly unknown[]): string => (xs.length === 0 ? "[]" : `[\n${xs.map((x) => `    ${JSON.stringify(x)}`).join(",\n")}\n  ]`);
+  return `{\n  "id": ${JSON.stringify(p.id)},\n  "name": ${JSON.stringify(p.name)},\n  "version": ${JSON.stringify(p.version)},\n  "tags": ${list(p.tags)},\n  "verbs": ${list(p.verbs)},\n  "modifiers": ${list(p.modifiers)},\n  "forms": ${list(p.forms)},\n  "rulings": ${list(p.rulings ?? [])}\n}\n`;
+}
+
+/** Parse and validate an uploaded learned pack against the base packs. */
+export function validateLearned(base: readonly ContentPack[], raw: unknown): { ok: true; pack: ContentPack } | { ok: false; error: string } {
+  const parsed = parsePack(raw);
+  if (!parsed.ok) return { ok: false, error: parsed.errors.slice(0, 5).join("; ") };
+  if (parsed.pack.id !== LEARNED_PACK_ID) return { ok: false, error: `Pack-ID muss "${LEARNED_PACK_ID}" sein` };
+  try {
+    Ontology.compile([...base, parsed.pack]);
+  } catch (e) {
+    return { ok: false, error: e instanceof OntologyError ? e.errors.slice(0, 5).join("; ") : String(e) };
   }
+  return { ok: true, pack: parsed.pack };
+}
+
+/** Load the stored pack, keeping whatever still fits the (possibly grown) core. */
+export function readLearnedFile(base: readonly ContentPack[], file: string): ContentPack {
+  if (!existsSync(file)) return emptyLearnedPack();
+  try {
+    const v = validateLearned(base, JSON.parse(readFileSync(file, "utf8")));
+    if (v.ok) return v.pack;
+    const parsed = parsePack(JSON.parse(readFileSync(file, "utf8")));
+    return (parsed.ok ? reconcileLearned(base, parsed.pack) : undefined) ?? emptyLearnedPack();
+  } catch {
+    return emptyLearnedPack();
+  }
+}
+
+/** Atomic write (temp file + rename): a crash never leaves half a pack behind. */
+export function writeLearnedFile(file: string, pack: ContentPack): void {
+  mkdirSync(dirname(file), { recursive: true });
+  const tmp = `${file}.tmp`;
+  writeFileSync(tmp, formatPack(pack));
+  renameSync(tmp, file);
+}
+
+export interface LearnedEndpoint {
+  readonly base: readonly ContentPack[];
+  get(): ContentPack;
+  /** Merge an uploaded (validated) pack into the shared one. */
+  put(pack: ContentPack): ContentPack;
+  /** Public servers do not accept uploads – there the rooms are the only writers. */
+  readonly writable: boolean;
+}
+
+/** GET/PUT /api/learned. */
+export async function handleLearned(req: Request, ep: LearnedEndpoint): Promise<Response> {
+  if (req.method === "GET") return new Response(JSON.stringify(ep.get()), { status: 200, headers: { "content-type": "application/json" } });
   if (req.method !== "PUT") return json(405, { error: "GET oder PUT" });
+  if (!ep.writable) return json(403, { error: "Dieser Server lernt nur in seinen Räumen." });
   const text = await req.text();
   if (text.length > MAX_BYTES) return json(413, { error: "Pack zu groß" });
   let raw: unknown;
@@ -30,19 +77,8 @@ export async function handleLearned(req: Request, file: string): Promise<Respons
   } catch {
     return json(400, { error: "Ungültiges JSON" });
   }
-  const parsed = parsePack(raw);
-  if (!parsed.ok) return json(400, { error: parsed.errors.slice(0, 5).join("; ") });
-  if (parsed.pack.id !== LEARNED_PACK_ID) return json(400, { error: `Pack-ID muss "${LEARNED_PACK_ID}" sein` });
-  try {
-    Ontology.compile([loadPack(CORE_PACK_RAW), parsed.pack]);
-  } catch (e) {
-    return json(400, { error: e instanceof OntologyError ? e.errors.slice(0, 5).join("; ") : String(e) });
-  }
-  mkdirSync(dirname(file), { recursive: true });
-  // one entry per line, like the core content – reviewable diffs when committed
-  const p = parsed.pack;
-  const list = (xs: readonly unknown[]): string => (xs.length === 0 ? "[]" : `[\n${xs.map((x) => `    ${JSON.stringify(x)}`).join(",\n")}\n  ]`);
-  const out = `{\n  "id": ${JSON.stringify(p.id)},\n  "name": ${JSON.stringify(p.name)},\n  "version": ${JSON.stringify(p.version)},\n  "tags": ${list(p.tags)},\n  "verbs": ${list(p.verbs)},\n  "modifiers": ${list(p.modifiers)},\n  "forms": ${list(p.forms)},\n  "rulings": ${list(p.rulings ?? [])}\n}\n`;
-  writeFileSync(file, out);
+  const v = validateLearned(ep.base, raw);
+  if (!v.ok) return json(400, { error: v.error });
+  const p = ep.put(v.pack);
   return json(200, { ok: true, forms: p.forms.length, tags: p.tags.length, verbs: p.verbs.length, rulings: (p.rulings ?? []).length });
 }

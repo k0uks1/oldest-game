@@ -4,7 +4,8 @@ import { activeFields } from "../engine/fields.ts";
 import { ESCAPE, reaches } from "../engine/rules.ts";
 import type { CounterCheck, Form, GameState, PlayerId } from "../engine/types.ts";
 import {
-  detectLocalProxy,
+  fetchHealth,
+  localProxyOf,
   estimateCostUsd,
   isClaudeReady,
   isHostedOrigin,
@@ -12,6 +13,7 @@ import {
   saveSettings,
   sessionUsage,
   type LlmSettings,
+  type ServerInfo,
 } from "../llm/client.ts";
 import { browserStore, serverStore, type LearnedStore } from "../llm/learned-store.ts";
 import { emptyLearnedPack, reconcileLearned } from "../llm/learning.ts";
@@ -22,6 +24,8 @@ import { narrateEnd } from "../narrate/offline.ts";
 import { Resolver, type Novelty, type PlayedOutcome, type Turn } from "../game/resolver.ts";
 import { Arena, attackOutcome, attackStyle, easterEggFor, type AttackStyle } from "../render/arena.ts";
 import { clear, h } from "./dom.ts";
+import { OnlineLink, savedSeat, type LinkStatus } from "../online/link.ts";
+import { applyPackDelta, type ChronicleEntry, type ClientMsg, type SeatInfo, type ServerMsg } from "../online/protocol.ts";
 import { Music } from "./music.ts";
 import { Sound } from "./sound.ts";
 
@@ -136,6 +140,20 @@ export class App {
   private store: LearnedStore = browserStore();
   /** Text → resolved turn; owns the "Gelernt" pack (grows while playing). */
   private readonly resolver: Resolver;
+  /** What the game server offers (null: opened from disk). */
+  private server: ServerInfo | null = null;
+  /** Set while playing online – the server resolves turns, this client only shows them. */
+  private online: OnlineLink | null = null;
+  /** Seats this client plays online (both on one device). */
+  private seats: readonly PlayerId[] = [];
+  private players: readonly [SeatInfo | null, SeatInfo | null] = [null, null];
+  /** Online turns play one after another, even if they arrive in a burst. */
+  private onlineQueue: Promise<void> = Promise.resolve();
+  private readonly narrations = new Map<number, (text: string) => void>();
+  private readonly earlyNarrations = new Map<number, string>();
+  /** The server's epilogue for the finished online duel. */
+  private epilogue: string | null = null;
+  private epilogueEl: HTMLElement | null = null;
 
   /** The "Gelernt" pack. */
   private get learned(): ContentPack {
@@ -320,8 +338,15 @@ export class App {
           this.toggleMenu(false);
           this.showSettings();
         }),
-        item("Neues Duell", () => {
+        this.online !== null && this.state.phase !== "finished" && this.online.room !== null
+          ? item("Einladen", () => {
+              this.toggleMenu(false);
+              this.showInvite(this.online?.room ?? "", false);
+            })
+          : null,
+        item(this.online === null ? "Neues Duell" : "Raum verlassen", () => {
           this.toggleMenu(false);
+          this.leaveOnline();
           this.showStart();
         }),
         playing ? giveUp : null,
@@ -357,16 +382,32 @@ export class App {
   }
 
   private async init(): Promise<void> {
-    if (!this.debug) {
-      const proxy = await detectLocalProxy();
-      if (proxy !== null) {
-        this.localProxy = proxy.url;
-        this.settings = { ...this.settings, model: proxy.model };
-        this.store = serverStore();
+    this.server = await fetchHealth();
+    const proxy = localProxyOf(this.server);
+    if (!this.debug && proxy !== null) {
+      this.localProxy = proxy.url;
+      this.settings = { ...this.settings, model: proxy.model };
+    }
+    // The server's pack is shared by everyone who plays there (hot-seat and rooms).
+    if ((!this.debug && proxy !== null) || this.server?.online === true) this.store = serverStore();
+    await this.loadLearned();
+    if (this.server?.online === true) {
+      const invite = new URLSearchParams(location.search).get("room");
+      if (savedSeat() !== null) {
+        this.goOnline(null);
+        return;
+      }
+      if (invite !== null) {
+        this.showJoin(invite);
+        return;
       }
     }
-    await this.loadLearned();
     this.showStart();
+  }
+
+  /** A public server (Docker): no browser proxy – every duel is a room, even on one device. */
+  private get roomsOnly(): boolean {
+    return this.server?.online === true && !this.server.proxy;
   }
 
   private async loadLearned(): Promise<void> {
@@ -418,6 +459,10 @@ export class App {
     const text = this.els.input.value.trim();
     if (text === "" || this.busy || this.state.phase === "finished") return;
     this.unlockAudio();
+    if (this.online !== null) {
+      this.sendOnlineMove(text);
+      return;
+    }
     if (!this.debug && !isClaudeReady(this.llm)) {
       this.showSettings("Claude ist nicht verbunden. Starte das Spiel mit `npm start` (Key in .env) oder trage einen API-Key ein.");
       return;
@@ -445,7 +490,7 @@ export class App {
 
   private setBusy(on: boolean): void {
     this.busy = on;
-    this.els.input.disabled = on;
+    this.els.input.disabled = on || !this.myTurn();
     this.els.root.classList.toggle("busy", on);
     this.arena.setThinking(on);
     if (!on) this.els.input.focus();
@@ -626,6 +671,10 @@ export class App {
 
   /** Start narration immediately (runs in parallel with the animation). */
   private onPass(): void {
+    if (this.online !== null) {
+      this.online.send({ t: "pass" });
+      return;
+    }
     if (this.busy || this.state.phase === "finished") return;
     this.state = pass(this.state);
     this.render();
@@ -669,12 +718,12 @@ export class App {
       this.els.input.placeholder = "";
       this.els.input.disabled = true;
     } else {
-      this.els.input.disabled = this.busy;
+      this.els.input.disabled = this.busy || !this.myTurn();
       // No articles needed ("gegen Ritter") – works for every learned name. Long names drop the player.
       const full =
         target === null ? `${active.name}, wer bist du?` : this.retry ? `${target.name} steht noch, ${active.name} …` : `${active.name} – gegen ${target.name}`;
       const short = target === null ? "Wer bist du?" : this.retry ? `${target.name} steht noch …` : `Gegen ${target.name}`;
-      this.els.input.placeholder = full.length <= 34 ? full : short;
+      this.els.input.placeholder = !this.myTurn() ? `${active.name} ist am Zug …` : full.length <= 34 ? full : short;
     }
   }
 
@@ -764,11 +813,282 @@ export class App {
     if (this.state.phase !== "finished") this.els.input.focus();
   }
 
+  // ── Online ──────────────────────────────────────────────────────────────
+
+  private myTurn(): boolean {
+    return this.online === null || this.seats.includes(this.state.active);
+  }
+
+  /** Connect to the server's rooms; `hello` = create/join, null = resume the saved seat. */
+  private goOnline(hello: ClientMsg | null): void {
+    this.online?.close();
+    this.seats = [];
+    this.online = new OnlineLink(
+      hello,
+      (m) => {
+        this.onServer(m);
+      },
+      (st) => {
+        this.onLinkStatus(st);
+      },
+    );
+  }
+
+  private leaveOnline(): void {
+    if (this.online === null) return;
+    this.online.close();
+    this.online = null;
+    this.seats = [];
+    this.narrations.clear();
+    this.earlyNarrations.clear();
+    this.setBusy(false);
+  }
+
+  private linkLost = false;
+  private onLinkStatus(st: LinkStatus): void {
+    if (st === "lost" && !this.linkLost) {
+      this.linkLost = true;
+      this.arena.setThinking(false);
+      this.flashBanner("Verbindung verloren – verbinde neu …", "info");
+    }
+    if (st === "open" && this.linkLost) {
+      this.linkLost = false;
+      this.flashBanner("Wieder verbunden.", "good");
+    }
+  }
+
+  private sendOnlineMove(text: string): void {
+    if (this.busy || !this.myTurn() || this.state.phase === "finished") return;
+    if (this.online?.send({ t: "move", text }) !== true) {
+      this.flashBanner("Keine Verbindung zum Server.", "bad");
+      return;
+    }
+    this.setBusy(true);
+  }
+
+  /** The narration for an online turn arrives separately (Claude writes while the arena plays). */
+  private narrationFor(seq: number): Promise<string> {
+    const early = this.earlyNarrations.get(seq);
+    if (early !== undefined) {
+      this.earlyNarrations.delete(seq);
+      return Promise.resolve(early);
+    }
+    return new Promise((resolve) => {
+      this.narrations.set(seq, resolve);
+    });
+  }
+
+  private adoptLearned(pack: ContentPack): void {
+    this.resolver.setLearned(pack);
+    this.setOntology(this.resolver.onto);
+  }
+
+  /** Show a server-side game as it stands (join, reconnect, rematch) – no animation replay. */
+  private adoptState(state: GameState, chronicle: readonly ChronicleEntry[], epilogue: string | null): void {
+    this.state = state;
+    this.arena.clear();
+    this.retry = false;
+    this.epilogue = epilogue;
+    this.discoveries = chronicle.filter((e) => e.discovery).map((e) => ({ name: e.name, player: e.actor }));
+    this.music.restart(state.players[0].name.length * 31 + state.players[1].name.length);
+    this.lastWille = [state.players[0].wille, state.players[1].wille];
+    clear(this.els.chronicle);
+    for (const e of chronicle) this.addChronicle(e.actor, e.name, e.text, e.failed, [], e.discovery);
+    // Only the form still standing – every earlier one was answered.
+    const last = state.history.at(-1);
+    if (last !== undefined) void this.arena.summon(last.player, last.form);
+    this.hideCaption();
+    this.resetInput();
+    this.setBusy(false);
+    this.render();
+    if (state.phase === "finished") void this.showEnd();
+  }
+
+  private onServer(m: ServerMsg): void {
+    switch (m.t) {
+      case "welcome": {
+        this.seats = m.seats;
+        this.players = m.players;
+        this.adoptLearned(m.learned);
+        // A reload should resume the seat, not join again.
+        if (location.search.includes("room=")) history.replaceState(null, "", location.pathname);
+        this.closeModal();
+        if (m.state === null) {
+          this.showInvite(m.room, true);
+          return;
+        }
+        this.adoptState(m.state, m.chronicle, m.epilogue);
+        return;
+      }
+      case "presence": {
+        for (const p of [0, 1] as const) {
+          const before = this.players[p];
+          const now = m.players[p];
+          if (this.seats.includes(p) || before === null || now === null || before.online === now.online) continue;
+          this.flashBanner(now.online ? `${now.name} ist zurück.` : `${now.name} ist getrennt – wartet …`, "info");
+        }
+        this.players = m.players;
+        return;
+      }
+      case "start":
+        this.closeModal();
+        this.adoptState(m.state, [], null);
+        this.flashBanner(`${m.state.players[m.state.active].name} beginnt.`, "info");
+        return;
+      case "thinking":
+        this.setBusy(true);
+        return;
+      case "rejected":
+        this.setBusy(false);
+        this.flashBanner(m.reason, "bad");
+        return;
+      case "turn": {
+        const narration = this.narrationFor(m.seq);
+        this.onlineQueue = this.onlineQueue.then(async () => {
+          this.setBusy(true);
+          try {
+            await this.playTurn(m.turn, narration);
+          } finally {
+            this.setBusy(false);
+          }
+        });
+        return;
+      }
+      case "narration": {
+        const resolve = this.narrations.get(m.seq);
+        if (resolve === undefined) this.earlyNarrations.set(m.seq, m.text);
+        else {
+          this.narrations.delete(m.seq);
+          resolve(m.text);
+        }
+        return;
+      }
+      case "resigned":
+        this.onlineQueue = this.onlineQueue.then(() => {
+          this.state = m.state;
+          this.flashBanner(`${m.state.players[m.seat].name} gibt auf.`, "info");
+          this.render();
+          void this.showEnd();
+        });
+        return;
+      case "epilogue":
+        this.epilogue = m.text;
+        if (this.epilogueEl !== null) {
+          this.epilogueEl.textContent = m.text;
+          this.epilogueEl.classList.remove("pending");
+        }
+        return;
+      case "learned":
+        try {
+          this.adoptLearned(applyPackDelta(this.learned, m.delta));
+        } catch {
+          this.online?.send({ t: "sync" });
+        }
+        return;
+      case "learnedFull":
+        try {
+          this.adoptLearned(m.pack);
+        } catch {
+          /* keep what we have */
+        }
+        return;
+      case "error":
+        if (m.code === "noroom" || m.code === "access" || m.code === "full") {
+          this.online = null;
+          this.seats = [];
+          this.setBusy(false);
+          this.showStart();
+        } else if (this.busy && m.code !== "busy") this.setBusy(false);
+        this.flashBanner(m.message, m.code === "busy" ? "info" : "bad");
+        return;
+    }
+  }
+
+  /** The invite: code and link to send to the opponent. */
+  private showInvite(room: string, waiting: boolean): void {
+    const url = `${location.origin}${location.pathname}?room=${room}`;
+    const copy = h(
+      "button",
+      {
+        class: "btn primary",
+        onclick: () => {
+          void navigator.clipboard.writeText(url).then(
+            () => {
+              copy.textContent = "Kopiert ✓";
+            },
+            () => {
+              copy.textContent = "Bitte von Hand kopieren";
+            },
+          );
+        },
+      },
+      "Link kopieren",
+    );
+    this.modal(
+      waiting ? "Warte auf Gegner" : "Einladen",
+      h("p", { class: "invite-code", "aria-label": "Raum-Code" }, room),
+      h("p", { class: "invite-link" }, url),
+      h("p", { class: "hint" }, "Schick den Link oder nenne den Code. Das Duell beginnt, sobald jemand beitritt."),
+      h(
+        "div",
+        { class: "actions" },
+        copy,
+        waiting
+          ? h("button", { class: "btn ghost", onclick: () => {
+                this.leaveOnline();
+                this.showStart();
+              } }, "Abbrechen")
+          : null,
+      ),
+    );
+  }
+
+  /** Opened through an invite link. */
+  private showJoin(room: string): void {
+    const name = h("input", { class: "form-input", id: "join-name", placeholder: "Dein Name", value: "" });
+    const access = h("input", { class: "form-input", id: "join-access", type: "password", placeholder: "vom Betreiber des Servers", autocomplete: "off" });
+    const go = (): void => {
+      const code = access.value.trim();
+      this.unlockAudio();
+      this.closeModal();
+      this.goOnline({ t: "join", room: room.toUpperCase(), name: name.value.trim() || "Gast", ...(code === "" ? {} : { code }) });
+    };
+    for (const inp of [name, access]) {
+      inp.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") go();
+      });
+    }
+    this.modal(
+      "Eine Herausforderung",
+      h("p", { class: "lore" }, "Jemand erwartet dich in der Arena."),
+      h("label", { for: "join-name" }, "Dein Name", name),
+      this.server?.accessCode === true ? h("label", { for: "join-access" }, "Zugangscode", access) : null,
+      h(
+        "div",
+        { class: "actions" },
+        h("button", { class: "btn primary", onclick: go }, "Beitreten"),
+        h("button", { class: "btn ghost", onclick: () => {
+              history.replaceState(null, "", location.pathname);
+              this.showStart();
+            } }, "Lieber hier zu zweit"),
+      ),
+    );
+    name.focus();
+  }
+
   private showStart(): void {
     const n0 = h("input", { class: "form-input", value: this.state.players[0].name, placeholder: "Spieler 1" });
     const n1 = h("input", { class: "form-input", value: this.state.players[1].name, placeholder: "Spieler 2" });
-    const needsKey = !this.debug && !isClaudeReady(this.llm);
+    const rooms = this.server?.online === true;
+    // On a public server even a one-device duel is played in a room (the server holds the key).
+    const viaRoom = this.roomsOnly && !this.debug;
+    const needsKey = !this.debug && !viaRoom && !isClaudeReady(this.llm);
     const key = h("input", { class: "form-input", id: "start-key", type: "password", placeholder: "sk-ant-… (Claude API-Key)", autocomplete: "off" });
+    const access = h("input", { class: "form-input", id: "start-access", type: "password", placeholder: "vom Betreiber des Servers", autocomplete: "off" });
+    const roomCode = h("input", { class: "form-input room-code", id: "start-room", placeholder: "Code", autocomplete: "off" });
+    roomCode.maxLength = 5;
+    const withCode = (m: Extract<ClientMsg, { t: "create" | "join" }>): ClientMsg => (access.value.trim() === "" ? m : { ...m, code: access.value.trim() });
+    const me = (): string => n0.value.trim() || "Spieler 1";
     const remember = h("input", { type: "checkbox", id: "start-remember" });
     remember.checked = this.settings.rememberSecrets;
     const go = (): void => {
@@ -784,8 +1104,32 @@ export class App {
       }
       this.unlockAudio();
       this.closeModal();
-      this.newGame([n0.value.trim() || "Spieler 1", n1.value.trim() || "Spieler 2"]);
+      if (viaRoom) {
+        this.goOnline(withCode({ t: "create", name: me(), name2: n1.value.trim() || "Spieler 2" }));
+        return;
+      }
+      this.leaveOnline();
+      this.newGame([me(), n1.value.trim() || "Spieler 2"]);
     };
+    const openRoom = (): void => {
+      this.unlockAudio();
+      this.closeModal();
+      this.goOnline(withCode({ t: "create", name: me() }));
+    };
+    const joinRoom = (): void => {
+      const room = roomCode.value.trim().toUpperCase();
+      if (room.length !== 5) {
+        roomCode.focus();
+        this.flashBanner("Der Raum-Code hat fünf Zeichen.", "bad");
+        return;
+      }
+      this.unlockAudio();
+      this.closeModal();
+      this.goOnline(withCode({ t: "join", room, name: me() }));
+    };
+    roomCode.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") joinRoom();
+    });
     const debugStart = (): void => {
       this.settings = { ...this.settings, debugOffline: true };
       this.closeModal();
@@ -802,6 +1146,7 @@ export class App {
       h("p", { class: "lore" }, "Zwei Willen. Eine Arena. Jeder wird zu etwas, das den anderen besiegt – bis einer keine Antwort mehr findet."),
       d > 0 ? h("p", { class: "hint" }, `Das Grimoire kennt ${String(d)} Gestalten, die vor euch niemand kannte.`) : null,
       h("div", { class: "names" }, h("label", {}, "Spieler 1", n0), h("label", {}, "Spieler 2", n1)),
+      rooms && this.server?.accessCode === true ? h("label", { for: "start-access" }, "Zugangscode", access) : null,
       needsKey ? h("label", { for: "start-key" }, "Claude API-Key", key) : null,
       needsKey ? this.rememberBox(remember) : null,
       needsKey ? h("p", { class: "hint" }, "Tipp: Nutze einen eigenen Key nur für dieses Spiel, mit Ausgabenlimit. Ganz ohne Key im Browser: lokal mit `npm start`.") : null,
@@ -812,6 +1157,21 @@ export class App {
         h("button", { class: "btn primary", onclick: go }, "Duell beginnen"),
         needsKey ? h("button", { class: "btn ghost", title: "Ohne Claude – nur zum Testen", onclick: debugStart }, "Debug ohne Claude") : null,
       ),
+      rooms
+        ? h(
+            "div",
+            { class: "online-start" },
+            h("h3", {}, "Online"),
+            h("p", { class: "hint" }, "Gegen jemanden an einem anderen Gerät – Spieler 1 ist dein Name."),
+            h(
+              "div",
+              { class: "actions" },
+              h("button", { class: "btn", onclick: openRoom }, "Raum eröffnen"),
+              roomCode,
+              h("button", { class: "btn ghost", onclick: joinRoom }, "Beitreten"),
+            ),
+          )
+        : null,
       h("p", { class: "version" }, `v${APP_VERSION}`),
     );
     n0.focus();
@@ -970,7 +1330,15 @@ export class App {
       tabs,
       search,
       list,
-      n === 0 ? null : h("div", { class: "actions small" }, h("span", { class: "hint" }, `Aufbewahrt in: ${this.store.label}`), exportBtn, resetBtn),
+      n === 0
+        ? null
+        : h(
+            "div",
+            { class: "actions small" },
+            h("span", { class: "hint" }, this.server?.online === true && (this.online !== null || this.roomsOnly) ? "Geteilt mit allen auf diesem Server." : `Aufbewahrt in: ${this.store.label}`),
+            exportBtn,
+            this.online !== null || this.roomsOnly ? null : resetBtn,
+          ),
     );
     search.focus();
   }
@@ -1046,7 +1414,21 @@ export class App {
     this.sound.play("end");
     const plain = narrateEnd(s);
     const legend = h("p", { class: "lore" }, plain);
-    const useClaude = !this.debug && isClaudeReady(this.llm) && s.history.length > 1;
+    const useClaude = this.online === null && !this.debug && isClaudeReady(this.llm) && s.history.length > 1;
+    if (this.online !== null) {
+      // The server tells the legend; it may already be here.
+      legend.textContent = this.epilogue ?? plain;
+      legend.classList.toggle("pending", this.epilogue === null);
+      this.epilogueEl = legend;
+    }
+    const again =
+      this.online === null
+        ? h("button", { class: "btn primary", onclick: () => {
+              this.showStart();
+            } }, "Neues Duell")
+        : h("button", { class: "btn primary", onclick: () => {
+              this.online?.send({ t: "rematch" });
+            } }, "Revanche");
     const found = this.discoveries;
     this.modal(
       s.winner === null ? "Unentschieden" : `${s.players[s.winner].name} gewinnt`,
@@ -1064,12 +1446,16 @@ export class App {
       h(
         "div",
         { class: "actions" },
-        h("button", { class: "btn primary", onclick: () => {
-              this.showStart();
-            } }, "Neues Duell"),
+        again,
         h("button", { class: "btn ghost", onclick: () => {
               this.showChronicle();
             } }, "Chronik"),
+        this.online === null
+          ? null
+          : h("button", { class: "btn ghost", onclick: () => {
+                this.leaveOnline();
+                this.showStart();
+              } }, "Verlassen"),
       ),
     );
     if (useClaude) {
