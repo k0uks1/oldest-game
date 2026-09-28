@@ -7,6 +7,7 @@ import { WebSocket } from "ws";
 import { CORE_PACK_RAW, loadPack } from "../src/content/index.ts";
 import { Ontology } from "../src/engine/ontology/ontology.ts";
 import type { ContentPack } from "../src/engine/ontology/pack.ts";
+import type { Form } from "../src/engine/types.ts";
 import { Resolver } from "../src/game/resolver.ts";
 import { DEFAULT_SETTINGS } from "../src/llm/client.ts";
 import { emptyLearnedPack } from "../src/llm/learning.ts";
@@ -42,6 +43,7 @@ function setup(
     claude?: boolean;
     report?: (r: AbsurdReport & { room: string }) => void;
     art?: HubArt;
+    lore?: (form: Form) => Promise<string | undefined>;
   } = {},
 ): { hub: OnlineHub; resolver: Resolver } {
   const resolver = new Resolver(Ontology.compile([core]), [core], emptyLearnedPack(), {
@@ -58,6 +60,7 @@ function setup(
     ...(opts.now === undefined ? {} : { now: opts.now }),
     ...(opts.report === undefined ? {} : { report: opts.report }),
     ...(opts.art === undefined ? {} : { art: opts.art }),
+    ...(opts.lore === undefined ? {} : { lore: opts.lore }),
   });
   return { hub, resolver };
 }
@@ -405,5 +408,28 @@ describe("Bilder auf Abruf", () => {
     hold.finish("k-wolf", "2.2.ff0000ff.AwE=");
     assert.deepEqual(a.last("art")?.items, [{ id: "wolf", state: "ready", art: "2.2.ff0000ff.AwE=" }]);
     assert.equal(a.last("welcome")?.art, true);
+  });
+});
+
+describe("Legenden", () => {
+  it("a legend reaches only whoever asked; unknown forms and no Claude answer with empty text", async () => {
+    const asked: string[] = [];
+    const { hub } = setup({
+      lore: (f) => {
+        asked.push(f.id);
+        return Promise.resolve(`Die Sage vom ${f.name}.`);
+      },
+    });
+    const { a, b, ca } = openRoom(hub);
+    ca.receive(JSON.stringify({ t: "lore", id: "wolf" }));
+    ca.receive(JSON.stringify({ t: "lore", id: "gibtsnicht" }));
+    await settle();
+    const lore = a.inbox.filter((m): m is Extract<ServerMsg, { t: "lore" }> => m.t === "lore").sort((x, y) => y.id.localeCompare(x.id));
+    assert.deepEqual(lore, [
+      { t: "lore", id: "wolf", text: "Die Sage vom Wolf." },
+      { t: "lore", id: "gibtsnicht", text: "" },
+    ]);
+    assert.equal(b.last("lore"), undefined);
+    assert.deepEqual(asked, ["wolf"]);
   });
 });

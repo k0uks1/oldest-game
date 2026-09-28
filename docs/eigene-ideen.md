@@ -380,3 +380,14 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Schon vor dem Lernen richtig** | Der Parser rechnet neue Eigenschaften beim Fähigkeiten-Check bereits mit (Schattenform aus Eltern, Folgerungen, Verleihungen) – nichts fliegt raus, nur weil es neu ist. | `shadowOf` |
 | **Online geteilt** | Gelernte Qualitäten reisen in den Pack-Deltas mit; ältere Server und Clients ignorieren das Feld einfach. | `protocol.ts` |
 
+## Die Gestaltkarte (Nutzerwünsche: Grimoire klickbar, Übersicht unter dem Eingabefeld, Backstory, sichtbare Modifikationen)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Eine Karte für alles** | Dieselbe Karte im Grimoire und unter dem Eingabefeld: Bild (generiert oder gezeichnet), Größe und Ebene, was die Gestalt *ist*, *hat* und *kann* – jeweils mit der Eigenschaft, aus der es kommt („zerschlägt (wuchtig)“) –, Kräfte und Schutz als farbige Marken, Schwächen, Legende. | `game/card.ts`, `ui/card-view.ts` |
+| **Abwandlungen sichtbar** | „Ungeladener Gast mit Zwiebel-Atem“ merkt sich, wovon er abstammt, und die Worte des Spielers: „Abwandlung von Mann · ungeladen · mit Zwiebel-Atem · + Zwiebel-Atem“. Claude muss jede Abwandlung in Eigenschaften übersetzen, sonst zählt sie nicht – und eine reine Intensitätsänderung (glühendes Schwert) bleibt jetzt auch eine Abwandlung. | `Form.base`, `Form.mods`, `sameShape` |
+| **Die Übersicht bleibt leise** | Unter der Eingabezeile steht nur der Name der Gestalt, die es zu besiegen gilt. Ein Klick klappt die Karte über der Zeile auf; der Zustand wird gemerkt. Zugeklappt kostet sie nichts – auch keine Legende. | `details.peek` |
+| **Legenden im Ton der Gestalt** | Claude schreibt 2–4 Sätze: mythisch für den Drachen, augenzwinkernd für die Quietscheente, absurd mit innerer Logik für den achtarmigen Alkoholiker. Neue Gestalten bringen sie beim Einordnen gleich mit, alle anderen bekommen sie beim ersten Aufklappen. | `loreWithClaude`, `Form.tone` |
+| **Einmal schreiben, für alle** | Online schreibt der Server jede Legende nur einmal und hebt sie auf (`lore.json`), mit Stundenbudget. Der Browser merkt sich, was er schon gelesen hat. Ohne Claude steht dort der bekannte Spruch der Gestalt. | `server/lore-store.ts`, `ui/lore-client.ts` |
+| **Bild kommt nach** | Hat eine Gestalt noch kein generiertes Bild, zeigt die Karte das gezeichnete und tauscht es, sobald der Server fertig gemalt hat. | `cardFor` |
+

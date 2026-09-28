@@ -16,7 +16,7 @@ import { reaches } from "../engine/rules.ts";
 import type { Form, GameState, PlayerId } from "../engine/types.ts";
 import { isClaudeReady, type LlmSettings } from "../llm/client.ts";
 import { addRuling, findLearned, learn } from "../llm/learning.ts";
-import { narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
+import { loreWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
 import { parseWithClaude } from "../llm/parser.ts";
 import { refereeWithClaude } from "../llm/referee.ts";
 import { rasterizeSketch } from "../render/svgsprite.ts";
@@ -53,7 +53,9 @@ export interface ResolverHost {
 
 function sameShape(a: Form, b: Form): boolean {
   const eq = (x: readonly string[], y: readonly string[]): boolean => x.length === y.length && x.every((v) => y.includes(v));
-  return a.scale === b.scale && eq(a.tags, b.tags) && eq(a.not, b.not) && eq(a.verbs, b.verbs);
+  const levels = (f: Form): string => JSON.stringify(Object.entries(f.qualities ?? {}).sort(([x], [y]) => x.localeCompare(y)));
+  // a modification that only changes an intensity (a glowing sword) is still a modification
+  return a.scale === b.scale && eq(a.tags, b.tags) && eq(a.not, b.not) && eq(a.verbs, b.verbs) && levels(a) === levels(b);
 }
 
 export class Resolver {
@@ -141,6 +143,12 @@ export class Resolver {
     }
     if (outcome.kind === "rejected") return { kind: "rejected", reason: outcome.reason };
     return { kind: "turn", turn: { actor, form, outcome, novelty, verdict, state: outcome.state, index: outcome.state.history.length - 1 } };
+  }
+
+  /** The form's legend for its card: its own, or a fresh one from Claude (undefined offline). */
+  legend(form: Form): Promise<string | undefined> {
+    if (form.lore !== undefined) return Promise.resolve(form.lore);
+    return this.useClaude() ? loreWithClaude(this.onto, this.host.llm(), form) : Promise.resolve(undefined);
   }
 
   /** One short sentence about an already resolved turn (Claude, or templates offline). */

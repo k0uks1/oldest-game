@@ -3,6 +3,7 @@ import type { Ontology } from "../engine/ontology/ontology.ts";
 import type { Failure } from "../engine/attempt.ts";
 import type { Form, GameState, Move } from "../engine/types.ts";
 import { callClaude, type LlmSettings } from "./client.ts";
+import { loreOf } from "./parser.ts";
 
 /**
  * Hard cap on the client side too: the model is asked for one short sentence, but whatever
@@ -134,5 +135,38 @@ export async function narrateEpilogueWithClaude(settings: LlmSettings, state: Ga
     return text === "" ? fallback : text;
   } catch {
     return fallback;
+  }
+}
+
+const LORE_SYSTEM = `Du schreibst Einträge für das Grimoire von „The Oldest Game“, einem Duell der Vorstellungskraft
+(Sandman: Morpheus gegen einen Dämon). Zu einer Gestalt schreibst du ihre kurze Legende: 2–4 kurze deutsche Sätze,
+zusammen höchstens 60 Wörter, kein Markdown, keine Anführungszeichen um das Ganze, keine Zahlen oder Spielregeln.
+Der TON folgt der Gestalt:
+- ernst (Ritter, Drache, Tod): mythisch, düster, wie eine alte Sage.
+- heiter (Quietscheente, Postbote): warm und augenzwinkernd.
+- albern (Witz- und Quatschgestalten wie „der achtarmige Alkoholiker“): absurd-komisch, aber mit innerer Logik –
+  nimm den Witz halb ernst, als wäre er wahr, und lass seine Eigenheiten eine Rolle spielen.
+Erfinde Herkunft, Gewohnheiten, einen Ruf – nichts, was ihren Eigenschaften widerspricht.`;
+
+/**
+ * A short legend for the form card (grimoire, overview). Presentation only: the engine never
+ * reads it. `undefined` when Claude is not reachable – the card then shows the flavor text.
+ */
+export async function loreWithClaude(onto: Ontology, settings: LlmSettings, form: Form): Promise<string | undefined> {
+  const verbs = onto.compileForm(form).verbs.slice(0, 4).map((v) => onto.verbs.get(v)?.spec.label ?? v);
+  const facts = [
+    `Gestalt: ${describe(onto, form)}`,
+    verbs.length === 0 ? "" : `Kann: ${verbs.join(", ")}`,
+    form.mods === undefined ? "" : `Abwandlungen: ${form.mods.join(", ")}`,
+    form.flavor === undefined ? "" : `Bekannter Spruch: ${form.flavor}`,
+    `Ton: ${form.tone ?? "wähle ihn selbst"}`,
+  ]
+    .filter((l) => l !== "")
+    .join("\n");
+  try {
+    const r = await callClaude(settings, { system: LORE_SYSTEM, user: facts, maxTokens: 220, temperature: 0.9 });
+    return loreOf(r.text);
+  } catch {
+    return undefined;
   }
 }

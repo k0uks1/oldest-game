@@ -5,7 +5,7 @@ import { MAX_LEVEL, type Ontology } from "../engine/ontology/ontology.ts";
 import { parseForm, suggest } from "../engine/parse.ts";
 import { clampScale } from "../engine/rules.ts";
 import { hash32, normalize } from "../engine/text.ts";
-import { ARCHETYPES, PLANES, type Archetype, type Form, type FormLook, type Plane } from "../engine/types.ts";
+import { ARCHETYPES, PLANES, TONES, type Archetype, type Form, type FormLook, type Plane, type Tone } from "../engine/types.ts";
 import type { QualitySpec, RequiresSpec, TagSpec, VerbSpec } from "../engine/ontology/pack.ts";
 import { callClaude, type LlmSettings, type ToolDef } from "./client.ts";
 import { EMPTY_DELTA, LEARNED_TAG_FORCE, MAX_NEW_QUALITIES, MAX_NEW_TAGS, slug, type LearningDelta } from "./learning.ts";
@@ -71,6 +71,19 @@ const TOOL: ToolDef = {
         description: "Mechanismus-IDs, mit denen die Gestalt angreifen kann. Bei base: nur zusätzliche.",
       },
       weaknesses: { type: "array", items: { type: "string" }, maxItems: 3, description: "Offensichtliche Schwächen (müssen Eigenschaften sein)." },
+      zusaetze: {
+        type: "array",
+        items: { type: "string" },
+        maxItems: 4,
+        description:
+          "Bei base: die Abwandlungen, so kurz wie der Spieler sie meint („mit Zwiebel-Atem“, „ungeladen“, „auf Rollschuhen“). Jede MUSS sich in properties, remove_properties, intensitaet oder scale niederschlagen.",
+      },
+      ton: { type: "string", enum: [...TONES], description: "ernst (Ritter, Tod), heiter (Quietscheente, Postbote), albern (Witz- und Quatschgestalten)." },
+      geschichte: {
+        type: "string",
+        description:
+          "Nur bei base = null oder zusaetze: Legende in 2–4 kurzen deutschen Sätzen (max. 60 Wörter), im Ton der Gestalt – ernst: mythisch-düster; heiter/albern: augenzwinkernd, aber mit innerer Logik.",
+      },
       intended_mechanism: {
         type: ["string", "null"],
         description: "Mechanismus-ID, falls der Spieler beschreibt WIE die Gestalt angreift, sonst null. \"entkommt\", wenn die Gestalt ausweichen/fliehen will statt anzugreifen.",
@@ -399,8 +412,15 @@ function shapeFromLlm(onto: Ontology, input: unknown, text: string): Shaped {
   const iv = typeof o["intended_mechanism"] === "string" ? (resolveVerb(o["intended_mechanism"]) ?? null) : null;
   const look = lookOf(o["aussehen"]) ?? base?.look;
   const artPrompt = artPromptOf(o["bild"]);
+  const mods = strings(o["zusaetze"]).map((m) => m.replace(/\s+/g, " ").trim().slice(0, 40)).filter((m) => m !== "").slice(0, 4);
+  const tone = TONES.find((t): t is Tone => t === o["ton"]);
+  const lore = loreOf(o["geschichte"]);
   const looked: Form = {
     ...form,
+    ...(base === null ? {} : { base: base.id }),
+    ...(base === null || mods.length === 0 ? {} : { mods }),
+    ...(tone === undefined ? {} : { tone }),
+    ...(lore === undefined ? {} : { lore }),
     ...(look === undefined ? {} : { look }),
     ...(qualities === undefined ? {} : { qualities }),
     ...(artPrompt === undefined ? {} : { artPrompt }),
@@ -567,17 +587,28 @@ export async function parseWithClaude(onto: Ontology, settings: LlmSettings, tex
     `Gestalt des Spielers: „${text}“`,
     anchors.length > 0 ? `\nAnker aus dem Lexikon:\n${anchors.map((a) => anchorLine(onto, a)).join("\n")}` : "\nKeine passenden Anker.",
   ].join("\n");
-  const result = await callClaude(settings, { system: systemPrompt(onto), user, maxTokens: 1000, tool: TOOL });
+  const result = await callClaude(settings, { system: systemPrompt(onto), user, maxTokens: 1400, tool: TOOL });
   let shaped = shapeFromLlm(onto, result.toolInput, text);
   if (shaped.result === undefined && shaped.unable.length > 0) {
     const input = result.toolInput as { name?: unknown } | undefined;
     const name = typeof input?.name === "string" ? input.name : text;
-    const again = await callClaude(settings, { system: systemPrompt(onto), user: `${user}\n\n${abilityCorrection(onto, name, shaped.unable)}`, maxTokens: 1000, tool: TOOL });
+    const again = await callClaude(settings, { system: systemPrompt(onto), user: `${user}\n\n${abilityCorrection(onto, name, shaped.unable)}`, maxTokens: 1400, tool: TOOL });
     shaped = shapeFromLlm(onto, again.toolInput, text);
   }
   const parsed = shaped.result;
   if (parsed !== undefined) cacheSet(key, parsed);
   return parsed;
+}
+
+/** A legend: printable text, at most 480 characters, cut at a sentence end where possible. */
+export function loreOf(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const clean = raw.replace(/[\p{C}]/gu, " ").replace(/\s+/g, " ").trim();
+  if (clean.length < 20) return undefined;
+  if (clean.length <= 480) return clean;
+  const cut = clean.slice(0, 480);
+  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  return end > 120 ? cut.slice(0, end + 1) : `${cut.slice(0, cut.lastIndexOf(" "))} …`;
 }
 
 /** Claude's picture description: one printable line, at most 200 characters. */

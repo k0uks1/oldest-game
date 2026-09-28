@@ -171,6 +171,11 @@ export interface FormSpec {
   /** Live learning: who first summoned this form and when (ISO date). Purely informational. */
   readonly discoveredBy?: string;
   readonly discoveredAt?: string;
+  /** Presentation (see {@link Form}): the varied lexicon form, modifications, legend and tone. */
+  readonly base?: string;
+  readonly mods?: readonly string[];
+  readonly lore?: string;
+  readonly tone?: string;
 }
 
 /**
@@ -434,6 +439,10 @@ export function parsePack(input: unknown): PackResult {
         ...opt("artPrompt", c.artPrompt(o, "artPrompt", w)),
         ...opt("discoveredBy", c.optStr(o, "discoveredBy", w)),
         ...opt("discoveredAt", c.optStr(o, "discoveredAt", w)),
+        ...opt("base", c.optStr(o, "base", w)),
+        ...opt("mods", c.list(o, "mods", w)),
+        ...opt("lore", c.optStr(o, "lore", w)),
+        ...opt("tone", c.optStr(o, "tone", w)),
       };
     }),
     ...(input["rulings"] === undefined

@@ -86,6 +86,8 @@ export interface HubOptions {
   readonly log?: (line: string) => void;
   /** Generated pictures (optional): look one up for a form, starting generation if needed. */
   readonly art?: HubArt;
+  /** A form's legend (stored or freshly written by Claude); undefined = none. */
+  readonly lore?: (form: Form) => Promise<string | undefined>;
   /** Store a reported absurd win (room code added). */
   readonly report?: (r: AbsurdReport & { readonly room: string }) => void;
 }
@@ -254,6 +256,9 @@ export class OnlineHub {
         return;
       case "art":
         this.artRequest(c, msg.ids);
+        return;
+      case "lore":
+        void this.loreRequest(c, msg.id);
         return;
     }
   }
@@ -541,6 +546,13 @@ export class OnlineHub {
   // ── generated pictures ──────────────────────────────────────────────────
 
   /** Answer what is known now; remember who waits for pictures still being made. */
+  /** A legend for one form – stored, freshly written (the store keeps the budget) or none. */
+  private async loreRequest(c: Conn, id: string): Promise<void> {
+    const form = this.resolver.onto.formById(id);
+    const text = form === undefined ? undefined : (form.lore ?? (await this.opts.lore?.(form).catch(() => undefined)));
+    if (this.conns.has(c)) c.peer.send({ t: "lore", id, text: text ?? "" });
+  }
+
   private artRequest(c: Conn, ids: readonly string[]): void {
     const art = this.opts.art;
     const items: ArtItem[] = [];
