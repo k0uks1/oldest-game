@@ -2,10 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { deflateSync } from "node:zlib";
 import { coreOntology } from "../src/content/index.ts";
-import artJson from "../src/content/core/art.json" with { type: "json" };
 import promptsJson from "../src/content/core/art-prompts.json" with { type: "json" };
 import { parsePack } from "../src/engine/ontology/pack.ts";
-import { ART_MAX_SIDE, artFor, artGlow, decodeArt, encodeArt, upscale } from "../src/render/art.ts";
+import { ART_MAX_SIDE, artFor, artGlow, decodeArt, encodeArt, registerArt, resample, upscale } from "../src/render/art.ts";
 import type { PixelImage } from "../src/render/sprite.ts";
 import { decodePng } from "../server/png.ts";
 
@@ -100,13 +99,6 @@ describe("png decoder (server/scripts)", () => {
 
 describe("core art", () => {
   const onto = coreOntology();
-  it("every entry belongs to a lexicon form and decodes", () => {
-    for (const [id, raw] of Object.entries(artJson as Record<string, string>)) {
-      assert.ok(onto.formById(id), `art for unknown form ${id}`);
-      assert.ok(decodeArt(raw), `art for ${id} does not decode`);
-    }
-  });
-
   it("every lexicon form has an image prompt (new forms need one too)", () => {
     const prompts = promptsJson as Record<string, string>;
     const missing = onto.lexicon.filter((f) => (prompts[f.id] ?? "").trim() === "").map((f) => f.id);
@@ -114,11 +106,23 @@ describe("core art", () => {
     for (const id of Object.keys(prompts)) assert.ok(onto.formById(id), `prompt for unknown form ${id}`);
   });
 
-  it("a form's own art wins over the atlas", () => {
+  it("pictures from the server win over art stored in a (learned) spec", () => {
     const f = onto.formById("jaeger");
     assert.ok(f);
-    const own = encodeArt(image(32, 32, 3));
-    assert.equal(artFor({ ...f, art: own })?.width, 32);
+    assert.equal(artFor(f), undefined);
+    assert.equal(artFor({ ...f, art: encodeArt(image(32, 32, 3)) })?.width, 32);
+    assert.equal(registerArt("jaeger", encodeArt(image(128, 128, 5))), true);
+    assert.equal(artFor({ ...f, art: encodeArt(image(32, 32, 3)) })?.width, 128);
+    assert.equal(registerArt("jaeger", "kaputt"), false);
+  });
+
+  it("resamples nearest-neighbour to any size", () => {
+    const img = image(8, 8, 3);
+    const up = resample(img, 16, 16);
+    assert.equal(up.width, 16);
+    assert.deepEqual([...up.data.subarray(0, 4)], [...img.data.subarray(0, 4)]);
+    assert.equal(resample(img, 8, 8), img);
+    assert.equal(resample(up, 8, 8).width, 8);
   });
 
   it("learned packs cannot smuggle anything else in as art", () => {

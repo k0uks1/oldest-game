@@ -2,7 +2,7 @@ import type { Ontology } from "../engine/ontology/ontology.ts";
 import { hash32, rng } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 import { paletteFor, type SpritePalette } from "./palette.ts";
-import { artFor, artGlow, upscale } from "./art.ts";
+import { artFor, artGlow, resample } from "./art.ts";
 import { renderGlow, renderSprite, spriteSize, type PixelImage } from "./sprite.ts";
 import { ISO } from "./stage-iso.ts";
 import { FLOOR_Y, GROUND_Y, HEIGHT, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
@@ -64,8 +64,14 @@ export interface SpriteEntry {
   readonly rim: HTMLCanvasElement;
   /** Grey, crumbling version (versteinert). */
   readonly stone: HTMLCanvasElement;
+  /** The canvases' pixels (at the renderer's density). */
   readonly pixels: PixelImage;
+  /** Size in arena pixels (layout, effects); the canvases are `density` times larger. */
+  readonly width: number;
+  readonly height: number;
   readonly palette: SpritePalette;
+  /** Made from a generated picture (not the drawn fallback). */
+  readonly art: boolean;
 }
 
 export interface Fighter {
@@ -252,6 +258,13 @@ export abstract class ArenaSim {
   protected flashColor = "#ffffff";
   protected thinking = 0;
   protected thinkingTarget = 0;
+  /** "Beschwörung": 0..1 while a generated picture is being painted – the pentagram in the rune circle. */
+  protected conjure = 0;
+  protected conjureTarget = 0;
+  /** Seconds since the current conjuring began (the pentagram traces itself in). */
+  protected conjureAge = 0;
+  /** Final burst when the picture arrives (1 → 0). */
+  protected conjureBurst = 0;
   protected time = 0;
   protected last = 0;
   protected running = false;
@@ -295,6 +308,11 @@ export abstract class ArenaSim {
     protected onto: Ontology,
     /** The scenery: flat wall or isometric room. */
     protected readonly stage: StageLayout = ISO,
+    /**
+     * Device pixels per arena pixel the renderer draws fighters at. Generated pictures carry
+     * ART_DENSITY× detail; a renderer at density 2 shows all of it, at 1 it shows them reduced.
+     */
+    protected readonly density = 1,
   ) {
     this.background = stage.paintBackground();
     this.reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -421,13 +439,13 @@ export abstract class ArenaSim {
     this.onCue?.("discovery");
     this.discoveryGlow = { side, life: 0 };
     const cx = SIDE_X[side];
-    const top = this.gy(side) - f.sprite.pixels.height;
+    const top = this.gy(side) - f.sprite.height;
     for (let i = 0; i < 70; i++) {
       const a = (i / 70) * Math.PI * 6;
-      const rr = 6 + (i / 70) * f.sprite.pixels.width * 0.6;
+      const rr = 6 + (i / 70) * f.sprite.width * 0.6;
       this.particles.push({
         x: cx + Math.cos(a) * rr,
-        y: this.gy(side) - (i / 70) * f.sprite.pixels.height,
+        y: this.gy(side) - (i / 70) * f.sprite.height,
         vx: -Math.sin(a) * 18,
         vy: -18 - this.rand() * 20,
         life: -i * 0.008,
@@ -472,19 +490,70 @@ export abstract class ArenaSim {
     this.rings.length = 0;
   }
 
-  /**
-   * Swap in a grown ontology (live learning). Cached sprites stay valid – they depend on form ids.
-   * A form on stage whose generated art just arrived swaps to it with a flash.
-   */
+  /** Swap in a grown ontology (live learning). Cached sprites stay valid – they depend on form ids. */
   setOntology(onto: Ontology): void {
     this.onto = onto;
+    this.refreshArt();
+  }
+
+  /** A generated picture arrived: a form on stage that still shows its drawn sprite swaps with a flash. */
+  refreshArt(): void {
     for (const side of [0, 1] as const) {
       const f = this.fighters[side];
-      if (f === null || f.form.art !== undefined) continue;
-      const fresh = onto.formById(f.form.id);
-      if (fresh?.art === undefined) continue;
-      this.fighters[side] = { ...f, form: fresh, sprite: this.sprite(fresh), flash: 0.8 };
-      this.rings.push({ x: SIDE_X[side], y: this.gy(side), r: 4, life: 0, max: 0.7, color: this.sprite(fresh).palette.glow });
+      if (f === null || f.sprite.art) continue;
+      const fresh = this.onto.formById(f.form.id) ?? f.form;
+      if (artFor(fresh) === undefined) continue;
+      const sprite = this.sprite(fresh);
+      this.fighters[side] = { ...f, form: fresh, sprite, flash: 0.8 };
+      this.rings.push({ x: SIDE_X[side], y: this.gy(side), r: 4, life: 0, max: 0.7, color: sprite.palette.glow });
+    }
+  }
+
+  /**
+   * "Beschwörung": a picture is being painted for the form about to appear on `side`. The rune
+   * circle lights up and a pentagram of runes traces itself in, until {@link endConjuring}.
+   */
+  startConjuring(): void {
+    if (this.conjureTarget === 0) this.conjureAge = 0;
+    this.conjureTarget = 1;
+    this.onCue?.("summon");
+  }
+
+  /** The picture is here (or will not come): one bright flare, then the circle calms down. */
+  async endConjuring(arrived: boolean): Promise<void> {
+    if (this.conjureTarget === 0) return;
+    this.conjureTarget = 0;
+    if (!arrived) return;
+    this.conjureBurst = 1;
+    this.flash = Math.max(this.flash, 0.45);
+    this.flashColor = "#f4e0ff";
+    const { cx, cy } = this.stage.rune;
+    this.rings.push({ x: cx, y: cy, r: 6, life: 0, max: 0.9, color: "#f0d8ff" });
+    this.burst(cx, cy - 4, "#e8c8ff", 70);
+    this.onCue?.("reveal");
+    await wait(this.reducedMotion ? 80 : 420);
+  }
+
+  /** Sparks rising from the pentagram's points while conjuring. */
+  private emitConjureSparks(dt: number): void {
+    if (this.conjure < 0.15 || this.reducedMotion) return;
+    const { cx, cy, inner } = this.stage.rune;
+    const spin = this.time * 0.35;
+    for (let k = 0; k < 5; k++) {
+      if (this.rand() > dt * 9 * this.conjure) continue;
+      const ang = spin + (k / 5) * Math.PI * 2 - Math.PI / 2;
+      this.particles.push({
+        x: cx + Math.cos(ang) * inner[0],
+        y: cy + Math.sin(ang) * inner[1],
+        vx: (this.rand() - 0.5) * 6,
+        vy: -18 - this.rand() * 30,
+        life: 0,
+        max: 0.7 + this.rand() * 0.8,
+        color: this.rand() < 0.5 ? "#d8b4ff" : "#ffe3a0",
+        size: 1,
+        gravity: -4,
+        glow: true,
+      });
     }
   }
 
@@ -505,17 +574,43 @@ export abstract class ArenaSim {
     const cached = this.spriteCache.get(key);
     if (cached !== undefined) return cached;
     const palette = paletteFor(this.onto, form);
-    // generated art wins; smaller art is scaled up (nearest) to the form's sprite size
-    const pixels = art === undefined ? renderSprite(this.onto, form) : upscale(art, Math.floor(spriteSize(form.scale) / Math.max(art.width, art.height)));
-    const entry: SpriteEntry = {
-      image: toCanvas(pixels),
-      glow: toCanvas(art === undefined ? renderGlow(this.onto, form) : artGlow(pixels, palette.emissive)),
-      silhouette: toCanvas(silhouetteOf(pixels, "#07050c")),
-      rim: toCanvas(rimOf(pixels, palette.glow)),
-      stone: toCanvas(stoneOf(pixels)),
-      pixels,
-      palette,
-    };
+    const d = this.density;
+    let entry: SpriteEntry;
+    if (art === undefined) {
+      // drawn sprite: layers at arena resolution, then scaled up unchanged to the renderer's density
+      const pixels = renderSprite(this.onto, form);
+      const up = (img: PixelImage): HTMLCanvasElement => toCanvas(resample(img, img.width * d, img.height * d));
+      entry = {
+        image: up(pixels),
+        glow: up(renderGlow(this.onto, form)),
+        silhouette: up(silhouetteOf(pixels, "#07050c")),
+        rim: up(rimOf(pixels, palette.glow)),
+        stone: up(stoneOf(pixels)),
+        pixels: resample(pixels, pixels.width * d, pixels.height * d),
+        width: pixels.width,
+        height: pixels.height,
+        palette,
+        art: false,
+      };
+    } else {
+      // generated picture: fills the form's sprite slot, keeping all the detail the density allows
+      const side = spriteSize(form.scale);
+      const w = Math.max(1, Math.round((art.width / Math.max(art.width, art.height)) * side));
+      const h = Math.max(1, Math.round((art.height / Math.max(art.width, art.height)) * side));
+      const pixels = resample(art, w * d, h * d);
+      entry = {
+        image: toCanvas(pixels),
+        glow: toCanvas(artGlow(pixels, palette.emissive)),
+        silhouette: toCanvas(silhouetteOf(pixels, "#07050c")),
+        rim: toCanvas(rimOf(pixels, palette.glow)),
+        stone: toCanvas(stoneOf(pixels)),
+        pixels,
+        width: w,
+        height: h,
+        palette,
+        art: true,
+      };
+    }
     if (this.spriteCache.size > 200) this.spriteCache.clear();
     this.spriteCache.set(key, entry);
     return entry;
@@ -559,7 +654,7 @@ export abstract class ArenaSim {
     this.rings.push({ x: SIDE_X[side], y: this.gy(side), r: 4, life: 0, max: 0.8, color });
     for (let i = 0; i < 50; i++) {
       this.particles.push({
-        x: SIDE_X[side] + (this.rand() - 0.5) * sprite.pixels.width,
+        x: SIDE_X[side] + (this.rand() - 0.5) * sprite.width,
         y: this.gy(side),
         vx: (this.rand() - 0.5) * 20,
         vy: -30 - this.rand() * 70,
@@ -578,7 +673,7 @@ export abstract class ArenaSim {
   async reveal(side: Side): Promise<void> {
     const f = this.fighters[side];
     if (f === null) return;
-    const cy = this.gy(side) - f.sprite.pixels.height / 2;
+    const cy = this.gy(side) - f.sprite.height / 2;
     this.onCue?.("reveal");
     this.rings.push({ x: SIDE_X[side], y: cy, r: 4, life: 0, max: 0.6, color: f.sprite.palette.glow });
     this.burst(SIDE_X[side], cy, f.sprite.palette.glow, 60);
@@ -603,8 +698,8 @@ export abstract class ArenaSim {
     this.shake = weaknessHit ? 8 : 5;
     this.flash = weaknessHit ? 0.55 : 0.35;
     this.flashColor = attacker.sprite.palette.glow;
-    this.burst(SIDE_X[other], this.gy(other) - target.sprite.pixels.height / 2, attacker.sprite.palette.glow, weaknessHit ? 90 : 50);
-    this.rings.push({ x: SIDE_X[other], y: this.gy(other) - target.sprite.pixels.height / 2, r: 6, life: 0, max: 0.5, color: attacker.sprite.palette.glow });
+    this.burst(SIDE_X[other], this.gy(other) - target.sprite.height / 2, attacker.sprite.palette.glow, weaknessHit ? 90 : 50);
+    this.rings.push({ x: SIDE_X[other], y: this.gy(other) - target.sprite.height / 2, r: 6, life: 0, max: 0.5, color: attacker.sprite.palette.glow });
     await wait(260);
     if (outcome === "destroy") await this.defeat(other, style);
     else await this.depart(other, outcome);
@@ -625,7 +720,7 @@ export abstract class ArenaSim {
       });
     } else if (outcome === "sleep") {
       for (let k = 0; k < 3; k++) {
-        this.particles.push({ x: SIDE_X[side] + 8, y: this.gy(side) - f.sprite.pixels.height, vx: 8, vy: -14, life: -k * 0.35, max: 1.2, color: "#c8d8ff", size: 2, gravity: 0, glow: true });
+        this.particles.push({ x: SIDE_X[side] + 8, y: this.gy(side) - f.sprite.height, vx: 8, vy: -14, life: -k * 0.35, max: 1.2, color: "#c8d8ff", size: 2, gravity: 0, glow: true });
       }
       await this.tween(this.reducedMotion ? 50 : 1300, (t) => {
         f.offsetY = 4 * t;
@@ -649,7 +744,7 @@ export abstract class ArenaSim {
       const gold = outcome === "peace";
       for (let k = 0; k < 24; k++) {
         const c = gold ? (this.rand() < 0.5 ? "#ffe890" : "#fffbe0") : this.rand() < 0.5 ? "#ff9ad0" : "#ffe0f0";
-        this.particles.push({ x: SIDE_X[side] + (this.rand() - 0.5) * f.sprite.pixels.width, y: this.gy(side) - this.rand() * f.sprite.pixels.height, vx: 0, vy: -12 - this.rand() * 10, life: -this.rand() * 0.5, max: 1, color: c, size: 1, gravity: 0, glow: true });
+        this.particles.push({ x: SIDE_X[side] + (this.rand() - 0.5) * f.sprite.width, y: this.gy(side) - this.rand() * f.sprite.height, vx: 0, vy: -12 - this.rand() * 10, life: -this.rand() * 0.5, max: 1, color: c, size: 1, gravity: 0, glow: true });
       }
       await this.tween(this.reducedMotion ? 50 : 1100, (t) => {
         f.alpha = 1 - t;
@@ -665,7 +760,7 @@ export abstract class ArenaSim {
     const target = this.fighters[other];
     await this.strike(side, style, true);
     await this.suspense(other);
-    const x = SIDE_X[other] + (side === 0 ? -1 : 1) * ((target?.sprite.pixels.width ?? 40) / 2 + 6);
+    const x = SIDE_X[other] + (side === 0 ? -1 : 1) * ((target?.sprite.width ?? 40) / 2 + 6);
     this.onCue?.("fizzle");
     this.rings.push({ x, y: this.gy(other) - 30, r: 3, life: 0, max: 0.45, color: "#e8e0f0" });
     this.burst(x, this.gy(other) - 30, "#e8e0f0", 24);
@@ -691,7 +786,7 @@ export abstract class ArenaSim {
     const rm = this.reducedMotion;
     const away = side === 0 ? -1 : 1;
     const cx = SIDE_X[side];
-    const h = f.sprite.pixels.height;
+    const h = f.sprite.height;
     const r = this.rand;
     switch (style) {
       case "water": {
@@ -708,7 +803,7 @@ export abstract class ArenaSim {
           f.flash = 0.6 * (1 - t);
           f.squash = 1 - 0.6 * t;
           f.alpha = 1 - t * t;
-          if (r() < 0.8) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.pixels.width, y: this.gy(side) - r() * h * (1 - 0.6 * t), vx: (r() - 0.5) * 10, vy: -30 - r() * 30, life: 0, max: 0.7, color: r() < 0.5 ? "#ff6a20" : "#ffc64a", size: 2, gravity: -10, glow: true });
+          if (r() < 0.8) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.width, y: this.gy(side) - r() * h * (1 - 0.6 * t), vx: (r() - 0.5) * 10, vy: -30 - r() * 30, life: 0, max: 0.7, color: r() < 0.5 ? "#ff6a20" : "#ffc64a", size: 2, gravity: -10, glow: true });
         });
         for (let k = 0; k < 20; k++) this.particles.push({ x: cx + (r() - 0.5) * 20, y: this.gy(side) - 2, vx: (r() - 0.5) * 8, vy: -8 - r() * 10, life: 0, max: 1.6, color: "#3a3440", size: 2, gravity: -3, glow: false });
         return;
@@ -717,7 +812,7 @@ export abstract class ArenaSim {
         await this.tween(rm ? 50 : 800, (t) => {
           f.offsetY = h * t;
           f.alpha = 1 - t * 0.7;
-          if (r() < 0.6) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.pixels.width, y: this.gy(side) - 2, vx: (r() - 0.5) * 30, vy: -30 - r() * 40, life: 0, max: 0.6, color: "#6a5040", size: 2, gravity: 160, glow: false });
+          if (r() < 0.6) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.width, y: this.gy(side) - 2, vx: (r() - 0.5) * 30, vy: -30 - r() * 40, life: 0, max: 0.6, color: "#6a5040", size: 2, gravity: 160, glow: false });
         });
         return;
       }
@@ -745,7 +840,7 @@ export abstract class ArenaSim {
         await this.tween(rm ? 50 : 1000, (t) => {
           f.squash = 1 - t;
           f.alpha = 1 - t * t;
-          if (r() < 0.7) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.pixels.width, y: this.gy(side) - r() * h * (1 - t), vx: 0, vy: -6 - r() * 8, life: 0, max: 0.9, color: c, size: 2, gravity: 0, glow: style !== "dark" });
+          if (r() < 0.7) this.particles.push({ x: cx + (r() - 0.5) * f.sprite.width, y: this.gy(side) - r() * h * (1 - t), vx: 0, vy: -6 - r() * 8, life: 0, max: 0.9, color: c, size: 2, gravity: 0, glow: style !== "dark" });
         });
         return;
       }
@@ -818,7 +913,7 @@ export abstract class ArenaSim {
     const [color, glow] = STYLE_COLORS[style];
     const tx = SIDE_X[other];
     const reachX = stopShort ? SIDE_X[side] + (tx - SIDE_X[side]) * 0.72 : tx;
-    const ty = this.gy(other) - (target?.sprite.pixels.height ?? 40) / 2;
+    const ty = this.gy(other) - (target?.sprite.height ?? 40) / 2;
     await this.tween(180, (t) => (attacker.offsetX = -dir * 6 * t));
     this.onCue?.("strike");
     const back = (): void => void this.tween(250, (t) => (attacker.offsetX = attacker.offsetX * (1 - t)));
@@ -826,7 +921,7 @@ export abstract class ArenaSim {
     switch (style) {
       case "slash": {
         // a real lunge: the attacker crosses the arena and cuts
-        const gap = Math.abs(tx - SIDE_X[side]) - (attacker.sprite.pixels.width + (target?.sprite.pixels.width ?? 30)) / 2 - 4;
+        const gap = Math.abs(tx - SIDE_X[side]) - (attacker.sprite.width + (target?.sprite.width ?? 30)) / 2 - 4;
         const dist = Math.max(10, stopShort ? gap * 0.7 : gap);
         await this.tween(this.reducedMotion ? 40 : 150, (t) => (attacker.offsetX = dir * (-6 + (dist + 6) * t * t)));
         this.slashArc(stopShort ? reachX : tx, ty, dir, stopShort);
@@ -1007,6 +1102,10 @@ export abstract class ArenaSim {
     this.shake = Math.max(0, this.shake - dt * 20);
     this.flash = Math.max(0, this.flash - dt * 1.8);
     this.thinking += (this.thinkingTarget - this.thinking) * Math.min(1, dt * 4);
+    this.conjure += (this.conjureTarget - this.conjure) * Math.min(1, dt * (this.conjureTarget > this.conjure ? 2.5 : 5));
+    this.conjureAge = this.conjureTarget > 0 ? this.conjureAge + dt : 0;
+    this.conjureBurst = Math.max(0, this.conjureBurst - dt * 1.6);
+    this.emitConjureSparks(dt);
     this.updateCosmos(dt);
     for (const fx of this.fieldFx.values()) fx.level += (fx.target - fx.level) * Math.min(1, dt * 1.5);
     this.emitFieldParticles(dt);
@@ -1217,8 +1316,8 @@ export abstract class ArenaSim {
   }
 
   private emitAura(side: Side, f: Fighter): void {
-    const w = f.sprite.pixels.width;
-    const h = f.sprite.pixels.height;
+    const w = f.sprite.width;
+    const h = f.sprite.height;
     const x = SIDE_X[side] + (this.rand() - 0.5) * w * 0.8;
     const y = this.gy(side) - this.rand() * h;
     const k = f.aura.kind;

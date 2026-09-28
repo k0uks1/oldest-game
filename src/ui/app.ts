@@ -29,6 +29,7 @@ import { OnlineLink, savedSeat, type LinkStatus } from "../online/link.ts";
 import { applyPackDelta, normalizeRoom, type ChronicleEntry, type ClientMsg, type SeatInfo, type ServerMsg } from "../online/protocol.ts";
 import { Music } from "./music.ts";
 import { addReport, clearReports, loadReports, reportsText } from "./reports.ts";
+import { ArtClient, httpTransport, socketTransport } from "./art-client.ts";
 import { Sound } from "./sound.ts";
 
 function sleep(ms: number): Promise<void> {
@@ -44,6 +45,9 @@ const VICTORY_TEXT: Readonly<Record<string, string>> = {
   gebannt: "gebannt.",
   versteinert: "versteinert.",
 };
+
+/** How long a summon waits for its generated picture before the drawn sprite stands in. */
+const ART_WAIT_MS = 75_000;
 
 const SCALE_NAMES = ["", "winzig", "klein", "menschengroß", "groß", "gewaltig", "Landschaft", "Welt", "kosmisch"];
 
@@ -174,6 +178,8 @@ export class App {
   private readonly resolver: Resolver;
   /** What the game server offers (null: opened from disk). */
   private server: ServerInfo | null = null;
+  /** Generated pictures from the server (just in time); no transport = drawn sprites. */
+  private readonly art = new ArtClient();
   /** Set while playing online – the server resolves turns, this client only shows them. */
   private online: OnlineLink | null = null;
   /** Seats this client plays online (both on one device). */
@@ -433,6 +439,11 @@ export class App {
       this.localProxy = proxy.url;
       this.settings = { ...this.settings, model: proxy.model };
     }
+    // Hot-seat next to a picture-painting server: ask it over HTTP (rooms switch to the socket).
+    if (this.server?.art === true) this.art.setTransport(httpTransport());
+    this.art.onArrive = () => {
+      this.arena.refreshArt();
+    };
     // The server's pack is shared by everyone who plays there (hot-seat and rooms).
     if ((!this.debug && proxy !== null) || this.server?.online === true) this.store = serverStore();
     await this.loadLearned();
@@ -522,6 +533,7 @@ export class App {
         this.flashBanner(r.reason, "bad");
         return;
       }
+      this.art.want([r.turn.form]);
       await this.playTurn(r.turn, this.resolver.narrate(r.turn));
     } catch (e) {
       this.flashBanner(e instanceof Error ? e.message : "Claude antwortet nicht.", "bad");
@@ -571,10 +583,22 @@ export class App {
   ): Promise<void> {
     this.arena.setThinking(false);
     this.els.plates[actor].textContent = "";
-    await this.arena.summon(actor, form, true);
     const discovery = novelty?.kind === "discovery";
-    await this.spellName(form.name, discovery);
-    await this.arena.reveal(actor);
+    if (this.art.coming(form)) {
+      // "Beschwörung": the picture is being painted – the rune circle conjures instead of showing
+      // a stand-in; the name spells itself meanwhile, and the form appears with the picture.
+      this.arena.startConjuring();
+      const spelled = this.spellName(form.name, discovery);
+      const pictured = await this.art.whenReady(form, ART_WAIT_MS);
+      await spelled;
+      await this.arena.endConjuring(pictured);
+      await this.arena.summon(actor, form, !pictured);
+      if (!pictured) await this.arena.reveal(actor);
+    } else {
+      await this.arena.summon(actor, form, true);
+      await this.spellName(form.name, discovery);
+      await this.arena.reveal(actor);
+    }
     const egg = easterEggFor(form.name);
     if (egg !== null) await this.arena.easterEgg(egg, actor);
     if (discovery) {
@@ -949,6 +973,7 @@ export class App {
     if (this.online === null) return;
     this.online.close();
     this.online = null;
+    this.art.setTransport(this.server?.art === true ? httpTransport() : null);
     this.seats = [];
     this.joined = false;
     this.showWatchers(0);
@@ -1013,12 +1038,22 @@ export class App {
     for (const e of chronicle) this.addChronicle(e.actor, e.name, e.text, e.failed, [], e.discovery);
     // Only the form still standing – every earlier one was answered.
     const last = state.history.at(-1);
-    if (last !== undefined) void this.arena.summon(last.player, last.form);
+    if (last !== undefined) void this.resummon(last.player, last.form);
     this.hideCaption();
     this.resetInput();
     this.setBusy(false);
     this.render();
     if (state.phase === "finished") void this.showEnd();
+  }
+
+  /** The form still standing after a (re)connect – with its picture if the server has or makes one. */
+  private async resummon(side: PlayerId, form: Form): Promise<void> {
+    if (this.art.coming(form)) {
+      this.arena.startConjuring();
+      const pictured = await this.art.whenReady(form, ART_WAIT_MS);
+      await this.arena.endConjuring(pictured);
+    }
+    await this.arena.summon(side, form);
   }
 
   private onServer(m: ServerMsg): void {
@@ -1027,6 +1062,10 @@ export class App {
         this.joined = true;
         this.seats = m.seats;
         this.players = m.players;
+        // every (re)connect asks again – pictures of a lost connection are not lost for good
+        const link = this.online;
+        this.art.setTransport(m.art && link !== null ? socketTransport((ids) => link.send({ t: "art", ids })) : null);
+        if (m.state !== null) this.art.want(m.state.history.map((mv) => mv.form));
         this.showWatchers(m.watchers);
         this.adoptLearned(m.learned);
         // A reload should resume the seat, not join again.
@@ -1069,6 +1108,7 @@ export class App {
         this.flashBanner(`${this.players[m.seat]?.name ?? "Der Gegner"} versucht „${m.text}“ – zählt nicht, noch einmal.`, "info");
         return;
       case "turn": {
+        this.art.want([m.turn.form]);
         const narration = this.narrationFor(m.seq);
         this.onlineQueue = this.onlineQueue.then(async () => {
           this.setBusy(true);
@@ -1117,6 +1157,9 @@ export class App {
         } catch {
           /* keep what we have */
         }
+        return;
+      case "art":
+        this.art.receive(m.items);
         return;
       case "error":
         // Not (or no longer) in a room: back to the start dialog, the reason next to the field.

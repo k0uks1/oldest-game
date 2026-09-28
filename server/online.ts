@@ -14,7 +14,7 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { createGame, pass } from "../src/engine/game.ts";
 import type { ContentPack } from "../src/engine/ontology/pack.ts";
-import type { GameState, PlayerId } from "../src/engine/types.ts";
+import type { Form, GameState, PlayerId } from "../src/engine/types.ts";
 import type { Resolver, Turn } from "../src/game/resolver.ts";
 import {
   isEmptyDelta,
@@ -23,6 +23,7 @@ import {
   ROOM_ALPHABET,
   ROOM_CODE_LENGTH,
   type AbsurdReport,
+  type ArtItem,
   type ChronicleEntry,
   type ClientMsg,
   type ErrorCode,
@@ -83,8 +84,18 @@ export interface HubOptions {
   readonly persist?: (pack: ContentPack) => void;
   readonly now?: () => number;
   readonly log?: (line: string) => void;
+  /** Generated pictures (optional): look one up for a form, starting generation if needed. */
+  readonly art?: HubArt;
   /** Store a reported absurd win (room code added). */
   readonly report?: (r: AbsurdReport & { readonly room: string }) => void;
+}
+
+/** What the hub needs from the picture store. */
+export interface HubArt {
+  /** State of a form's picture; `key` identifies the job so waiting clients get the result later. */
+  lookup(form: Form): { readonly key: string; readonly item: ArtItem } | undefined;
+  /** Every finished job (art undefined = failed). */
+  onDone(listener: (key: string, art: string | undefined) => void): () => void;
 }
 
 interface Seat {
@@ -151,6 +162,9 @@ export class OnlineHub {
   private published: ContentPack;
   private readonly now: () => number;
 
+  /** Clients waiting for a picture that is being made: job key → (connection, form id). */
+  private readonly artWaiting = new Map<string, Map<Conn, Set<string>>>();
+
   constructor(
     private readonly resolver: Resolver,
     private readonly opts: HubOptions,
@@ -158,6 +172,9 @@ export class OnlineHub {
     this.limits = { ...DEFAULT_LIMITS, ...opts.limits };
     this.now = opts.now ?? Date.now;
     this.published = resolver.learned;
+    opts.art?.onDone((key, art) => {
+      this.artDone(key, art);
+    });
   }
 
   get roomCount(): number {
@@ -178,6 +195,7 @@ export class OnlineHub {
 
   detach(c: Conn): void {
     this.conns.delete(c);
+    for (const waiting of this.artWaiting.values()) waiting.delete(c);
     this.leave(c);
   }
 
@@ -233,6 +251,9 @@ export class OnlineHub {
         return;
       case "report":
         if (c.room !== null) this.opts.report?.({ attacker: msg.attacker, target: msg.target, verb: msg.verb, room: c.room.code });
+        return;
+      case "art":
+        this.artRequest(c, msg.ids);
         return;
     }
   }
@@ -428,6 +449,8 @@ export class OnlineHub {
     }
     // The room may have been swept or restarted while Claude was thinking.
     if (this.rooms.get(room.code) !== room || room.state !== state) return;
+    // start painting the new form right away – by the time the clients ask, it is on its way
+    this.opts.art?.lookup(turn.form);
     room.state = turn.state;
     const seq = ++room.seq;
     const entry: ChronicleEntry = {
@@ -507,11 +530,45 @@ export class OnlineHub {
       seats: c.seats,
       players: this.presence(room),
       watchers: this.watcherCount(room),
+      art: this.opts.art !== undefined,
       state: room.state,
       chronicle: room.chronicle,
       epilogue: room.epilogue,
       learned: this.resolver.learned,
     });
+  }
+
+  // ── generated pictures ──────────────────────────────────────────────────
+
+  /** Answer what is known now; remember who waits for pictures still being made. */
+  private artRequest(c: Conn, ids: readonly string[]): void {
+    const art = this.opts.art;
+    const items: ArtItem[] = [];
+    for (const id of ids) {
+      const form = this.resolver.onto.formById(id);
+      const found = form === undefined || art === undefined ? undefined : art.lookup(form);
+      if (found === undefined) {
+        items.push({ id, state: "none" });
+        continue;
+      }
+      items.push(found.item);
+      if (found.item.state === "pending") {
+        const waiting = this.artWaiting.get(found.key) ?? new Map<Conn, Set<string>>();
+        waiting.set(c, (waiting.get(c) ?? new Set<string>()).add(id));
+        this.artWaiting.set(found.key, waiting);
+      }
+    }
+    c.peer.send({ t: "art", items });
+  }
+
+  private artDone(key: string, art: string | undefined): void {
+    const waiting = this.artWaiting.get(key);
+    if (waiting === undefined) return;
+    this.artWaiting.delete(key);
+    for (const [c, ids] of waiting) {
+      if (!this.conns.has(c)) continue;
+      c.peer.send({ t: "art", items: [...ids].map((id): ArtItem => (art === undefined ? { id, state: "none" } : { id, state: "ready", art })) });
+    }
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────

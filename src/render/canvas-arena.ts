@@ -21,7 +21,8 @@ export class CanvasArena extends ArenaScene {
   private readonly pens: { readonly base: CanvasPen; readonly glow: CanvasPen };
 
   constructor(target: HTMLCanvasElement, onto: Ontology, stage?: StageLayout) {
-    super(onto, stage);
+    // density 1: the software fallback keeps its fill rate; generated pictures are shown reduced
+    super(onto, stage, 1);
     target.width = WIDTH * UPSCALE;
     target.height = HEIGHT * UPSCALE;
     this.display = ctx2d(target);
@@ -117,14 +118,15 @@ export class CanvasArena extends ArenaScene {
     // materialise: reveal rows from bottom
     const visible = Math.ceil(h * easeOut(f.appear));
     const mirrored = (side === 1) !== (f.facing === -1);
+    const d = this.density;
     const blit = (ctx: CanvasRenderingContext2D, img: HTMLCanvasElement): void => {
       ctx.save();
       if (mirrored) {
         ctx.translate(x + w, 0);
         ctx.scale(-1, 1);
-        ctx.drawImage(img, 0, h - visible, w, visible, 0, y + h - visible, w, visible);
+        ctx.drawImage(img, 0, (h - visible) * d, w * d, visible * d, 0, y + h - visible, w, visible);
       } else {
-        ctx.drawImage(img, 0, h - visible, w, visible, x, y + h - visible, w, visible);
+        ctx.drawImage(img, 0, (h - visible) * d, w * d, visible * d, x, y + h - visible, w, visible);
       }
       ctx.restore();
     };
@@ -160,8 +162,8 @@ export class CanvasArena extends ArenaScene {
       if (mirrored) {
         b.translate(x + w, 0);
         b.scale(-1, 1);
-        b.drawImage(f.sprite.image, 0, y);
-      } else b.drawImage(f.sprite.image, x, y);
+        b.drawImage(f.sprite.image, 0, y, w, h);
+      } else b.drawImage(f.sprite.image, x, y, w, h);
       b.restore();
     }
   }

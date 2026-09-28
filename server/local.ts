@@ -17,19 +17,24 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { CORE_PACK_RAW, loadPack } from "../src/content/index.ts";
 import { Ontology } from "../src/engine/ontology/ontology.ts";
 import type { ContentPack } from "../src/engine/ontology/pack.ts";
+import type { Form, Scale } from "../src/engine/types.ts";
 import { Resolver } from "../src/game/resolver.ts";
 import type { LlmSettings } from "../src/llm/client.ts";
 import { reconcileLearned } from "../src/llm/learning.ts";
 import { narrateEpilogueWithClaude } from "../src/llm/narrator.ts";
 import { narrateEnd } from "../src/narrate/offline.ts";
-import { applyPackDelta, packDelta, parseReport, WS_PATH, type AbsurdReport, type ServerMsg } from "../src/online/protocol.ts";
-import { ArtService, withArt } from "./art-service.ts";
+import { applyPackDelta, packDelta, parseReport, WS_PATH, type AbsurdReport, type ArtItem, type ServerMsg } from "../src/online/protocol.ts";
+import { artRequest } from "./art-prompts.ts";
+import { ArtService } from "./art-service.ts";
 import { handleLearned, readLearnedFile, writeLearnedFile } from "./learned.ts";
-import { OnlineHub, type HubLimits } from "./online.ts";
+import { OnlineHub, type HubArt, type HubLimits } from "./online.ts";
 import { generatePixelArt } from "./pixellab.ts";
 import { DEFAULT_PROXY_MODEL, handleProxy, type ProxyEnv } from "./proxy.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Just enough of a form to ask for a picture by description. */
+const FORM_STUB: Form = { id: "", name: "", archetype: "orb", scale: 1, plane: "materie", tags: [], not: [], verbs: [], immune: [], weak: [], origin: "llm" };
 const MAX_BODY = 1_000_000;
 
 /** Minimal .env reader (KEY=value, # comments, optional quotes). */
@@ -168,8 +173,29 @@ export function startServer(opts: ServerOptions): RunningServer {
     }
   };
 
+  // Just-in-time pictures: the store always serves what was made before; with a key it also paints.
+  const artEnv = opts.art;
+  const pictures = new ArtService({
+    ...(artEnv === undefined ? {} : { generate: (prompt: string, size: number) => generatePixelArt(artEnv.key, prompt, size) }),
+    monthlyLimit: artEnv?.monthlyLimit ?? 0,
+    dir: join(dirname(file), "art"),
+    usageFile: join(dirname(file), "art-usage.json"),
+    log,
+  });
+  const hubArt: HubArt = {
+    lookup: (form) => {
+      const req = artRequest(form);
+      if (req === undefined) return undefined;
+      const found = pictures.lookup(req.prompt, req.size);
+      const item: ArtItem = found.state === "ready" ? { id: form.id, state: "ready", art: found.art } : { id: form.id, state: found.state };
+      return { key: found.key, item };
+    },
+    onDone: (listener) => pictures.onDone(listener),
+  };
+
   const theHub = new OnlineHub(resolver, {
     report: storeReport,
+    art: hubArt,
     ...(opts.env.accessCode === undefined ? {} : { accessCode: opts.env.accessCode }),
     ...(opts.limits === undefined ? {} : { limits: opts.limits }),
     claude,
@@ -185,26 +211,10 @@ export function startServer(opts: ServerOptions): RunningServer {
     log,
   });
 
-  const artEnv = opts.art;
-  const art =
-    artEnv === undefined
-      ? undefined
-      : new ArtService({
-          generate: (prompt, size) => generatePixelArt(artEnv.key, prompt, size),
-          monthlyLimit: artEnv.monthlyLimit,
-          usageFile: join(dirname(file), "art-usage.json"),
-          onArt: (id, img) => {
-            resolver.setLearned(withArt(resolver.learned, id, img));
-            theHub.learnedChanged();
-          },
-          log,
-        });
-  /** Persist + broadcast what the resolver learned, then look for forms that still need art. */
+  /** Persist + broadcast what the resolver learned. */
   const learnedChanged = (): void => {
     theHub.learnedChanged();
-    art?.scan(resolver.learned);
   };
-  art?.scan(resolver.learned);
 
   const learnedEndpoint = {
     base,
@@ -233,8 +243,22 @@ export function startServer(opts: ServerOptions): RunningServer {
               model: opts.env.model,
               accessCode: opts.env.accessCode !== undefined,
               online: true,
+              art: true,
             }),
           );
+          return;
+        }
+        if (url.startsWith("/api/art") && !isPublic && req.method === "GET") {
+          // hot-seat: the page resolves locally, so a freshly learned form may not be here yet –
+          // then its own description comes along (local server only, never on a public one)
+          const q = new URL(url, "http://local").searchParams;
+          const id = (q.get("id") ?? "").slice(0, 80);
+          const known = resolver.onto.formById(id);
+          const prompt = q.get("prompt")?.replace(/[\p{C}]/gu, " ").slice(0, 200);
+          const scale = Math.max(1, Math.min(8, Number(q.get("scale") ?? 3) || 3));
+          const found = known !== undefined ? hubArt.lookup(known) : prompt === undefined || prompt.trim() === "" ? undefined : hubArt.lookup({ ...FORM_STUB, id, scale: scale as Scale, artPrompt: prompt });
+          res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+          res.end(JSON.stringify(found?.item ?? { id, state: "none" }));
           return;
         }
         if (url.startsWith("/api/report") && !isPublic && req.method === "POST") {

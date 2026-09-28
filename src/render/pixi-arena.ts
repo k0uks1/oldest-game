@@ -1,8 +1,10 @@
 /**
  * The arena on PixiJS (WebGL): a scene graph instead of immediate 2D-canvas calls.
  *
- *   baseRoot → baseRT (480×270, nearest)  backdrop, back layer, fighters, front layer
- *   glowRoot → glowRT (480×270)           emissive only
+ *   baseRoot → baseRT (480×270 × DENSITY, nearest)  backdrop, back layer, fighters, front layer
+ *   glowRoot → glowRT (480×270 × DENSITY)           emissive only
+ * The roots are scaled by DENSITY: the scene draws in arena pixels exactly as before, while the
+ * fighters' generated pictures keep their extra detail (their sprites sit at 1/DENSITY scale).
  *   glowRT   → nearRT (240×135) + BlurFilter, farRT (120×68) + BlurFilter
  *   screen   = baseRT ×4 nearest + near/far bloom (additive) + crisp glow core + impact flash
  *
@@ -15,6 +17,9 @@ import { easeOut, HEIGHT, UPSCALE, WIDTH, type Fighter, type Side } from "./aren
 import { colorNum, PixiPen, radialTexture } from "./pixi-pen.ts";
 import { ArenaScene } from "./scene.ts";
 import type { StageLayout } from "./stage.ts";
+
+/** Device pixels per arena pixel: generated pictures show twice the detail. */
+const DENSITY = 2;
 
 /** One layer of a fighter: a sprite whose texture frame shows only the materialised rows. */
 interface Layer {
@@ -67,7 +72,7 @@ export class PixiArena extends ArenaScene {
     onto: Ontology,
     stage?: StageLayout,
   ) {
-    super(onto, stage);
+    super(onto, stage, DENSITY);
     target.width = WIDTH * UPSCALE;
     target.height = HEIGHT * UPSCALE;
     const disc = radialTexture();
@@ -78,6 +83,8 @@ export class PixiArena extends ArenaScene {
     this.backdropTex.source.scaleMode = "nearest";
     this.baseRoot.addChild(new Sprite(this.backdropTex), this.back.base.root, this.fightersBase, this.front.base.root);
     this.glowRoot.addChild(this.back.glow.root, this.fightersGlow, this.front.glow.root);
+    this.baseRoot.scale.set(DENSITY);
+    this.glowRoot.scale.set(DENSITY);
     this.ready = this.init();
   }
 
@@ -103,16 +110,16 @@ export class PixiArena extends ArenaScene {
 
   private buildCompositing(): Targets {
     const rt = (w: number, h: number, nearest: boolean): RenderTexture => RenderTexture.create({ width: w, height: h, scaleMode: nearest ? "nearest" : "linear", resolution: 1 });
-    const base = rt(WIDTH, HEIGHT, true);
-    const glow = rt(WIDTH, HEIGHT, true);
+    const base = rt(WIDTH * DENSITY, HEIGHT * DENSITY, true);
+    const glow = rt(WIDTH * DENSITY, HEIGHT * DENSITY, true);
     const near = rt(WIDTH / 2, HEIGHT / 2, false);
     const far = rt(WIDTH / 4, Math.ceil(HEIGHT / 4), false);
     // bloom: the glow layer downsampled and blurred at two sizes
     const nearPass = new Sprite(glow);
-    nearPass.scale.set(0.5);
+    nearPass.scale.set(0.5 / DENSITY);
     nearPass.filters = [new BlurFilter({ strength: 1.5, quality: 2 })];
     const farPass = new Sprite(glow);
-    farPass.scale.set(0.25);
+    farPass.scale.set(0.25 / DENSITY);
     farPass.filters = [new BlurFilter({ strength: 2, quality: 2 })];
     const up = (tex: RenderTexture, alpha: number, add: boolean): Sprite => {
       const s = new Sprite(tex);
@@ -183,8 +190,8 @@ export class PixiArena extends ArenaScene {
     }
     const sx = Math.round((this.rand() - 0.5) * this.shake);
     const sy = Math.round((this.rand() - 0.5) * this.shake);
-    this.baseRoot.position.set(sx, sy);
-    this.glowRoot.position.set(sx, sy);
+    this.baseRoot.position.set(sx * DENSITY, sy * DENSITY);
+    this.glowRoot.position.set(sx * DENSITY, sy * DENSITY);
 
     const pens = [this.back.base, this.back.glow, this.front.base, this.front.glow];
     for (const p of pens) p.begin();
@@ -224,19 +231,21 @@ export class PixiArena extends ArenaScene {
       const { x, y, w, h } = this.fighterRect(s, f);
       const visible = Math.ceil(h * easeOut(f.appear));
       const mirrored = (s === 1) !== (f.facing === -1);
+      const d = this.density;
       const place = (l: Layer, show: boolean, alpha: number): void => {
         l.sprite.visible = show && visible > 0;
         if (!l.sprite.visible) return;
         const frame = l.tex.frame;
-        if (frame.height !== visible) {
-          frame.y = l.h - visible;
-          frame.height = visible;
+        const rows = visible * d;
+        if (frame.height !== rows) {
+          frame.y = l.h - rows;
+          frame.height = rows;
           // emits "update" → the sprite takes its new size from the frame. (Re-assigning the same
           // texture is a no-op in Pixi 8 – that left a sprite shown mid-materialise squashed for good.)
           l.tex.update();
         }
         l.sprite.alpha = alpha;
-        l.sprite.scale.x = mirrored ? -1 : 1;
+        l.sprite.scale.set((mirrored ? -1 : 1) / d, 1 / d);
         l.sprite.position.set(mirrored ? x + w : x, y + h - visible);
       };
       place(v.silhouette, f.reveal < 1, 1);
@@ -247,7 +256,7 @@ export class PixiArena extends ArenaScene {
       v.flash.visible = f.flash > 0;
       if (f.flash > 0) {
         v.flash.alpha = f.flash;
-        v.flash.scale.x = mirrored ? -1 : 1;
+        v.flash.scale.set((mirrored ? -1 : 1) / d, 1 / d);
         v.flash.position.set(mirrored ? x + w : x, y);
       }
       v.scan.clear();

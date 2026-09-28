@@ -16,7 +16,7 @@ npm run build      # → dist/index.html (single self-contained file, opens from
 npm run simulate   # balancing report; add `-- --games 2000` for bot self-play
 npm run sheet -- items   # sprite contact sheet PNG (items | emblems a+b,c | form ids)
 npm run audit            # Prüfstand: suspicious wins in the lexicon (the engine-rebuild yardstick)
-npm run art -- status    # generated art: status | ingest <dir> | generate [--limit N] (needs PIXELLAB_API_KEY)
+npm run art -- status    # picture store: status | ingest <png-dir> | warm [--limit N] (needs PIXELLAB_API_KEY)
 ```
 
 ## Architecture
@@ -101,18 +101,21 @@ it needs an escape route tag (`config.escapeRoutes`: fliegt / schwimmt / graebt)
 tag that follows along that route, at least one *physical* mechanism of the target must reach the evader, no
 non-physical one may, and the target must be ≤ `maxEscapeScale`. Echo applies; defeating is preferred.
 
-### Generated art ("Kunst", `render/art.ts`)
+### Generated art ("Kunst auf Abruf", `render/art.ts`, `server/art-service.ts`)
 
-Pixel art from PixelLab (pixflux, side view facing right, transparent, one fixed style recipe in
-`server/pixellab.ts`), generated once per form at `spriteSize(scale)` (32/64/128) and stored in a compact
-pure format (`w.h.palette.runs`): core forms in `content/core/art.json` (prompts in `art-prompts.json`),
-learned forms in `FormSpec.art` (shape-checked by `parsePack`, fully decoded by the renderer). Art wins over
-every drawn fallback; silhouette/rim/stone/glow are derived from its pixels. The PixelLab key lives only in
-the environment (`PIXELLAB_API_KEY`) – never in a build, the repo or the browser.
-Live art: Claude writes an English `bild` description while classifying (stored as `FormSpec.artPrompt`);
-the server's `ArtService` (`server/art-service.ts`) generates art for learned forms that lack it – once per
-form, monthly budget `ART_MONTHLY_LIMIT` (usage persisted next to the learned pack) – and broadcasts it as a
-normal learned delta; the arena swaps a form already on stage.
+Nothing is pre-generated. The first time a form appears, the server paints it with PixelLab (pixflux, side view
+facing right, transparent, one fixed style recipe in `server/pixellab.ts`) and keeps it in its picture store
+(`learned/art/`, next to the learned pack – the Docker volume). The store key is a hash of the **description**
+and size (`artKey`), not the form: variants (the hunter in a red coat) are separate pictures, equal descriptions
+share one. Descriptions: core forms `content/core/art-prompts.json`, learned forms `artPrompt` (Claude's `bild`).
+Pictures carry `ART_DENSITY` (2)× the detail of the sprite slot (`artSize`); the Pixi arena renders at that
+density (scene in arena pixels, fighter sprites at ½ scale), the canvas fallback at 1.
+Clients ask by form id (`art` message online, `GET /api/art` for the local hot-seat) and get ready / pending /
+none; pending ones are pushed (online) or polled (local). While a picture is on its way the rune circle
+conjures (pentagram of runes), then flares and the form appears; after a reconnect pictures are asked again.
+No server, no key or budget spent (`ART_MONTHLY_LIMIT`, persisted) → the drawn sprites below. The PixelLab key
+lives only in the server environment (`PIXELLAB_API_KEY`) – never in a build, the repo or the browser.
+`npm run art -- status | ingest <png-dir> | warm` inspects or pre-fills the store.
 
 ### Sprites from parts ("Bauplan", `render/look.ts`)
 

@@ -13,7 +13,7 @@ import { emptyLearnedPack } from "../src/llm/learning.ts";
 import { narrateEnd } from "../src/narrate/offline.ts";
 import { applyPackDelta, normalizeRoom, packDelta, parseClientMsg, type AbsurdReport, type ServerMsg } from "../src/online/protocol.ts";
 import { startServer } from "../server/local.ts";
-import { OnlineHub, type HubLimits } from "../server/online.ts";
+import { OnlineHub, type HubArt, type HubLimits } from "../server/online.ts";
 
 const core = loadPack(CORE_PACK_RAW);
 
@@ -35,7 +35,14 @@ class FakePeer {
 }
 
 function setup(
-  opts: { accessCode?: string; limits?: Partial<HubLimits>; now?: () => number; claude?: boolean; report?: (r: AbsurdReport & { room: string }) => void } = {},
+  opts: {
+    accessCode?: string;
+    limits?: Partial<HubLimits>;
+    now?: () => number;
+    claude?: boolean;
+    report?: (r: AbsurdReport & { room: string }) => void;
+    art?: HubArt;
+  } = {},
 ): { hub: OnlineHub; resolver: Resolver } {
   const resolver = new Resolver(Ontology.compile([core]), [core], emptyLearnedPack(), {
     llm: () => DEFAULT_SETTINGS,
@@ -50,6 +57,7 @@ function setup(
     epilogue: (s) => Promise.resolve(narrateEnd(s)),
     ...(opts.now === undefined ? {} : { now: opts.now }),
     ...(opts.report === undefined ? {} : { report: opts.report }),
+    ...(opts.art === undefined ? {} : { art: opts.art }),
   });
   return { hub, resolver };
 }
@@ -368,5 +376,34 @@ describe("Quatsch-Meldungen", () => {
     ca.receive(JSON.stringify({ t: "report", attacker: "", target: "Ritter", verb: "fesselt" }));
     assert.deepEqual(got, [{ attacker: "Klebeband", target: "Ritter", verb: "fesselt", room: code }]);
     assert.equal(parseClientMsg(JSON.stringify({ t: "report", attacker: "x".repeat(500), target: "y", verb: "z" }))?.t, "report");
+  });
+});
+
+describe("Bilder auf Abruf", () => {
+  it("pending pictures reach whoever asked – also after the turn that started them", () => {
+    const hold: { finish?: (key: string, art: string | undefined) => void } = {};
+    const started: string[] = [];
+    const art: HubArt = {
+      lookup: (form) => {
+        started.push(form.id);
+        return { key: `k-${form.id}`, item: { id: form.id, state: "pending" } };
+      },
+      onDone: (l) => {
+        hold.finish = l;
+        return () => undefined;
+      },
+    };
+    const { hub } = setup({ art });
+    const { a, ca } = openRoom(hub);
+    ca.receive(JSON.stringify({ t: "art", ids: ["wolf", "gibtsnicht"] }));
+    assert.deepEqual(a.last("art")?.items, [
+      { id: "wolf", state: "pending" },
+      { id: "gibtsnicht", state: "none" },
+    ]);
+    assert.deepEqual(started, ["wolf"]);
+    assert.ok(hold.finish);
+    hold.finish("k-wolf", "2.2.ff0000ff.AwE=");
+    assert.deepEqual(a.last("art")?.items, [{ id: "wolf", state: "ready", art: "2.2.ff0000ff.AwE=" }]);
+    assert.equal(a.last("welcome")?.art, true);
   });
 });
