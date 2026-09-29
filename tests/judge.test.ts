@@ -132,4 +132,52 @@ describe("Urteil für zwei erfundene Gestalten", () => {
     assert.deepEqual(j.attacker.tags, ["schwimmt", "scharf", "laut"]);
     assert.equal(judgementFrom(onto, wolf, hai, { sieg: "ja", begruendung: "x" }), undefined);
   });
+
+  it("one invented form is enough: an absurd win against a hand-written form is judged and overturned", async () => {
+    const r = resolver();
+    const radio = {
+      name: "Säureradio",
+      base: null,
+      scale: 2,
+      plane: "materie",
+      archetype: "box",
+      properties: ["maschine", "elektrisch", "laut", "saeure"],
+      mechanisms: ["zersetzt", "uebertoent"],
+      weaknesses: ["elektrisch"],
+      intended_mechanism: "zersetzt",
+    };
+    const ratte = { name: "Ratte", base: "ratte", scale: 2, plane: "leben", archetype: "beast", properties: [], mechanisms: [], weaknesses: [], intended_mechanism: null };
+    const judge = { sieg: false, begruendung: "Ein Radio dudelt, es ätzt nicht – die Ratte huscht davon.", mechanismus: "zersetzt", angreifer: {}, ziel: { eigenschaften: ["schnell"] } };
+    const calls = fakeClaude((tool, user) => (tool === "urteil" ? judge : user.includes("Säureradio") ? radio : ratte));
+    const first = await r.resolve(createGame(["A", "B"]), "Ratte");
+    assert.equal(first.kind, "turn");
+    const second = await r.resolve(first.turn.state, "Säureradio");
+    assert.equal(second.kind, "turn");
+    assert.ok(calls.includes("urteil"), "judged although only the attacker is invented");
+    const ruling = (r.learned.rulings ?? []).find((x) => x.target === "ratte" && x.attacker === "g:saeureradio");
+    assert.ok(ruling, "the engine alone would have let acid win – now a precedent says no");
+    assert.equal(ruling.valid, false);
+    assert.equal(second.turn.outcome.kind, "failure", "the precedent overturns the engine's win");
+    assert.equal(r.onto.formById("ratte")?.tags.includes("schnell"), false, "hand-written forms never change");
+    assert.match(second.turn.verdict ?? "", /Urteil/);
+  });
+
+  it("„Quatsch?“ on a win with an invented form has the pair judged again – it counts from the next time", async () => {
+    const r = resolver();
+    const radio = { name: "Säureradio", base: null, scale: 2, plane: "materie", archetype: "box", properties: ["maschine", "elektrisch", "laut", "saeure"], mechanisms: ["zersetzt"], weaknesses: ["elektrisch"], intended_mechanism: "zersetzt" };
+    const ratte = { name: "Ratte", base: "ratte", scale: 2, plane: "leben", archetype: "beast", properties: [], mechanisms: [], weaknesses: [], intended_mechanism: null };
+    let verdict: unknown = { sieg: true, begruendung: "Säure ist Säure.", mechanismus: "zersetzt" };
+    fakeClaude((tool, user) => (tool === "urteil" ? verdict : user.includes("Säureradio") ? radio : ratte));
+    const first = await r.resolve(createGame(["A", "B"]), "Ratte");
+    assert.equal(first.kind, "turn");
+    const second = await r.resolve(first.turn.state, "Säureradio");
+    assert.equal(second.kind, "turn");
+    assert.equal(second.turn.outcome.kind, "success");
+    verdict = { sieg: false, begruendung: "Ein Radio ätzt nicht.", mechanismus: "zersetzt" };
+    const reason = await r.reconsider("g:saeureradio", "ratte", "zersetzt");
+    assert.equal(reason, "Ein Radio ätzt nicht.");
+    assert.equal(r.onto.rulingFor("g:saeureradio", "ratte")?.valid, false);
+    assert.equal(await r.reconsider("ritter", "ratte", "durchbohrt"), undefined, "two hand-written forms: the engine's own business");
+  });
 });
+

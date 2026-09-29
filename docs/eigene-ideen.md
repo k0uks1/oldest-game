@@ -418,3 +418,11 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Vorsichtig verallgemeinern** | Nur mit mindestens zwei Belegen auf verschiedenen Zielen, nur mit einer Eigenschaft, die ein Ziel ausdrücklich hat (nicht einem vagen Oberbegriff), die seltenste gemeinsame (keine, die 3 % des Lexikons öffnen würde); Mechanismen werden nur erweitert, nie beschnitten. | `findInsights` |
 | **Sichtbar und geteilt** | Die Warum-Zeile meldet „neuer Siegweg: …“, das Grimoire listet alle gelernten Siegwege; online reisen sie in den Pack-Deltas mit. | `Resolver.generalize`, Grimoire, `PackDelta.extensions` |
 
+## Neue Gestalten zuerst (Nutzerwunsch, ausdrücklich: „die ganz großen Probleme kommen vor allem, wenn ganz neue Gestalten involviert sind“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Urteil schon bei einer neuen Gestalt** | Bisher urteilte Claude nur, wenn *beide* Gestalten erfunden waren – eine neue gegen eine bekannte entschied die Engine allein, und genau da entstanden „Radio zersetzt Marder“ und Co. Jetzt wird jedes Paar mit einer erfundenen Gestalt einmal verhandelt; nur die erfundene lernt dazu, bekannte Gestalten bleiben, wie sie sind. | `Resolver.judge` |
+| **„Besiegt nicht“ gilt fürs ganze Paar** | Ein verneinender Präzedenzfall sperrte bisher nur den einen Mechanismus – mit einem anderen gewann das Radio trotzdem. Jetzt hält er für jeden Angriff (Ausweichen bleibt möglich). | `engine/game.ts` |
+| **„Quatsch?“ repariert** | Meldet jemand einen Sieg mit einer erfundenen Gestalt als Quatsch, prüft Claude das Paar sofort streng nach; das Urteil gilt ab dem nächsten Mal (online für alle, der Melder sieht „⚖ Nachgeprüft: …“). | `Resolver.reconsider`, `report` |
+

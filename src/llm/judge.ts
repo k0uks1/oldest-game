@@ -5,8 +5,8 @@ import type { LearningDelta } from "./learning.ts";
 import { PROPOSAL_PROPERTIES, proposeDelta, qualitiesOf } from "./parser.ts";
 
 /**
- * The judge ("Urteil"): when two forms meet that the game did not know before the duel (both
- * learned from the players' own words), no rule was ever written for them. Then Claude judges
+ * The judge ("Urteil"): when a form meets that the game did not know before (learned from a
+ * player's own words), no rule was ever written for the pair. Then Claude judges
  * the pair outright – and must give the reasons in the game's own vocabulary: properties,
  * intensities, a mechanism. Those are validated and learned like any other proposal; the engine
  * re-checks the pair with them, and only where it still disagrees is the verdict stored as a
@@ -50,13 +50,14 @@ const TOOL: ToolDef = {
 };
 
 const SYSTEM = `Du bist der Richter im „ältesten Spiel“ (Sandman: Morpheus gegen einen Dämon – jeder wird zu etwas,
-das die letzte Gestalt des anderen besiegt). Hier treffen zwei Gestalten aufeinander, die die Spieler selbst erfunden
-haben; keine Regel kennt dieses Paar. Du urteilst – mit gesundem Menschenverstand, Märchenlogik und der inneren Logik
+das die letzte Gestalt des anderen besiegt). Hier ist mindestens eine Gestalt dabei, die ein Spieler selbst erfunden
+hat; keine Regel kennt dieses Paar, und die Regel-Engine irrt bei neuen Gestalten oft (ein Radio „zersetzt“ einen Marder). Du urteilst – mit gesundem Menschenverstand, Märchenlogik und der inneren Logik
 der Gestalten (auch Witzgestalten nimmst du halb ernst: ihre Pointe gilt).
 
 Dein Urteil muss aus Eigenschaften folgen, die das Spiel versteht: Nenne, was dem Angreifer oder dem Ziel an
 Eigenschaften, Fähigkeiten oder Intensität noch fehlte, damit eine Regel-Engine zum selben Ergebnis kommt – bestehende
-Begriffe bevorzugt, sonst neue (new_properties, new_qualities, new_mechanism im bekannten Format). Nur was wirklich zur
+Begriffe bevorzugt, sonst neue (new_properties, new_qualities, new_mechanism im bekannten Format). Gestalten ohne
+„(erfunden)“ stammen aus dem Lexikon und ändern sich nicht – nenne dort nichts. Nur was wirklich zur
 Gestalt gehört: nichts erfinden, nur damit es passt. Größe zählt: Eine Maus besiegt keinen Berg, außer ihre Natur trifft
 genau seine Schwachstelle. Sei streng, aber fair: Ein Sieg „irgendwie“ ist kein Sieg. Antworte nur mit dem Werkzeug.`;
 
@@ -82,7 +83,7 @@ function describe(onto: Ontology, f: Form): string {
   const verbs = c.verbs.map((v) => `${v} (${onto.verbs.get(v)?.spec.label ?? v})`);
   const levels = [...c.qualities].map(([q, n]) => `${onto.qualities.get(q)?.label ?? q} ${String(n)}`);
   return [
-    `${f.name} – Stufe ${String(f.scale)}, ${f.plane}${f.tone === undefined ? "" : `, Ton ${f.tone}`}`,
+    `${f.name}${f.id.startsWith("g:") ? " (erfunden)" : ""} – Stufe ${String(f.scale)}, ${f.plane}${f.tone === undefined ? "" : `, Ton ${f.tone}`}`,
     `  Eigenschaften: ${tags.join(", ")}`,
     `  Kann: ${verbs.join(", ") || "nichts"}`,
     levels.length === 0 ? "" : `  Intensität: ${levels.join(", ")}`,

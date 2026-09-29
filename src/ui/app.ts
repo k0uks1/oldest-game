@@ -685,7 +685,7 @@ export class App {
       if (target !== undefined && check.verb !== ESCAPE) {
         const btn = h("button", { class: "w-quatsch", title: "Dieser Sieg ergibt keinen Sinn? Melden – das hilft der Engine." }, "Quatsch?");
         btn.addEventListener("click", () => {
-          this.reportAbsurd({ attacker: form.name, target: target.name, verb: label });
+          this.reportAbsurd({ attacker: form.name, target: target.name, verb: label, attackerId: form.id, targetId: target.id });
           btn.replaceWith(h("span", { class: "w-badge quiet" }, "gemeldet"));
         });
         el.append(" ", btn);
@@ -697,12 +697,20 @@ export class App {
   }
 
   /** "Das war Quatsch!" – remember the absurd win here and tell the server, if there is one. */
-  private reportAbsurd(r: { attacker: string; target: string; verb: string }): void {
-    addReport(r, new Date().toISOString());
-    if (this.online?.send({ t: "report", ...r }) !== true) {
-      void fetch("/api/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(r) }).catch(() => undefined);
+  private reportAbsurd(r: { attacker: string; target: string; verb: string; attackerId: string; targetId: string }): void {
+    addReport({ attacker: r.attacker, target: r.target, verb: r.verb }, new Date().toISOString());
+    if (this.online?.send({ t: "report", ...r }) === true) {
+      this.flashBanner("Gemeldet – danke!", "info");
+      return;
     }
-    this.flashBanner("Gemeldet – danke! Das fließt in die neue Engine.", "info");
+    void fetch("/api/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(r) }).catch(() => undefined);
+    this.flashBanner("Gemeldet – danke!", "info");
+    // an invented form involved: the judge looks again (counts from the next time)
+    void this.resolver.reconsider(r.attackerId, r.targetId, r.verb).then((reason) => {
+      if (reason === undefined) return;
+      this.setOntology(this.resolver.onto);
+      this.flashBanner(`⚖ Nachgeprüft: ${brief(reason, 140)}`, "info");
+    });
   }
 
   private showReports(): void {
@@ -1262,6 +1270,9 @@ export class App {
         return;
       case "lore":
         this.lore.receive(m.id, m.text);
+        return;
+      case "reconsidered":
+        this.flashBanner(`⚖ Nachgeprüft: ${brief(m.text, 140)}`, "info");
         return;
       case "art":
         this.art.receive(m.items);

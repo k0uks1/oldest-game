@@ -253,6 +253,7 @@ export class OnlineHub {
         return;
       case "report":
         if (c.room !== null) this.opts.report?.({ attacker: msg.attacker, target: msg.target, verb: msg.verb, room: c.room.code });
+        if (c.room !== null && msg.attackerId !== undefined && msg.targetId !== undefined) void this.reconsider(c, msg.attackerId, msg.targetId, msg.verb);
         return;
       case "art":
         this.artRequest(c, msg.ids);
@@ -546,6 +547,21 @@ export class OnlineHub {
   // ── generated pictures ──────────────────────────────────────────────────
 
   /** Answer what is known now; remember who waits for pictures still being made. */
+  /** A reported win with an invented form is judged again; the reporter hears the outcome. */
+  private reconsidering = 0;
+  private async reconsider(c: Conn, attackerId: string, targetId: string, verb: string): Promise<void> {
+    if (!this.opts.claude() || this.reconsidering >= 2) return;
+    this.reconsidering++;
+    try {
+      const reason = await this.resolver.reconsider(attackerId, targetId, verb);
+      if (reason === undefined) return;
+      this.learnedChanged();
+      if (this.conns.has(c)) c.peer.send({ t: "reconsidered", text: reason });
+    } finally {
+      this.reconsidering--;
+    }
+  }
+
   /** A legend for one form – stored, freshly written (the store keeps the budget) or none. */
   private async loreRequest(c: Conn, id: string): Promise<void> {
     const form = this.resolver.onto.formById(id);
