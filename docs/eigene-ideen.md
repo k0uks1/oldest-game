@@ -461,3 +461,11 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Kein Anker** | Der Richter sah bisher das Urteil der Engine („kein Sieg – …“) und stimmte ihm meist zu. Jetzt sieht er nur die beiden Gestalten und ggf. den Einspruch des Spielers. | `Resolver.judge`, `reconsider` |
 | **Ein Ja des Richters gilt** | Hatte der Richter „Sieg“ gesagt, prüfte die Engine beim Abspielen trotzdem Reichweite, Intensität und Stärke nach – bei knappen Paaren (1–2 Stufen Unterschied) kippte das rund jedes fünfte Ja wieder um. Urteile tragen jetzt ihre Herkunft (`by`); ein Richterspruch steht, nur „Maßlos“ und „beherrscht den Mechanismus“ gelten weiter. | `checkRuling` |
 | **Messbar** | `npm run judge-eval` legt dem Richter beschriftete Paare vor (Wasser → Feuer soll gewinnen, Schere → Fels nicht) und zählt beide Quoten. | `scripts/judge-eval.ts` |
+
+## Beschwörungsmatrix (Kiki: „Beschwörungsmatrix, lila Flammen, darin formen sich Gestalten“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Die Matrix steht, wo die Gestalt erscheinen wird** | Solange PixelLab malt, richtet sich über dem Platz des Spielers ein aufrechter Runenkreis auf: zwei Ringe, kreisende Runen, ein Hexagramm, das sich selbst einzeichnet, eine Lichtsäule. Lila Flammenzungen lecken vom Boden hoch, Funken steigen. | `drawMatrix`, `drawSummoning` |
+| **Gestalten formen sich in den Flammen** | Umrisse bekannter Gestalten (Wolf, Drache, Baum, Katze …) wachsen von unten aus dem Feuer, stehen kurz und schmelzen Zelle für Zelle in die nächste. Am Umriss steigt eine Hitzewelle hoch, durch den Kern läuft ein Lichtband. Auch bei winzigen Gestalten sind die Zwischenformen groß genug zum Erkennen. | `render/morph.ts` |
+| **Zum Schluss die echte Form** | Ist das Bild da, zieht sich das Feuer auf den Umriss des fertigen Bildes zusammen – in dessen Größe und an dessen Platz –, dann Blitz und die Gestalt steht genau dort. Kommt kein Bild, nimmt es den Umriss der gezeichneten Figur an. | `endConjuring(arrived, form)` |

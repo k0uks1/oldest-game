@@ -143,7 +143,9 @@ share one crop), so figures fill their place and stand on the ground. The Pixi a
 in arena pixels, fighter sprites at ½ scale), the canvas fallback at 1. Clicking the name under a fighter opens its card.
 Clients ask by form id (`art` message online, `GET /api/art` for the local hot-seat) and get ready / pending /
 none; pending ones are pushed (online) or polled (local). While a picture is on its way the rune circle
-conjures (pentagram of runes), then flares and the form appears; after a reconnect pictures are asked again.
+conjures (pentagram of runes) and a **summoning matrix** (`render/morph.ts`) rises where the form will stand: purple
+flames, shapes of known forms (drawn sprites as cell masks) melting into one another, finally the form's own outline;
+then it flares and the form appears; after a reconnect pictures are asked again.
 No server, no key or budget spent (`ART_MONTHLY_LIMIT`, persisted) → the drawn sprites below. The PixelLab key
 lives only in the server environment (`PIXELLAB_API_KEY`) – never in a build, the repo or the browser.
 `npm run art -- status | ingest <png-dir> | warm` inspects or pre-fills the store.
