@@ -527,3 +527,9 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 |---|---|---|
 | **Aufwecken** | Mobile Browser legen den Audio-Kontext still, wenn eine andere App nach vorn kommt (iOS: „interrupted“), und wecken ihn nie selbst. Jetzt weckt die Seite ihn beim Zurückkehren (sichtbar, `pageshow`, Fokus) und bei jeder Berührung oder Taste. | `Sound.wake` |
 | **Im Takt weiter** | Ein gedrosselter Hintergrund-Tab lässt den Taktgeber stocken; danach lagen alle Noten in der Vergangenheit. Jetzt springt er ganze Sechzehntel nach vorn – Raster und Taktposition stimmen, nichts wird nachgeholt. Im Hintergrund plant er 1,5 s voraus, damit gedrosselte Timer nicht reißen. | `catchUp`, `LOOKAHEAD_HIDDEN` |
+
+## Kein Weiß hinter der Mauer (Fehlerbericht: „weiße Felder, wenn die Mauer zerfällt“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Das All reicht bis unten** | Die Seitenwände des Iso-Raums reichen unter die Bodenlinie, das gemalte All endete aber dort – PixelLab hatte den leeren Rest weiß gefüllt. Fielen unten Steine heraus, schien Weiß durch. Jetzt füllt das All das ganze Bild (unten ein gedrehter, weich angesetzter Ausschnitt), und auch das gezeichnete All reicht bis unten, sodass ein neuer Malauftrag nichts Leeres mehr bekommt. | `scenery/void.png`, `paintStarfield` |
