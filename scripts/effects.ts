@@ -2,7 +2,7 @@
  * Attack effects ("Angriffe"): a fixed library of short PixelLab animations – fireballs, bullets,
  * claw marks, lightning, hearts … – made once and bundled, so a duel never waits for one. Each
  * effect in content/core/effects.json gets a first frame (pixflux) and an animation of it
- * (animate-with-text); projectiles also get an impact. Frames are written side by side as one
+ * (animate-pixminimax); projectiles also get an impact. Frames are written side by side as one
  * strip: src/render/effects/<id>.png and <id>-impact.png.
  *
  *   PIXELLAB_API_KEY=… npm run effects [-- fireball bullet …] [--force]
@@ -60,7 +60,15 @@ async function firstFrame(name: string, description: string, size: number): Prom
 async function animate(name: string, first: string, action: string): Promise<Rgba[]> {
   let id = force ? undefined : jobs.get(name);
   if (id === undefined) {
-    const res = await fetch(`${API}/animate-with-text-v3`, { method: "POST", headers, body: JSON.stringify({ first_frame: { type: "base64", base64: first }, action, frame_count: 8, no_background: true, seed: 7 }) });
+    // PixMiniMax: a much shorter queue than animate-with-text-v3 (minutes, not a quarter hour) and
+    // steadier loops; 1 generation for 64 px × 8 frames. Tier 2 allows 11 jobs at once – a full
+    // house answers 429, so wait for a slot.
+    let res: Response;
+    for (;;) {
+      res = await fetch(`${API}/animate-pixminimax`, { method: "POST", headers, body: JSON.stringify({ first_frame: { type: "base64", base64: first }, description: action, frame_count: 8, no_background: true, seed: 7 }) });
+      if (res.status !== 429) break;
+      await new Promise((r) => setTimeout(r, 15000));
+    }
     id = ((await res.json()) as { background_job_id?: string }).background_job_id;
     if (!res.ok || id === undefined) throw new Error(`${name}: animate ${String(res.status)}`);
     jobs.set(name, id);
