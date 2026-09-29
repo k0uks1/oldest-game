@@ -6,7 +6,7 @@
  * `Resolver` the hot-seat UI uses; clients only send text and show what comes back.
  */
 import type { ContentPack, FormSpec, ModifierSpec, NoteSpec, QualitySpec, RulingSpec, TagSpec, VerbExtensionSpec, VerbSpec } from "../engine/ontology/pack.ts";
-import type { GameState, PlayerId } from "../engine/types.ts";
+import type { AnimMove, GameState, PlayerId } from "../engine/types.ts";
 import type { Turn } from "../game/resolver.ts";
 import { NOTE_MAX_CHARS } from "../llm/learning.ts";
 
@@ -40,6 +40,8 @@ export type ClientMsg =
   | { readonly t: "art"; readonly ids: readonly string[] }
   /** Ask for a form's legend (answered with `lore`; empty text = none). */
   | { readonly t: "lore"; readonly id: string }
+  /** Ask what this form can do when brought to life (answered with `moves`). */
+  | { readonly t: "moves"; readonly id: string }
   /** Bring your current form to life (`seat` only matters when both seats are on this device). */
   | { readonly t: "animate"; readonly action: AnimAction; readonly seat?: PlayerId };
 
@@ -49,8 +51,25 @@ export const ANIM_ACTIONS = {
   angriff: { label: "greift an", prompt: "attacking forward with its strongest move" },
   triumph: { label: "triumphiert", prompt: "victory celebration, proud triumphant pose" },
 } as const;
-export type AnimAction = keyof typeof ANIM_ACTIONS;
-export const ANIM_ACTION_IDS = Object.keys(ANIM_ACTIONS) as AnimAction[];
+/** The form's own moves (see `Form.moves`), by position – the server alone knows what they tell the animator. */
+export const MOVE_ACTIONS = ["m0", "m1", "m2"] as const;
+export type MoveAction = (typeof MOVE_ACTIONS)[number];
+export type AnimAction = keyof typeof ANIM_ACTIONS | MoveAction;
+export const ANIM_ACTION_IDS: readonly AnimAction[] = [...(Object.keys(ANIM_ACTIONS) as (keyof typeof ANIM_ACTIONS)[]), ...MOVE_ACTIONS];
+
+/** What the animator is told for this action on this form: a general one, or one of the form's own moves. */
+export function animPrompt(action: AnimAction, moves: readonly AnimMove[] | undefined): string | undefined {
+  const i = MOVE_ACTIONS.indexOf(action as MoveAction);
+  if (i < 0) return ANIM_ACTIONS[action as keyof typeof ANIM_ACTIONS].prompt;
+  return moves?.[i]?.action;
+}
+
+/** The label a player sees for this action on this form. */
+export function animLabel(action: AnimAction, moves: readonly AnimMove[] | undefined): string {
+  const i = MOVE_ACTIONS.indexOf(action as MoveAction);
+  if (i < 0) return ANIM_ACTIONS[action as keyof typeof ANIM_ACTIONS].label;
+  return moves?.[i]?.label ?? "bewegt sich";
+}
 /** Animations per player per duel. */
 export const ANIMS_PER_PLAYER = 3;
 
@@ -172,6 +191,8 @@ export type ServerMsg =
   | { readonly t: "learnedFull"; readonly pack: ContentPack }
   | { readonly t: "art"; readonly items: readonly ArtItem[] }
   | { readonly t: "lore"; readonly id: string; readonly text: string }
+  /** A form's own moves ("Beleben"); empty = only the general ones. */
+  | { readonly t: "moves"; readonly id: string; readonly moves: readonly AnimMove[] }
   /** The judge looked at a reported win again (counts from the next time). */
   | { readonly t: "reconsidered"; readonly text: string }
   | { readonly t: "anim"; readonly item: AnimItem; readonly left: readonly [number, number] }
@@ -250,6 +271,10 @@ export function parseClientMsg(raw: string): ClientMsg | undefined {
       const action = ANIM_ACTION_IDS.find((a) => a === m["action"]);
       const seat = m["seat"] === 0 || m["seat"] === 1 ? m["seat"] : undefined;
       return action === undefined ? undefined : { t: "animate", action, ...(seat === undefined ? {} : { seat }) };
+    }
+    case "moves": {
+      const id = str(m["id"], 80);
+      return id === undefined || id === "" ? undefined : { t: "moves", id };
     }
     case "lore": {
       const id = str(m["id"], 80);

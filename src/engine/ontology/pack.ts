@@ -1,4 +1,7 @@
-import type { FormLook } from "../types.ts";
+import type { AnimMove, FormLook } from "../types.ts";
+
+/** Moves ("Beleben") a form may carry. */
+export const MAX_MOVES = 3;
 
 /**
  * Content pack format. Packs are plain JSON so they can be generated,
@@ -168,6 +171,8 @@ export interface FormSpec {
   readonly art?: string;
   /** English picture description the art is (to be) generated from. */
   readonly artPrompt?: string;
+  /** "Beleben": what the form typically does (label + English action). */
+  readonly moves?: readonly AnimMove[];
   /** Live learning: who first summoned this form and when (ISO date). Purely informational. */
   readonly discoveredBy?: string;
   readonly discoveredAt?: string;
@@ -328,6 +333,18 @@ class ShapeChecker {
     return undefined;
   }
 
+  /** Up to three moves, each a short label and a short single-line action. */
+  moves(o: Obj, key: string, where: string): AnimMove[] | undefined {
+    const v = o[key];
+    if (v === undefined) return undefined;
+    const line = (x: unknown, max: number): x is string => typeof x === "string" && x !== "" && x.length <= max && !/[\p{Cc}]/u.test(x);
+    if (Array.isArray(v) && v.length <= MAX_MOVES && v.every((m) => isObj(m) && line(m["label"], 40) && line(m["action"], 160))) {
+      return v.map((m) => ({ label: String((m as Obj)["label"]), action: String((m as Obj)["action"]) }));
+    }
+    this.errors.push(`${where}: "${key}" muss eine Liste von höchstens ${String(MAX_MOVES)} Bewegungen {label, action} sein`);
+    return undefined;
+  }
+
   /** Generated art: shape-checked here, fully decoded (and dropped if broken) by the renderer. */
   art(o: Obj, key: string, where: string): string | undefined {
     const v = o[key];
@@ -472,6 +489,7 @@ export function parsePack(input: unknown): PackResult {
         ...opt("look", c.look(o, "look", w)),
         ...opt("art", c.art(o, "art", w)),
         ...opt("artPrompt", c.artPrompt(o, "artPrompt", w)),
+        ...opt("moves", c.moves(o, "moves", w)),
         ...opt("discoveredBy", c.optStr(o, "discoveredBy", w)),
         ...opt("discoveredAt", c.optStr(o, "discoveredAt", w)),
         ...opt("base", c.optStr(o, "base", w)),

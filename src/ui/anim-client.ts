@@ -4,14 +4,17 @@
  * page counts and polls the local server. Frames arrive in the art format and are played by the
  * arena in a loop for as long as the form stands.
  */
-import type { Form, PlayerId } from "../engine/types.ts";
+import type { AnimMove, Form, PlayerId } from "../engine/types.ts";
 import { ANIMS_PER_PLAYER, type AnimAction, type AnimItem } from "../online/protocol.ts";
+import { movesOf } from "../llm/parser.ts";
 import { decodeArt } from "../render/art.ts";
 import type { PixelImage } from "../render/sprite.ts";
 
 export interface AnimTransport {
   /** Start (or join) an animation; answers come back through {@link AnimClient.receive}. */
   ask(form: Form, action: AnimAction, seat: PlayerId, client: AnimClient): void;
+  /** Ask for the form's own moves; the answer comes back through {@link AnimClient.receiveMoves}. */
+  moves(form: Form, client: AnimClient): void;
 }
 
 export class AnimClient {
@@ -20,6 +23,9 @@ export class AnimClient {
   /** Form ids with an animation on its way. */
   readonly pending = new Set<string>();
   private readonly frames = new Map<string, PixelImage[]>();
+  /** The forms' own moves as the server told them (empty = only the general ones). */
+  private readonly moves = new Map<string, readonly AnimMove[]>();
+  private readonly movesWaiting = new Map<string, ((m: readonly AnimMove[]) => void)[]>();
   /** Frames arrived for a form (the arena plays them) – or it did not work out (frames undefined). */
   onUpdate: ((id: string, frames: PixelImage[] | undefined) => void) | null = null;
 
@@ -42,6 +48,40 @@ export class AnimClient {
   /** Frames already known for this form (to play again after it was summoned anew). */
   framesOf(id: string): PixelImage[] | undefined {
     return this.frames.get(id);
+  }
+
+  /** The form's own moves, if known already (its own, or what the server said). */
+  movesOf(form: Form): readonly AnimMove[] | undefined {
+    return form.moves ?? this.moves.get(form.id);
+  }
+
+  /** The form's own moves – asked once; empty when there are none (or no answer in time). */
+  loadMoves(form: Form, timeoutMs = 9000): Promise<readonly AnimMove[]> {
+    const known = this.movesOf(form);
+    if (known !== undefined) return Promise.resolve(known);
+    if (this.transport === null) return Promise.resolve([]);
+    const first = !this.movesWaiting.has(form.id);
+    const answer = new Promise<readonly AnimMove[]>((resolve) => {
+      const timer = setTimeout(() => {
+        resolve([]);
+      }, timeoutMs);
+      this.movesWaiting.set(form.id, [
+        ...(this.movesWaiting.get(form.id) ?? []),
+        (m) => {
+          clearTimeout(timer);
+          resolve(m);
+        },
+      ]);
+    });
+    if (first) this.transport.moves(form, this);
+    return answer;
+  }
+
+  receiveMoves(id: string, moves: readonly AnimMove[]): void {
+    this.moves.set(id, moves);
+    const waiting = this.movesWaiting.get(id) ?? [];
+    this.movesWaiting.delete(id);
+    for (const w of waiting) w(moves);
   }
 
   canAnimate(seat: PlayerId): boolean {
@@ -77,10 +117,13 @@ export class AnimClient {
 }
 
 /** Online: the server counts, animates and tells the whole room. */
-export function socketAnimTransport(send: (action: AnimAction, seat: PlayerId) => boolean): AnimTransport {
+export function socketAnimTransport(send: (action: AnimAction, seat: PlayerId) => boolean, askMoves: (id: string) => boolean): AnimTransport {
   return {
     ask(form, action, seat, client) {
       if (!send(action, seat)) client.receive({ id: form.id, action, state: "none" });
+    },
+    moves(form, client) {
+      if (!askMoves(form.id)) client.receiveMoves(form.id, []);
     },
   };
 }
@@ -88,6 +131,14 @@ export function socketAnimTransport(send: (action: AnimAction, seat: PlayerId) =
 /** Local hot-seat: the page counts (one of the allowance when a new animation starts), the server animates. */
 export function httpAnimTransport(fetchImpl: typeof fetch = fetch, pollMs = 4000, giveUpMs = 300_000): AnimTransport {
   return {
+    moves(form, client) {
+      void fetchImpl(`/api/moves?${new URLSearchParams({ id: form.id }).toString()}`, { cache: "no-store" })
+        .then(async (res) => (res.ok ? ((await res.json()) as { moves?: unknown }).moves : undefined))
+        .catch(() => undefined)
+        .then((raw) => {
+          client.receiveMoves(form.id, Array.isArray(raw) ? (movesOf(raw) ?? []) : []);
+        });
+    },
     ask(form, action, seat, client) {
       const since = Date.now();
       let counted = false;

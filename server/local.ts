@@ -23,10 +23,10 @@ import type { LlmSettings } from "../src/llm/client.ts";
 import { reconcileLearned } from "../src/llm/learning.ts";
 import { narrateEpilogueWithClaude } from "../src/llm/narrator.ts";
 import { narrateEnd } from "../src/narrate/offline.ts";
-import { ANIM_ACTION_IDS, ANIM_ACTIONS, applyPackDelta, packDelta, parseReport, WS_PATH, type AbsurdReport, type AnimItem, type ArtItem, type ServerMsg } from "../src/online/protocol.ts";
+import { ANIM_ACTION_IDS, animPrompt, applyPackDelta, packDelta, parseReport, WS_PATH, type AbsurdReport, type AnimItem, type ArtItem, type ServerMsg } from "../src/online/protocol.ts";
 import { AnimService } from "./anim-service.ts";
 import { artRequest } from "./art-prompts.ts";
-import { LoreStore } from "./lore-store.ts";
+import { LoreStore, MoveStore } from "./lore-store.ts";
 import { ArtService } from "./art-service.ts";
 import { handleLearned, readLearnedFile, writeLearnedFile } from "./learned.ts";
 import { OnlineHub, type HubAnim, type HubArt, type HubLimits } from "./online.ts";
@@ -207,6 +207,8 @@ export function startServer(opts: ServerOptions): RunningServer {
 
   // Legends for form cards: written once per form by Claude, kept next to the learned pack.
   const legends = new LoreStore({ write: (form) => resolver.legend(form), file: join(dirname(file), "lore.json"), perHour: LORE_PER_HOUR });
+  // "Beleben": what each form does when brought to life – its own moves, or asked once and kept
+  const moves = new MoveStore({ write: (form) => resolver.moves(form), file: join(dirname(file), "moves.json"), perHour: LORE_PER_HOUR });
 
   // "Beleben": animations of generated pictures, made on request and kept like pictures
   const animations = new AnimService({
@@ -221,7 +223,10 @@ export function startServer(opts: ServerOptions): RunningServer {
       const req = artRequest(form);
       const pic = req === undefined ? undefined : pictures.lookup(req.prompt, req.size);
       if (pic?.state !== "ready") return undefined;
-      const found = animations.lookup(pic.art, ANIM_ACTIONS[action].prompt);
+      // the action text comes from the server's own knowledge – never from a client
+      const prompt = animPrompt(action, moves.known(form));
+      if (prompt === undefined) return undefined;
+      const found = animations.lookup(pic.art, prompt);
       const item: AnimItem = found.state === "ready" ? { id: form.id, action, state: "ready", frames: found.frames } : { id: form.id, action, state: found.state };
       return { key: found.key, item };
     },
@@ -233,6 +238,7 @@ export function startServer(opts: ServerOptions): RunningServer {
     art: hubArt,
     anim: hubAnim,
     lore: (form) => legends.get(form),
+    moves: (form) => moves.get(form),
     ...(opts.env.accessCode === undefined ? {} : { accessCode: opts.env.accessCode }),
     ...(opts.limits === undefined ? {} : { limits: opts.limits }),
     claude,
@@ -311,6 +317,15 @@ export function startServer(opts: ServerOptions): RunningServer {
           const found = form === undefined || action === undefined ? undefined : hubAnim.lookup(form, action);
           res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
           res.end(JSON.stringify(found?.item ?? { id, action: action ?? "atmen", state: "none" }));
+          return;
+        }
+        if (url.startsWith("/api/moves") && !isPublic && req.method === "GET") {
+          // hot-seat "Beleben": the form's own moves (asked once, then kept); empty = the general ones
+          const id = (new URL(url, "http://local").searchParams.get("id") ?? "").slice(0, 80);
+          const form = resolver.onto.formById(id);
+          const found = form === undefined ? undefined : await moves.get(form).catch(() => undefined);
+          res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+          res.end(JSON.stringify({ id, moves: found ?? [] }));
           return;
         }
         if (url.startsWith("/api/report") && !isPublic && req.method === "POST") {

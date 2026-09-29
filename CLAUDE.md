@@ -157,7 +157,10 @@ lives only in the server environment (`PIXELLAB_API_KEY`) – never in a build, 
 `npm run art -- status | ingest <png-dir> | warm` inspects or pre-fills the store.
 **Beleben** (`server/anim-service.ts`, `ui/anim-client.ts`): a player may bring their current form to life,
 `ANIMS_PER_PLAYER` (3) times per duel – PixelLab `animate-with-text-v3` with the form's picture as first frame and
-one of three actions (`ANIM_ACTIONS`: atmet / greift an / triumphiert), 30–180 s. Stored like pictures (key =
+one of the form's **own three moves** (`Form.moves` {label, action}: invented forms get them from classification
+(`bewegungen`), core forms ask Claude once – `MoveStore`, `learned/moves.json`, hourly budget – via `moves` message / `GET
+/api/moves`; the general `ANIM_ACTIONS` atmet / greift an / triumphiert where there are none), 30–180 s. Clients only
+name a position (`m0`–`m2`); the action text comes from the server (`animPrompt`), never from a client. Stored like pictures (key =
 picture + action, `learned/anim/`, budget `ANIM_MONTHLY_LIMIT`, default 150); a stored one costs no charge, a failed
 one is refunded. Online the server counts (`animate` → `anim` to the whole room, `welcome.anim`); the local hot-seat
 polls `GET /api/animate` and counts in the page. The arena plays the frames in a loop into the fighter's own canvases

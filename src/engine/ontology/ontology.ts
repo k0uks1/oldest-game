@@ -431,6 +431,7 @@ export class Ontology {
       ...(spec.look === undefined ? {} : { look: spec.look }),
       ...(spec.art === undefined ? {} : { art: spec.art }),
       ...(spec.artPrompt === undefined ? {} : { artPrompt: spec.artPrompt }),
+      ...(spec.moves === undefined ? {} : { moves: spec.moves }),
       ...(spec.flavor === undefined ? {} : { flavor: spec.flavor }),
       ...presentationOf(spec),
       ...spriteOf(spec),

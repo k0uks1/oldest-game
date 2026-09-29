@@ -2,7 +2,7 @@ import { APP_VERSION } from "../version.ts";
 import { arenaMinScale, createGame, currentTarget, pass, roundNumber } from "../engine/game.ts";
 import { activeFields } from "../engine/fields.ts";
 import { ESCAPE, reaches } from "../engine/rules.ts";
-import type { CounterCheck, Form, GameState, PlayerId } from "../engine/types.ts";
+import type { AnimMove, CounterCheck, Form, GameState, PlayerId } from "../engine/types.ts";
 import {
   fetchHealth,
   localProxyOf,
@@ -37,7 +37,10 @@ import { renderSprite, type PixelImage } from "../render/sprite.ts";
 import { cardView } from "./card-view.ts";
 import { LoreClient } from "./lore-client.ts";
 import { AnimClient, httpAnimTransport, socketAnimTransport } from "./anim-client.ts";
-import { ANIM_ACTION_IDS, ANIM_ACTIONS } from "../online/protocol.ts";
+import { ANIM_ACTION_IDS, animLabel, MOVE_ACTIONS, type AnimAction } from "../online/protocol.ts";
+
+/** The general moves, for forms without their own. */
+const GENERAL_ANIMS = ANIM_ACTION_IDS.filter((a) => !(MOVE_ACTIONS as readonly string[]).includes(a));
 import { Sound } from "./sound.ts";
 
 function sleep(ms: number): Promise<void> {
@@ -976,8 +979,12 @@ export class App {
   private renderAnim(): void {
     for (const p of [0, 1] as const) {
       const slot = this.els.animBtn[p];
-      clear(slot);
       const form = this.stageFormOf(p);
+      // an open menu stays open while nothing about it changed (any render used to close it under the cursor)
+      const same = form !== undefined && slot.dataset["form"] === form.id && slot.dataset["left"] === String(this.anim.left[p]) && !this.anim.pending.has(form.id);
+      if (same && slot.querySelector(".anim-menu") !== null) continue;
+      clear(slot);
+      delete slot.dataset["form"];
       const mine = this.online === null || this.seats.includes(p);
       if (!this.anim.enabled || !mine || form === undefined || !hasArt(form)) continue;
       if (this.anim.pending.has(form.id)) {
@@ -987,32 +994,46 @@ export class App {
       const left = this.anim.left[p];
       if (left <= 0) continue;
       const btn = h("button", { class: "anim-btn", title: `${form.name} zum Leben erwecken (noch ${String(left)}× in diesem Duell)` }, `✦ beleben · ${String(left)}`);
+      slot.dataset["form"] = form.id;
+      slot.dataset["left"] = String(left);
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (slot.querySelector(".anim-menu") !== null) {
-          this.renderAnim();
+        const open = slot.querySelector(".anim-menu");
+        if (open !== null) {
+          open.remove();
           return;
         }
-        const menu = h(
-          "div",
-          { class: "anim-menu" },
-          ...ANIM_ACTION_IDS.map((a) =>
-            h(
-              "button",
-              {
-                class: "anim-choice",
-                onclick: (ev) => {
-                  ev.stopPropagation();
-                  this.anim.request(form, a, p);
-                  this.flashBanner(`✦ ${form.name} ${ANIM_ACTIONS[a].label} gleich – PixelLab braucht 1–3 Minuten.`, "info");
-                  this.renderAnim();
-                },
-              },
-              ANIM_ACTIONS[a].label,
-            ),
-          ),
-        );
+        // the form's own three moves (asked once, then kept) – the general ones where it has none
+        const menu = h("div", { class: "anim-menu" }, h("span", { class: "anim-wait" }, "…"));
         slot.append(menu);
+        const fill = (moves: readonly AnimMove[]): void => {
+          const actions: readonly AnimAction[] = moves.length > 0 ? MOVE_ACTIONS.slice(0, moves.length) : GENERAL_ANIMS;
+          clear(menu);
+          for (const a of actions) {
+            const label = animLabel(a, moves);
+            menu.append(
+              h(
+                "button",
+                {
+                  class: "anim-choice",
+                  onclick: (ev) => {
+                    ev.stopPropagation();
+                    this.anim.request(form, a, p);
+                    this.flashBanner(`✦ ${form.name}: ${label} – gleich, PixelLab braucht 1–3 Minuten.`, "info");
+                    this.renderAnim();
+                  },
+                },
+                label,
+              ),
+            );
+          }
+        };
+        const known = this.anim.movesOf(form);
+        if (known !== undefined) fill(known);
+        else
+          void this.anim.loadMoves(form).then((moves) => {
+            if (menu.isConnected) fill(moves);
+          });
       });
       slot.append(btn);
     }
@@ -1315,7 +1336,10 @@ export class App {
         const link = this.online;
         this.art.setTransport(m.art && link !== null ? socketTransport((ids) => link.send({ t: "art", ids })) : null);
         this.lore.socket((id) => link?.send({ t: "lore", id }) ?? false);
-        this.anim.setTransport(m.anim !== undefined && link !== null ? socketAnimTransport((action, seat) => link.send({ t: "animate", action, seat })) : null);
+        this.anim.setTransport(m.anim !== undefined && link !== null ? socketAnimTransport(
+                (action, seat) => link.send({ t: "animate", action, seat }),
+                (id) => link.send({ t: "moves", id }),
+              ) : null);
         if (m.anim !== undefined) {
           this.anim.reset();
           this.anim.left = [m.anim.left[0], m.anim.left[1]];
@@ -1413,6 +1437,9 @@ export class App {
         } catch {
           /* keep what we have */
         }
+        return;
+      case "moves":
+        this.anim.receiveMoves(m.id, m.moves);
         return;
       case "lore":
         this.lore.receive(m.id, m.text);
