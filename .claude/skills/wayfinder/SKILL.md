@@ -8,6 +8,33 @@ A loose idea has arrived, too big for one agent session, and wrapped in fog: the
 
 The destination varies per effort, and naming it is the first act of charting: it shapes every ticket. It might be a spec to hand off and iterate on, a decision to lock before planning starts, or a change made in place like a data-structure migration. The map is domain-agnostic: engineering work, course content, whatever fits the shape.
 
+## This repo: autonomous by default (overrides the rest of this file)
+
+Here wayfinder is first of all **tracking**: several sessions work a map in parallel and must not stall waiting for
+the human. Where this section and the text below disagree, this section wins.
+
+- **Decide what you can.** A question whose answer follows from the code, `CLAUDE.md`, `openspec/specs/`, the
+  docs or earlier decisions on the map is **AFK**, whatever its label: decide it, record it as the resolution
+  comment with its reasoning, end the comment with „Einspruch? Einfach hier kommentieren – dann wird neu
+  entschieden.“, close the ticket. Reversible choices are yours too; say so in the comment.
+- **Only the human's own decisions wait** – product direction and taste, anything costly (money, API budgets) or
+  hard to reverse, contradicting an invariant in `CLAUDE.md`. For those: write the question with numbered options
+  and your recommendation as a comment on the ticket, add the label `needs-user`, leave it open and unassigned,
+  and **move on** to the next frontier ticket. Never wait in chat for an answer. A human answers in the issue; the
+  next session that sees the answer removes `needs-user` and resolves the ticket.
+- **grilling / domain-modeling / prototype** are not interviews here. Use grilling's design tree as your own
+  checklist, write glossary terms and ADRs directly (`domain-modeling` formats), and treat a prototype ticket as
+  AFK if a throwaway prototype on a branch answers it without the human; otherwise `needs-user`.
+- **Charting** needs no interview: derive destination, notes and tickets from the user's request plus the repo.
+  Ask in chat only when the destination itself is ambiguous – then at most one short round, recommendations
+  included – and write every assumption into the map's Notes.
+- **More than one ticket per session is fine** – keep taking AFK frontier tickets until only `needs-user` or
+  blocked ones are left or the context gets heavy. Claim each first (assign it), so parallel sessions skip it.
+- **Tracking comes first.** Every resolution, new ticket, graduated fog and out-of-scope ruling goes to the map
+  immediately, not at the end of the session – another session may read it any minute.
+- When a stretch of the way is clear and buildable, hand it to OpenSpec (`/opsx:propose` with `Issue: #<ticket>`);
+  the automatic backlog sync takes it from there.
+
 ## Plan, don't do
 
 Wayfinder is **planning** by default: each ticket resolves a decision, and the map is done when the way is clear, with nothing left to decide before someone goes and does the thing. The pull to just do the work is usually the signal you've reached the edge of the map and it's time to hand off. An effort can override this in its **Notes**, carrying execution into the map itself, but absent that, produce decisions, not deliverables.

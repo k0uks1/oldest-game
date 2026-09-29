@@ -60,6 +60,7 @@ export const LABELS: { name: string; color: string; description: string }[] = [
   { name: "wayfinder:prototype", color: "c5def5", description: "Wayfinder: Prototyp (HITL)" },
   { name: "wayfinder:grilling", color: "c5def5", description: "Wayfinder: Klärungsgespräch (HITL)" },
   { name: "wayfinder:task", color: "c5def5", description: "Wayfinder: Vorarbeit für eine Entscheidung" },
+  { name: "needs-user", color: "d93f0b", description: "Wartet auf eine Entscheidung von dir – Antwort als Kommentar" },
 ];
 
 const ARCHIVE_DATE = /^\d{4}-\d{2}-\d{2}-/;

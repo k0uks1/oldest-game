@@ -238,7 +238,10 @@ Four places, each with one job – don't duplicate between them:
   How to reach GitHub (gh locally, MCP tools in the cloud): `docs/agents/issue-tracker.md`.
 - **Huge, foggy efforts** (more than one session, the way not yet clear – e.g. the engine rebuild): `/wayfinder`
   charts a decision map (`wayfinder:map` issue + sub-issues); once the way is clear, the buildable pieces become
-  OpenSpec changes.
+  OpenSpec changes. Only on explicit `/wayfinder`; it runs autonomously here (decides what it can derive, parks
+  only the user's own decisions as `needs-user` issue comments, several sessions in parallel).
+- **Don't interrupt to ask.** Sessions keep working; a decision that truly belongs to the user goes on its issue
+  with the label `needs-user` (options + recommendation) while the session carries on with the rest.
 - `docs/eigene-ideen.md` stays the log of ideas Claude added on its own; `docs/engine-neubau.md` collects
   absurd-win cases until the rebuild is charted.
 

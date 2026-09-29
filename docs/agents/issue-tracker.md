@@ -15,7 +15,7 @@ The backlog of this repo lives in **GitHub issues** of `k0uks1/oldest-game`. Rea
   created and updated by `.github/workflows/backlog.yml` (`scripts/backlog.ts`): summary from the proposal's
   "Why", task progress from `tasks.md`, the PRs that touch it. Archiving the change on `main` closes the issue.
   A proposal that starts from an existing issue says `Issue: #<n>` under "## Why" and is attached to it.
-- **Labels** `openspec` and `wayfinder:*` are created by the same workflow when missing.
+- **Labels** `openspec`, `wayfinder:*` and `needs-user` are created by the same workflow when missing.
 
 ## What agents do while working
 
@@ -26,6 +26,9 @@ The backlog of this repo lives in **GitHub issues** of `k0uks1/oldest-game`. Rea
 - **PR body:** `Closes #<n>` for work that finishes a plain issue, `Refs #<n>` for an OpenSpec change's issue
   (that one closes itself when the change is archived).
 - **A user wish in chat that won't be done now** becomes an issue too, so it isn't lost in scrollback.
+- **A decision only the user can make** (taste, product direction, cost, irreversible): comment the question with
+  options and a recommendation on the issue, label it `needs-user`, and carry on with other work – don't stop the
+  session to ask. Whoever sees the answer later removes the label and continues.
 
 ## Conventions
 

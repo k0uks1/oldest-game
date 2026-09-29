@@ -1,7 +1,13 @@
 # Vendored skills
 
-Copied unchanged from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, © 2026 Matt Pocock),
-commit `d81f3a1` (2026-09-29), without the Codex `agents/` files:
+Copied from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, © 2026 Matt Pocock),
+commit `d81f3a1` (2026-09-29), without the Codex `agents/` files.
+
+**Local changes** (keep them when updating): `wayfinder` has a section „This repo: autonomous by default“ (decide
+what is derivable, park only the human's own decisions as `needs-user` comments, several tickets per session, no
+chat interviews); `grilling`, `domain-modeling` and `prototype` fire only on an explicit request (descriptions
+narrowed), so autonomous sessions are never turned into interviews.
+
 
 | Skill | Source | Why here |
 |---|---|---|
