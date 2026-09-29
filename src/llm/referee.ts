@@ -1,8 +1,9 @@
 import type { Failure } from "../engine/attempt.ts";
 import type { Ontology } from "../engine/ontology/ontology.ts";
-import type { RulingSpec } from "../engine/ontology/pack.ts";
+import type { NoteSpec, RulingSpec } from "../engine/ontology/pack.ts";
 import type { Form } from "../engine/types.ts";
 import { callClaude, type LlmSettings } from "./client.ts";
+import { notesText } from "./judge.ts";
 
 /**
  * The referee ("Schiedsrichter"): consulted only when the engine flags its own verdict as
@@ -46,7 +47,7 @@ function describe(onto: Ontology, f: Form): string {
   return `${f.name} (Stufe ${String(f.scale)}; ${tags.join(", ")}${levels.length > 0 ? `; ${levels.join(", ")}` : ""})`;
 }
 
-export async function refereeWithClaude(onto: Ontology, settings: LlmSettings, failure: Failure): Promise<RefereeVerdict | undefined> {
+export async function refereeWithClaude(onto: Ontology, settings: LlmSettings, failure: Failure, notes: readonly NoteSpec[] = []): Promise<RefereeVerdict | undefined> {
   // Only the attacker's own mechanisms – a hat cannot win by trampling just because trampling exists.
   const verbs = onto
     .compileForm(failure.form)
@@ -62,6 +63,8 @@ export async function refereeWithClaude(onto: Ontology, settings: LlmSettings, f
     "",
     `Mechanismen von ${failure.form.name} (nur diese zählen):`,
     ...verbs,
+    "",
+    notesText(onto, notes),
   ]
     .filter((l) => l !== "")
     .join("\n");

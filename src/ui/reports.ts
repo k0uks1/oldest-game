@@ -42,5 +42,7 @@ export function clearReports(): void {
 
 /** One line per report, ready to paste into a chat or an issue. */
 export function reportsText(list: readonly StoredReport[]): string {
-  return list.map((r) => `${r.at.slice(0, 16).replace("T", " ")}  ${r.attacker} ${r.verb} ${r.target}`).join("\n");
+  return list
+    .map((r) => `${r.at.slice(0, 16).replace("T", " ")}  ${r.failed === true ? "✗ " : ""}${r.attacker} ${r.verb} ${r.target}${r.reason === undefined ? "" : ` – „${r.reason}“`}`)
+    .join("\n");
 }

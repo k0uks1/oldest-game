@@ -64,7 +64,10 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
    teaches the invented forms (validated like `learn`; core forms never change), the engine re-checks with them, and
    only a remaining disagreement is stored as a ruling. Once per pair. A player's objection – „Quatsch?“ on a win,
    „Hätte klappen müssen?“ on a failure – has any pair judged again (`Resolver.reconsider`, counts from the next time;
-   only invented forms learn, hand-written pairs get a ruling at most). A denying ruling holds for every mechanism of the pair
+   only invented forms learn, hand-written pairs get a ruling at most). The objection may carry the player's reason: it is
+   kept as a **note** (`notes` in the learned pack, `addNote` – cleaned, ≤ 200 chars, 2 per pair) and quoted to every later judge
+   and referee call involving either form as an opinion, never an instruction (`notesAbout`, `notesText`); the engine never
+   reads notes. A denying ruling holds for every mechanism of the pair
    (escape stays possible). Rulings carry `by`: a **judge** yes stands as given (it weighed size, reach and strength;
    only `maxScaleJump` and "has the mechanism" still apply), a **referee** yes still passes reach and intensity.
    **Against defender bias:** both prompts argue the attacker's best case first (`bester_weg`, first tool field), frame

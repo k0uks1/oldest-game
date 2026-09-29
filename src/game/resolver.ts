@@ -17,7 +17,7 @@ import { reaches } from "../engine/rules.ts";
 import { describeInsight, learnInsights } from "./insight.ts";
 import type { Form, GameState, PlayerId } from "../engine/types.ts";
 import { isClaudeReady, type LlmSettings } from "../llm/client.ts";
-import { addRuling, amend, findLearned, learn, type Amendment } from "../llm/learning.ts";
+import { addNote, addRuling, amend, cleanNote, findLearned, learn, notesAbout, type Amendment } from "../llm/learning.ts";
 import { judgeWithClaude } from "../llm/judge.ts";
 import { loreWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
 import { parseWithClaude } from "../llm/parser.ts";
@@ -151,7 +151,7 @@ export class Resolver {
     }
     // The engine is unsure → ask the referee once; the ruling becomes a precedent for this pair.
     if (outcome.kind === "failure" && outcome.failure.uncertain !== undefined && this.useClaude()) {
-      const v = await refereeWithClaude(this.onto, this.host.llm(), outcome.failure);
+      const v = await refereeWithClaude(this.onto, this.host.llm(), outcome.failure, notesAbout(this.learned, [form.id, outcome.failure.target.id]));
       const stored = v === undefined ? undefined : addRuling(this.basePacks, this.learned, v.ruling);
       if (v !== undefined && stored !== undefined) {
         this.onto = stored.onto;
@@ -183,8 +183,8 @@ export class Resolver {
     // written, and where absurd wins came from (a radio corroding a marten).
     if (target === null || first.kind === "rejected" || (!invented(form) && !invented(target)) || !this.useClaude()) return undefined;
     if (this.onto.rulingFor(form.id, target.id) !== undefined) return undefined;
-    // unanchored: the engine's own verdict is not shown to the judge
-    const j = await judgeWithClaude(this.onto, this.host.llm(), form, target);
+    // unanchored: the engine's own verdict is not shown to the judge – players' objections are
+    const j = await judgeWithClaude(this.onto, this.host.llm(), form, target, { notes: notesAbout(this.learned, [form.id, target.id]) });
     if (j === undefined) return undefined;
     const addVerb = j.win && j.verb !== undefined ? [j.verb] : [];
     // only invented forms learn; hand-written ones stay as they are (a precedent covers the rest)
@@ -239,20 +239,37 @@ export class Resolver {
   }
 
   /**
-   * "Quatsch!" on a win with an invented form: have the pair judged again, now knowing a player
-   * found it absurd. The verdict counts from the next time (the duel is not rewound): invented
-   * forms learn what was missing, and the pair gets a precedent. Returns the judge's reason, or
-   * undefined (no Claude, no invented form, unknown forms).
+   * Keep a player's reason for an objection (no Claude needed): later judgements involving either
+   * form hear it. False when there was nothing to keep.
    */
-  async reconsider(attackerId: string, targetId: string, verbLabel: string, shouldHaveWon = false): Promise<string | undefined> {
+  note(attackerId: string, targetId: string, text: string, failed: boolean): boolean {
+    if (cleanNote(text) === "" || this.onto.formById(attackerId) === undefined || this.onto.formById(targetId) === undefined) return false;
+    this.learned = addNote(this.learned, { form: attackerId, other: targetId, text, ...(failed ? { failed: true } : {}) });
+    this.host.saveLearned(this.learned);
+    return true;
+  }
+
+  /**
+   * A player's objection – "Quatsch!" on a win, "Hätte klappen müssen" on a failure: have the pair
+   * judged again, now knowing what the player thinks. Their reason (optional) is kept as a note, so
+   * every later judgement involving either form hears it too. The verdict counts from the next
+   * time (the duel is not rewound): invented forms learn what was missing, and the pair gets a
+   * precedent. Returns the judge's reason, or undefined (no Claude, unknown forms, no verdict).
+   */
+  async reconsider(attackerId: string, targetId: string, verbLabel: string, shouldHaveWon = false, reason = ""): Promise<string | undefined> {
     const a = this.onto.formById(attackerId);
     const t = this.onto.formById(targetId);
-    if (a === undefined || t === undefined || !this.useClaude()) return undefined;
+    if (a === undefined || t === undefined) return undefined;
+    const said = cleanNote(reason);
+    const earlier = notesAbout(this.learned, [a.id, t.id]);
+    this.note(a.id, t.id, said, shouldHaveWon);
+    if (!this.useClaude()) return undefined;
     // a player's objection is the doubt the referee otherwise waits for – for any pair; only invented forms learn
+    const because = said === "" ? "" : ` Begründung: „${said.replace(/[„“"]/g, "'")}“`;
     const objection = shouldHaveWon
-      ? `„${verbLabel}“ wurde nicht als Sieg gewertet – der Spieler meint, das hätte klappen müssen.`
-      : `„${verbLabel}“ wurde als Sieg gewertet – ein Spieler hält das für Quatsch.`;
-    const j = await judgeWithClaude(this.onto, this.host.llm(), a, t, objection);
+      ? `„${verbLabel}“ wurde nicht als Sieg gewertet – der Spieler meint, das hätte klappen müssen.${because}`
+      : `„${verbLabel}“ wurde als Sieg gewertet – ein Spieler hält das für Quatsch.${because}`;
+    const j = await judgeWithClaude(this.onto, this.host.llm(), a, t, { objection, notes: earlier });
     if (j === undefined) return undefined;
     const changes: Amendment[] = [];
     if (invented(a)) changes.push({ id: a.id, tags: j.attacker.tags, ...(j.attacker.qualities === undefined ? {} : { qualities: j.attacker.qualities }) });
