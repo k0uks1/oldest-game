@@ -7,7 +7,7 @@ import { alphaBox, artFor, artGlow, crop, resample, unionBox, type Box } from ".
 import { EMPTY_MASK, fitMask, maskOf, type Mask } from "./morph.ts";
 import { EFFECTS, type EffectKind } from "./effects.ts";
 import { EFFECT_SHEETS } from "./effects/index.ts";
-import { chooseRoom } from "./rooms.ts";
+import { carriesField, chooseRoom, ROOM_MIN_SCALE } from "./rooms.ts";
 import { ROOM_PICTURES } from "./rooms/index.ts";
 import { displaySize, renderGlow, renderSprite, type PixelImage } from "./sprite.ts";
 import { ISO } from "./stage-iso.ts";
@@ -356,6 +356,8 @@ export abstract class ArenaSim {
   private readonly roomFade = new Map<string, number>();
   private room: string | null = null;
   private roomCheck = 0;
+  /** Fields a big form brought: their room stays while they last. */
+  private readonly latched = new Set<string>();
   /** Side of the newest fighter (its mood counts first). */
   private newest: Side = 0;
   protected time = 0;
@@ -1700,7 +1702,10 @@ export abstract class ArenaSim {
       const fields = [...this.fieldFx].filter(([, fx]) => fx.target > 0).map(([id]) => id);
       const older: Side = this.newest === 0 ? 1 : 0;
       const forms = [this.fighters[this.newest], this.fighters[older]].flatMap((f) => (f === null ? [] : [f.form]));
-      this.room = chooseRoom(this.onto, fields, forms, (id) => this.rooms.has(id))?.id ?? null;
+      // a field a big form brought keeps its room while it lasts (the fire burns on after the dragon)
+      for (const id of this.latched) if (!fields.includes(id)) this.latched.delete(id);
+      for (const id of fields) if (forms.some((f) => f.scale >= ROOM_MIN_SCALE && carriesField(this.onto, f, id))) this.latched.add(id);
+      this.room = chooseRoom(this.onto, fields, forms, (id) => this.rooms.has(id), this.latched)?.id ?? null;
     }
     const speed = this.reducedMotion ? 10 : 0.7;
     for (const id of this.rooms.keys()) {

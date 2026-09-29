@@ -51,16 +51,28 @@ describe("Lebender Raum – the room takes on the mood", () => {
   const room = (fields: readonly string[], ids: readonly string[], available: (id: string) => boolean = all): string | undefined =>
     chooseRoom(onto, fields, ids.map(lx), available)?.id;
 
-  it("an arena field wins (the newest), then the forms on stage – newest first", () => {
-    assert.equal(room(["nass"], ["drache"]), "flut", "the flood outranks the dragon's magic");
-    assert.equal(room(["nass", "glut"], []), "brand");
-    assert.equal(room([], ["zombie", "hexe"]), "gruft", "the newest form sets the mood");
-    assert.equal(room([], ["hexe", "zombie"]), "arkan");
-    assert.equal(room([], ["baecker"]), undefined, "a baker leaves the dungeon as it is");
+  it("only big forms change the room: a dragon sets it on fire, a match does not", () => {
+    assert.equal(room(["glut"], ["streichholz"]), undefined, "a match lights no room");
+    assert.equal(room(["glut"], ["feuer"]), undefined, "nor a campfire (scale 3)");
+    assert.equal(room(["glut"], ["feuerelementar"]), "brand");
+    assert.equal(room(["glut"], ["drache"]), "brand", "the dragon brings the fire – not its magic mood");
+    assert.equal(room([], ["zombie"]), undefined, "a zombie is no crypt yet");
+    assert.equal(room([], ["lich"]), "gruft");
+    assert.equal(room(["nass"], ["welle"]), undefined);
+    assert.equal(room(["nass"], ["ozean"]), "flut");
+  });
+
+  it("a field a big form brought stays while it lasts; the newest big form sets the mood", () => {
+    const latched = new Set(["glut"]);
+    assert.equal(chooseRoom(onto, ["glut"], [lx("wasser")], all, latched)?.id, "brand", "the fire burns on after the dragon is gone");
+    assert.equal(room(["nass", "glut"], ["vulkan", "ozean"]), "brand", "the newest field first");
+    assert.equal(room([], ["lich", "drache"]), "gruft", "the newest form first");
+    assert.equal(room([], ["drache", "lich"]), "arkan");
+    assert.equal(room([], ["baecker"]), undefined);
   });
 
   it("only painted rooms; every field has one; the catalog's names exist", () => {
-    assert.equal(room(["nass"], ["zombie"], (id) => id !== "flut"), "gruft");
+    assert.equal(room(["nass"], ["ozean", "lich"], (id) => id !== "flut"), "gruft");
     for (const f of onto.fields) assert.ok(ROOMS.some((r) => r.field === f.id), `Feld ${f.id} hat keinen Raum`);
     for (const r of ROOMS) for (const t of r.tags ?? []) assert.ok(onto.hasTag(t), `${r.id}: ${t}`);
   });
