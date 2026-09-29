@@ -14,3 +14,18 @@ blueprints; `art-prompts.json`, `effects.json`, `rooms.json` feed the painted ar
   `tests/content.test.ts` enforces this.
 - Balancing changes: run `npm run simulate -- --games 2000` before and after, mention the diff in the PR.
 - Must scale to tens of thousands of tags/forms (`tests/scale.test.ts`).
+
+## Playing-card characters (Bavarian deck)
+
+Figures from the German-suited cards (Eichel-Ober, and any later Ober, Unter, Sau, König of Eichel, Gras, Herz, Schellen)
+always follow the **Bavarian deck's** look, not a generic fantasy one. Learned with the Eichelober (`forms/geheim.json`):
+
+- **Suit symbols as on the cards.** Eichel = yellow nut pointing up, green cross-hatched cup below, green stalk (never
+  a brown acorn with a cap on top). Keep the same symbol in every place it shows: projectiles, props, room, sprite.
+- **Card-figure dress:** Renaissance costume in the suit's colours (Eichel: green and yellow, red accents), rapier,
+  round shield with a cross emblem, flowing cape; the Ober rides or carries his suit symbol.
+- **Game lore fits the card game:** the Eichel-Ober is the highest trump in Schafkopf (flavour, aliases, moves).
+- **Secret by default:** such figures are `secret: true`, bring their own picture (`secret-art.json`) and may get a
+  suit room (`rooms.json`, `anyScale`) and a signature attack (`render/eichel.ts` pattern).
+- **Pictures:** preferably painted with PixelLab from the card motif; a hand-downscaled painting looks soft – if
+  drawn by hand, use few colours, hard edges and a dark 1-px outline.
