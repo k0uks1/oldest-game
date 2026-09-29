@@ -268,6 +268,16 @@ canvas.arena {
 .plate:empty {
   opacity: 0;
 }
+/* the name under a fighter opens its card */
+.plate:not(:empty) {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.plate:not(:empty):hover {
+  color: var(--gold);
+  text-decoration: underline dotted rgba(240, 200, 80, 0.5);
+  text-underline-offset: 4px;
+}
 
 /* ── Words over the arena ───────────────────────────────────────────────── */
 

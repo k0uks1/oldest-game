@@ -177,7 +177,12 @@ describe("Urteil für zwei erfundene Gestalten", () => {
     const reason = await r.reconsider("g:saeureradio", "ratte", "zersetzt");
     assert.equal(reason, "Ein Radio ätzt nicht.");
     assert.equal(r.onto.rulingFor("g:saeureradio", "ratte")?.valid, false);
-    assert.equal(await r.reconsider("ritter", "ratte", "durchbohrt"), undefined, "two hand-written forms: the engine's own business");
+    // an objection counts for hand-written pairs too – they get a precedent, but never change
+    const ritterTags = r.onto.formById("ritter")?.tags;
+    verdict = { sieg: true, begruendung: "Die Lanze trifft.", mechanismus: "durchbohrt", angreifer: { eigenschaften: ["schnell"] } };
+    assert.equal(await r.reconsider("ritter", "ratte", "durchbohrt", true), "Die Lanze trifft.");
+    assert.equal(r.onto.rulingFor("ritter", "ratte")?.valid, true);
+    assert.deepEqual(r.onto.formById("ritter")?.tags, ritterTags);
   });
 });
 

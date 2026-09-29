@@ -244,11 +244,15 @@ export class Resolver {
    * forms learn what was missing, and the pair gets a precedent. Returns the judge's reason, or
    * undefined (no Claude, no invented form, unknown forms).
    */
-  async reconsider(attackerId: string, targetId: string, verbLabel: string): Promise<string | undefined> {
+  async reconsider(attackerId: string, targetId: string, verbLabel: string, shouldHaveWon = false): Promise<string | undefined> {
     const a = this.onto.formById(attackerId);
     const t = this.onto.formById(targetId);
-    if (a === undefined || t === undefined || (!invented(a) && !invented(t)) || !this.useClaude()) return undefined;
-    const j = await judgeWithClaude(this.onto, this.host.llm(), a, t, `Sieg (${verbLabel}) – aber ein Spieler hält das für Quatsch. Prüfe streng.`);
+    if (a === undefined || t === undefined || !this.useClaude()) return undefined;
+    // a player's objection is the doubt the referee otherwise waits for – for any pair; only invented forms learn
+    const engine = shouldHaveWon
+      ? `kein Sieg (${verbLabel}) – aber ein Spieler meint, das hätte klappen müssen. Prüfe ehrlich, ob der Angreifer gewinnt.`
+      : `Sieg (${verbLabel}) – aber ein Spieler hält das für Quatsch. Prüfe streng.`;
+    const j = await judgeWithClaude(this.onto, this.host.llm(), a, t, engine);
     if (j === undefined) return undefined;
     const changes: Amendment[] = [];
     if (invented(a)) changes.push({ id: a.id, tags: j.attacker.tags, ...(j.attacker.qualities === undefined ? {} : { qualities: j.attacker.qualities }) });

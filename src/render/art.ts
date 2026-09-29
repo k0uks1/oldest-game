@@ -125,6 +125,58 @@ export function decodeArt(art: string): PixelImage | undefined {
   return p === w * h ? { width: w, height: h, data } : undefined;
 }
 
+export interface Box {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
+
+/** Bounding box of what is actually drawn (alpha above a faint haze), or undefined when empty. */
+export function alphaBox(img: PixelImage, threshold = 16): Box | undefined {
+  let x0 = img.width;
+  let y0 = img.height;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      if ((img.data[(y * img.width + x) * 4 + 3] ?? 0) <= threshold) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  return x1 < 0 ? undefined : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+/** The smallest box around all of them (animation frames share one crop – no jitter). */
+export function unionBox(boxes: readonly (Box | undefined)[]): Box | undefined {
+  const real = boxes.filter((b): b is Box => b !== undefined);
+  if (real.length === 0) return undefined;
+  const x0 = Math.min(...real.map((b) => b.x));
+  const y0 = Math.min(...real.map((b) => b.y));
+  const x1 = Math.max(...real.map((b) => b.x + b.w));
+  const y1 = Math.max(...real.map((b) => b.y + b.h));
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+export function crop(img: PixelImage, box: Box): PixelImage {
+  if (box.x === 0 && box.y === 0 && box.w === img.width && box.h === img.height) return img;
+  const data = new Uint8ClampedArray(box.w * box.h * 4);
+  for (let y = 0; y < box.h; y++) {
+    const s = ((box.y + y) * img.width + box.x) * 4;
+    data.set(img.data.subarray(s, s + box.w * 4), y * box.w * 4);
+  }
+  return { width: box.w, height: box.h, data };
+}
+
+/** Only the figure: transparent margins cut away (it then fills its slot and stands on the ground). */
+export function trimmed(img: PixelImage): PixelImage {
+  const box = alphaBox(img);
+  return box === undefined ? img : crop(img, box);
+}
+
 /** Nearest-neighbour resample to any size (pixel art stays crisp; same size = unchanged). */
 export function resample(img: PixelImage, width: number, height: number): PixelImage {
   if (width === img.width && height === img.height) return img;

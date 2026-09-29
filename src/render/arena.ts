@@ -3,8 +3,8 @@ import { loadImage, SCENERY, VOID } from "./scenery.ts";
 import { hash32, rng } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 import { paletteFor, type SpritePalette } from "./palette.ts";
-import { artFor, artGlow, resample } from "./art.ts";
-import { renderGlow, renderSprite, spriteSize, type PixelImage } from "./sprite.ts";
+import { alphaBox, artFor, artGlow, crop, resample, unionBox, type Box } from "./art.ts";
+import { displaySize, renderGlow, renderSprite, type PixelImage } from "./sprite.ts";
 import { ISO } from "./stage-iso.ts";
 import { FLOOR_Y, GROUND_Y, HEIGHT, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
 
@@ -613,12 +613,16 @@ export abstract class ArenaSim {
   }
 
   /** A generated picture (or animation frame) filling the form's sprite slot at the renderer's density. */
-  private pictureEntry(form: Form, art: PixelImage, palette: SpritePalette): SpriteEntry {
+  private pictureEntry(form: Form, art: PixelImage, palette: SpritePalette, box?: Box): SpriteEntry {
     const d = this.density;
-    const side = spriteSize(form.scale);
-    const w = Math.max(1, Math.round((art.width / Math.max(art.width, art.height)) * side));
-    const h = Math.max(1, Math.round((art.height / Math.max(art.width, art.height)) * side));
-    const pixels = resample(art, w * d, h * d);
+    // only the figure (it stands on the ground, no halo of empty pixels), at the picture's own
+    // detail: ART_DENSITY picture pixels per arena pixel, so Pixi (density 2) shows it unstretched
+    const cut = crop(art, box ?? alphaBox(art) ?? { x: 0, y: 0, w: art.width, h: art.height });
+    // the whole picture spans the form's display size (older pictures made at another size scale to it)
+    const perArena = Math.max(art.width, art.height) / displaySize(form.scale);
+    const w = Math.max(1, Math.round(cut.width / perArena));
+    const h = Math.max(1, Math.round(cut.height / perArena));
+    const pixels = resample(cut, w * d, h * d);
     return {
       image: toCanvas(pixels),
       glow: toCanvas(artGlow(pixels, palette.emissive)),
@@ -644,7 +648,9 @@ export abstract class ArenaSim {
       const f = this.fighters[side];
       if (f?.form.id !== formId || frames.length < 2) continue;
       const palette = f.sprite.palette;
-      const entries = frames.map((img) => this.pictureEntry(f.form, img, palette));
+      // one crop for all frames: the figure moves inside it instead of the frame jumping
+      const box = unionBox(frames.map((img) => alphaBox(img)));
+      const entries = frames.map((img) => this.pictureEntry(f.form, img, palette, box));
       const first = entries[0];
       if (first === undefined) continue;
       // the fighter's own canvases, repainted frame by frame

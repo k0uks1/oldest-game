@@ -61,8 +61,9 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
    Second exception, the **judge** (`src/llm/judge.ts`, „Urteil“): when *at least one* form is invented (a learned
    `g:` form), Claude judges the pair outright – but must name what was missing in the open property format. `amend()`
    teaches the invented forms (validated like `learn`; core forms never change), the engine re-checks with them, and
-   only a remaining disagreement is stored as a ruling. Once per pair. „Quatsch?“ on such a win has the pair judged
-   again (`Resolver.reconsider`, counts from the next time). A denying ruling holds for every mechanism of the pair
+   only a remaining disagreement is stored as a ruling. Once per pair. A player's objection – „Quatsch?“ on a win,
+   „Hätte klappen müssen?“ on a failure – has any pair judged again (`Resolver.reconsider`, counts from the next time;
+   only invented forms learn, hand-written pairs get a ruling at most). A denying ruling holds for every mechanism of the pair
    (escape stays possible).
 2. **Classification is independent of the opponent.** `parseWithClaude` gets only the player's
    text plus lexicon anchors, never the current target. Results are cached per text.
@@ -131,8 +132,10 @@ facing right, transparent, one fixed style recipe in `server/pixellab.ts`) and k
 (`learned/art/`, next to the learned pack – the Docker volume). The store key is a hash of the **description**
 and size (`artKey`), not the form: variants (the hunter in a red coat) are separate pictures, equal descriptions
 share one. Descriptions: core forms `content/core/art-prompts.json`, learned forms `artPrompt` (Claude's `bild`).
-Pictures carry `ART_DENSITY` (2)× the detail of the sprite slot (`artSize`); the Pixi arena renders at that
-density (scene in arena pixels, fighter sprites at ½ scale), the canvas fallback at 1.
+Pictures show at `displaySize(scale)` (a finer ladder than drawn sprites: 40 · 48 · 64 · 80 · 96 · 112 · 120 · 128)
+and are made at `ART_DENSITY` (2)× that (`artSize`); transparent margins are cut away (`trimmed`, animation frames
+share one crop), so figures fill their place and stand on the ground. The Pixi arena renders at that density (scene
+in arena pixels, fighter sprites at ½ scale), the canvas fallback at 1. Clicking the name under a fighter opens its card.
 Clients ask by form id (`art` message online, `GET /api/art` for the local hot-seat) and get ready / pending /
 none; pending ones are pushed (online) or polled (local). While a picture is on its way the rune circle
 conjures (pentagram of runes), then flares and the form appears; after a reconnect pictures are asked again.

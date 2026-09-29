@@ -28,6 +28,16 @@ export function upscalePasses(scale: number): number {
   return scale <= 2 ? 1 : scale <= 5 ? 2 : 3;
 }
 
+/**
+ * On-screen size of a *generated* picture per scale – a finer ladder than the drawn sprites'
+ * three steps (a cat is not a flea, a dragon is not a knight). Arena pixels; the picture itself
+ * is made at ART_DENSITY× this, so it is never stretched by an odd factor.
+ */
+const DISPLAY_SIZES = [40, 40, 48, 64, 80, 96, 112, 120, 128] as const;
+export function displaySize(scale: number): number {
+  return DISPLAY_SIZES[Math.max(1, Math.min(8, Math.round(scale)))] ?? 64;
+}
+
 /** EPX / Scale2x: doubles resolution while keeping diagonals smooth. */
 export function epx(grid: Grid): Grid {
   const h = grid.length;
