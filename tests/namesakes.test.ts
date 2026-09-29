@@ -38,13 +38,13 @@ const bibel = {
   new_mechanism: null,
 };
 
-function fakeClaude(): string[] {
+function fakeClaude(answer: unknown = bibel): string[] {
   const asked: string[] = [];
   globalThis.fetch = (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const body = JSON.parse(typeof init?.body === "string" ? init.body : "{}") as { tools?: { name: string }[]; messages: { content: string }[] };
     const tool = body.tools?.[0]?.name ?? "text";
     asked.push(tool);
-    const content = tool === "text" ? [{ type: "text", text: "…" }] : [{ type: "tool_use", input: bibel }];
+    const content = tool === "text" ? [{ type: "text", text: "…" }] : [{ type: "tool_use", input: answer }];
     return Promise.resolve(new Response(JSON.stringify({ content, usage: {} }), { status: 200 }));
   };
   return asked;
@@ -73,6 +73,29 @@ describe("Eine Gestalt, ein Eintrag", () => {
     const parses = asked.filter((t) => t === "gestalt").length;
     await r.resolve(createGame(["A", "B"]), "die heilige Bibel");
     assert.equal(asked.filter((t) => t === "gestalt").length, parses, "the new wording is known now – no Claude call");
+  });
+
+  it("the player's own name stays: a lookalike of a lexicon form is not played as that form", async () => {
+    // Claude took the monk as base (a „heiliger“ anchor) and changed nothing – still an „Unheiliger Franzose“
+    fakeClaude({ name: "Unheiliger Franzose", base: "moench", scale: 3, plane: "geist", archetype: "humanoid", properties: [], mechanisms: [], weaknesses: [], intended_mechanism: null });
+    const r = resolver();
+    const t = await r.resolve(createGame(["A", "B"]), "unheiliger Franzose");
+    assert.ok(t.kind === "turn");
+    assert.equal(t.turn.form.name, "Unheiliger Franzose");
+    assert.notEqual(t.turn.form.id, "moench");
+    // typing the lexicon form itself still plays the original
+    fakeClaude({ name: "Mönch", base: "moench", scale: 3, plane: "geist", archetype: "humanoid", properties: [], mechanisms: [], weaknesses: [], intended_mechanism: null });
+    const m = await r.resolve(createGame(["A", "B"]), "ein Mönch");
+    assert.ok(m.kind === "turn");
+    assert.equal(m.turn.form.id, "moench");
+  });
+
+  it("anchors: typos yes, lookalikes no – „unheiliger“ is not the monk's „heiliger“", async () => {
+    const { anchorsFor } = await import("../src/llm/parser.ts");
+    const onto = Ontology.compile([core]);
+    assert.deepEqual(anchorsFor(onto, "unheiliger Franzose"), []);
+    assert.deepEqual(anchorsFor(onto, "Wolff").map((f) => f.id), ["wolf"]);
+    assert.deepEqual(anchorsFor(onto, "gläserner Wolf").map((f) => f.id), ["wolf"]);
   });
 
   it("twins made before are folded into the first: aliases, precedents, notes and evidence follow", () => {

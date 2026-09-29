@@ -18,6 +18,7 @@ import { describeInsight, learnInsights } from "./insight.ts";
 import type { AnimMove, Form, GameState, PlayerId } from "../engine/types.ts";
 import { isClaudeReady, type LlmSettings } from "../llm/client.ts";
 import { addAlias, addNote, addRuling, amend, cleanNote, findLearned, learn, namesakeOf, notesAbout, type Amendment } from "../llm/learning.ts";
+import { normalize } from "../engine/text.ts";
 import { judgeWithClaude } from "../llm/judge.ts";
 import { movesWithClaude } from "../llm/moves.ts";
 import { loreWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
@@ -110,8 +111,10 @@ export class Resolver {
     if (known !== undefined) return { ok: true, form: known, verb: null, novelty: { kind: "remembered", by: this.learnedSpec(known.id)?.discoveredBy ?? null } };
     const r = await parseWithClaude(this.onto, this.host.llm(), text);
     if (r === undefined) return { ok: false, reason: "Diese Gestalt lässt sich nicht fassen. Beschreibe sie anders." };
-    // A plain lexicon entry (no changes, nothing new) is not worth remembering – play the original.
-    if (r.base !== null && r.delta.tags.length === 0 && r.delta.verbs.length === 0 && (r.delta.qualities ?? []).length === 0 && sameShape(r.form, r.base)) {
+    // A plain lexicon entry (no changes, nothing new, not even another name) is not worth remembering –
+    // play the original. The player's own name and variations always stay theirs.
+    const plain = r.base !== null && (r.form.mods ?? []).length === 0 && normalize(r.form.name) === normalize(r.base.name);
+    if (plain && r.delta.tags.length === 0 && r.delta.verbs.length === 0 && (r.delta.qualities ?? []).length === 0 && sameShape(r.form, r.base)) {
       return { ok: true, form: r.base, verb: r.intendedVerb, novelty: null };
     }
     // The same thing in other words ("die Bibel" after "Bibel"): the known form, now also under this wording.

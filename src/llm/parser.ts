@@ -2,7 +2,7 @@ import { ESCAPE } from "../engine/rules.ts";
 import { ITEM_IDS, knownLook, SYMBOL_IDS } from "../render/look.ts";
 import { SKETCH_EXAMPLES, SKETCH_GUIDE, sanitizeSketch } from "../render/svgsprite.ts";
 import { MAX_LEVEL, type Ontology } from "../engine/ontology/ontology.ts";
-import { parseForm, suggest } from "../engine/parse.ts";
+import { parseForm } from "../engine/parse.ts";
 import { clampScale } from "../engine/rules.ts";
 import { hash32, normalize } from "../engine/text.ts";
 import { ARCHETYPES, PLANES, TONES, type AnimMove, type Archetype, type Form, type FormLook, type Plane, type Tone } from "../engine/types.ts";
@@ -223,7 +223,8 @@ STUFEN (Größe/Reichweite): 1 winzig (Funke, Floh, Wort) · 2 klein (Katze, Dol
 
 ANKER: Im Nutzertext stehen passende Einträge aus dem Lexikon. Ist die Gestalt im Kern ein Anker (auch abgewandelt,
 z. B. „gläserner Wolf“ → Anker wolf), setze base auf dessen ID, übernimm dessen Stufe (Adjektive wie „riesig“ ±1, höchstens ±2)
-und gib nur Unterschiede an. Sonst base = null und eine vollständige Einordnung.
+und gib nur Unterschiede an. Sonst base = null und eine vollständige Einordnung. Ein Anker, der nur ähnlich klingt oder das
+Gegenteil meint, ist keiner („unheiliger Franzose“ ist kein Mönch) – dann base = null.
 
 EIGENSCHAFTEN – verwende bevorzugt diese Begriffe (andere Wörter werden automatisch auf den nächsten bekannten abgebildet):
 ${vocab}
@@ -290,9 +291,9 @@ export function anchorsFor(onto: Ontology, text: string, limit = 5): Form[] {
   const out: Form[] = [];
   const offline = parseForm(onto, text);
   if (offline.ok) out.push(offline.base);
-  for (const name of suggest(onto, text, limit)) {
-    const f = onto.formByAlias(normalize(name).replaceAll(" ", ""));
-    if (f !== undefined && !out.includes(f)) out.push(f);
+  // similar-sounding words only as typos (one letter): „unheiliger“ is not „heiliger“ (the monk)
+  for (const word of normalize(text).split(" ").filter((w) => w.length >= 4)) {
+    for (const hit of onto.fuzzyForms(word, 1, limit)) if (!out.includes(hit.value)) out.push(hit.value);
   }
   return out.slice(0, limit);
 }
