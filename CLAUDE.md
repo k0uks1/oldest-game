@@ -17,6 +17,7 @@ npm run simulate   # balancing report; add `-- --games 2000` for bot self-play
 npm run sheet -- items   # sprite contact sheet PNG (items | emblems a+b,c | form ids)
 npm run audit            # Prüfstand: suspicious wins in the lexicon (the engine-rebuild yardstick)
 npm run art -- status    # picture store: status | ingest <png-dir> | warm [--limit N] (needs PIXELLAB_API_KEY)
+npm run scenery          # repaint the arena rooms + void with PixelLab from our procedural render (needs the key + Playwright)
 ```
 
 ## Architecture
@@ -145,6 +146,14 @@ picture + action, `learned/anim/`, budget `ANIM_MONTHLY_LIMIT`, default 150); a 
 one is refunded. Online the server counts (`animate` → `anim` to the whole room, `welcome.anim`); the local hot-seat
 polls `GET /api/animate` and counts in the page. The arena plays the frames in a loop into the fighter's own canvases
 (`ArenaSim.animate`, `spriteRepainted` refreshes Pixi textures).
+
+### Painted scenery (`render/scenery.ts`, `npm run scenery`)
+
+The rooms (iso, flat) and the void behind the crumbling wall are PixelLab repaints of our own procedural render
+(`edit-images-v2`, edit_with_text – the render is the input, so the geometry the rules and fighters rely on stays put).
+Bundled as PNG data URLs (esbuild `dataurl` loader, `src/assets.d.ts`); the arena paints the procedural scene first and
+swaps in the pictures once decoded (`loadScenery`); `?drawn` keeps the procedural one. Animated things (torch flames,
+banners, rune circle, eyes, crumbling bricks) stay drawn on top. Change the stage geometry → rerun `npm run scenery`.
 
 ### Sprites from parts ("Bauplan", `render/look.ts`)
 

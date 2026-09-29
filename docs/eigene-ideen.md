@@ -435,3 +435,11 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Fair gezählt** | Online zählt der Server und alle im Raum sehen die Belebung; schlägt sie fehl, gibt es die Ladung zurück. Schon einmal Belebtes kommt aus dem Speicher und kostet nichts. | `server/online.ts`, `anim-service.ts` |
 | **Warten ohne Stillstand** | Während PixelLab arbeitet (1–3 Minuten), läuft das Duell normal weiter; der Knopf atmet „✦ wird belebt …“. | `AnimClient` |
 
+## Gemalte Kulisse (Nutzerwunsch: „jag alle Hintergründe durch die Pixel-API“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Unsere Kulisse als Vorlage** | Statt einen neuen Raum zu erfinden, bekommt PixelLab unseren gezeichneten Raum und malt ihn neu – Wände, Bodenlinie, Tor und Runenkreis bleiben exakt da, wo Regeln und Kämpfer sie erwarten. Mehr Stein, Moos, Knochen und warmes Fackellicht auf kaltem Violett. | `scripts/scenery.ts` |
+| **Auch das Dahinter** | Die Leere hinter den Mauern, die bei kosmischen Gestalten aufbrechen, ist jetzt ein gemalter Sternenhimmel mit Nebelband und fernen Galaxien. | `scenery/void.png` |
+| **Bewegtes bleibt lebendig** | Fackelflammen, Banner, Runenkreis, Augen im Dunkel und aufbrechende Steine werden weiter darüber gezeichnet. Bis die Bilder dekodiert sind, steht der gezeichnete Raum; `?drawn` behält ihn. | `ArenaSim.loadScenery` |
+
