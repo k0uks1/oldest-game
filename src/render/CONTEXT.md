@@ -71,16 +71,17 @@ symbols `m`/`n`), `emblem` + `badge` (library symbols composed into one sketch �
 freehand drawings), `main`/`second` colours. Claude picks ids from closed enums (`aussehen` in the parser);
 a freehand `skizze` only when no part fits. Unknown ids are dropped (`knownLook`).
 
-## Secret characters (`render/eichel.ts`)
+## Standard pictures and animations (`render/eichel.ts`, `render/form-anims/`)
 
-Forms with `secret: true` (`content/core/forms/geheim.json`) stay out of the grimoire until this browser has seen them
-summoned (`oldest-game:secrets`). Their pictures come with the game (`content/core/secret-art.json`, id → art string,
-PixelLab `generate-image-v2` from a design with reference images – the Eichelober from `docs/art/eichelober-vorlage.png`
+Some forms bring a standard picture made once and bundled (`content/core/form-art.json`, id → art string): the
+Eichel figures (`content/core/forms/spielkarten.json`) – PixelLab `generate-image-v2` from a design with reference images
+– the Eichelober from `docs/art/eichelober-vorlage.png`
 mirrored plus a Bavarian acorn, the gang from text + the Eichelober as coat of arms, then an `edit-images-v2` pass for
-the acorn sack). Stored **untrimmed** at the art size (160 / 128 px) so still and animation frames share one scale.
-**Their own animations** (`render/secret/<id>.png` loop, `<id>-attack.png` with the signature; square frames side by
-side, `SECRET_ANIMS`; PixelLab animate-with-text-v3 / pixminimax on the picture): the loop starts at `summon`, the attack
-strip loops while the signature plays (`withSecretMove`), one crop for still and strips (`secretBox`). The **Eichelober**
+the acorn sack; single members – slingshot shooter, sack carrier, banner bearer, 96 px = scale 2 – lie in
+`docs/art/eichelober-gang/` as a base for a lone member or later animations). Stored **untrimmed** at the art size (160 / 128 px) so still and animation frames share one scale.
+**Their own animations** (`render/form-anims/<id>.png` loop, `<id>-attack.png` with the signature; square frames side by
+side, `FORM_ANIMS`; PixelLab animate-with-text-v3 / pixminimax on the picture): the loop starts at `summon`, the attack
+strip loops while the signature plays (`withSignatureMove`), one crop for still and strips (`animBox`). The **Eichelober**
 arrives in a shower of acorns and attacks with the
 *Eichelkäseattacke* (an acorn machine gun: a stream of acorns with tracers, then one giant acorn) while he thrusts his
 rapier; every acorn is drawn after the Eichel of the Bavarian cards (yellow nut up, green hatched cup and stalk); the

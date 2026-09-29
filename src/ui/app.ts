@@ -132,31 +132,6 @@ function rememberedName(): string {
   }
 }
 
-const SECRETS_KEY = "oldest-game:secrets";
-
-/** Secret characters this browser has seen summoned (they show in the grimoire from then on). */
-function unlockedSecrets(): Set<string> {
-  try {
-    const raw: unknown = JSON.parse(localStorage.getItem(SECRETS_KEY) ?? "[]");
-    return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : []);
-  } catch {
-    return new Set();
-  }
-}
-
-/** Remember a secret character; true when it was not known yet. */
-function unlockSecret(id: string): boolean {
-  const known = unlockedSecrets();
-  if (known.has(id)) return false;
-  known.add(id);
-  try {
-    localStorage.setItem(SECRETS_KEY, JSON.stringify([...known]));
-  } catch {
-    /* storage unavailable */
-  }
-  return true;
-}
-
 function rememberName(name: string): void {
   try {
     if (name !== "") localStorage.setItem(NAME_KEY, name);
@@ -669,10 +644,6 @@ export class App {
     }
     const egg = easterEggFor(form.name);
     if (egg !== null) await this.arena.easterEgg(egg, actor);
-    if (form.secret === true && unlockSecret(form.id)) {
-      this.showSub("★ Geheimfigur freigeschaltet", false);
-      await sleep(900);
-    }
     if (discovery) {
       this.showSub(novelty.extra.length > 0 ? `✦ zum ersten Mal beschworen · ${novelty.extra.join(" · ")}` : "✦ zum ersten Mal beschworen", false);
       await this.arena.discover(actor);
@@ -1824,9 +1795,7 @@ export class App {
       },
     });
     const learnedIds = new Set(this.learned.forms.map((f) => f.id));
-    // secret characters stay out of the grimoire until they have been summoned here once
-    const secrets = unlockedSecrets();
-    const shown = this.onto.lexicon.filter((f) => f.secret !== true || secrets.has(f.id));
+    const shown = this.onto.lexicon;
     const tabAll = h("button", { class: "tab" }, `Alle · ${String(shown.length)}`);
     const tabNew = h("button", { class: "tab" }, `✦ Entdeckt · ${String(this.learned.forms.length)}`);
     const tabs = h("div", { class: "tabs" }, tabNew, tabAll);

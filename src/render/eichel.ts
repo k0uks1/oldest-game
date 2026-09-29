@@ -1,5 +1,5 @@
 /**
- * The Eichelober and his gang – the secret characters' own show: the acorn they fire (drawn after
+ * The Eichelober and his gang – their own show: the acorn they fire (drawn after
  * the Eichel of the Bavarian cards), the gang tattoo made from the Eichelober's picture, and which signature attack a
  * name asks for. Presentation only – the engine decides the outcome as for every other form.
  */

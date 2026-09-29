@@ -18,15 +18,16 @@ blueprints; `art-prompts.json`, `effects.json`, `rooms.json` feed the painted ar
 ## Playing-card characters (Bavarian deck)
 
 Figures from the German-suited cards (Eichel-Ober, and any later Ober, Unter, Sau, König of Eichel, Gras, Herz, Schellen)
-always follow the **Bavarian deck's** look, not a generic fantasy one. Learned with the Eichelober (`forms/geheim.json`):
+always follow the **Bavarian deck's** look, not a generic fantasy one. Learned with the Eichelober (`forms/spielkarten.json`):
 
 - **Suit symbols as on the cards.** Eichel = yellow nut pointing up, green cross-hatched cup below, green stalk (never
   a brown acorn with a cap on top). Keep the same symbol in every place it shows: projectiles, props, room, sprite.
 - **Card-figure dress:** Renaissance costume in the suit's colours (Eichel: green and yellow, red accents), rapier,
   round shield with a cross emblem, flowing cape; the Ober rides or carries his suit symbol.
 - **Game lore fits the card game:** the Eichel-Ober is the highest trump in Schafkopf (flavour, aliases, moves).
-- **Secret by default:** such figures are `secret: true`, bring their own picture (`secret-art.json`) and may get a
-  suit room (`rooms.json`, `anyScale`) and a signature attack (`render/eichel.ts` pattern).
+- **A standard comes with the game:** such figures are ordinary lexicon forms (in the grimoire from the start) that
+  bring their own picture (`form-art.json`, id → art string), may bring animations (`render/form-anims/`), a suit room
+  (`rooms.json`, `anyScale`) and a signature attack (`render/eichel.ts` pattern).
 - **Pictures:** painted with PixelLab from the card motif (`generate-image-v2` with the design and a Bavarian acorn
   as reference images – describe the acorn explicitly, or it comes out brown); a hand-downscaled painting looks soft.
-  Animations and the suit room: see `src/render/CONTEXT.md` (Secret characters).
+  Animations and the suit room: see `src/render/CONTEXT.md` (Standard pictures and animations).

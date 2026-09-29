@@ -161,8 +161,6 @@ export interface FormSpec {
   readonly qualities?: Readonly<Record<string, number>>;
   readonly aliases?: readonly string[];
   readonly flavor?: string;
-  /** Secret character: hidden from the grimoire until someone has summoned it. Presentation only. */
-  readonly secret?: true;
   /** Custom 16×16 pixel art (rows of . # + o * ,) – validated by the ontology compiler. */
   readonly sprite?: readonly string[];
   /** SVG sketch in the sketch colour roles (core content: `content/core/sketches.json`). */
@@ -486,7 +484,6 @@ export function parsePack(input: unknown): PackResult {
         ...opt("qualities", c.levels(o, "qualities", w)),
         ...opt("aliases", c.list(o, "aliases", w)),
         ...opt("flavor", c.optStr(o, "flavor", w)),
-        ...(o["secret"] === true ? { secret: true as const } : {}),
         ...opt("sprite", c.list(o, "sprite", w)),
         ...opt("sketch", c.optStr(o, "sketch", w)),
         ...opt("look", c.look(o, "look", w)),

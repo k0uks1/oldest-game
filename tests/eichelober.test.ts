@@ -6,14 +6,14 @@ import { signatureFor } from "../src/render/eichel.ts";
 import { artFor } from "../src/render/art.ts";
 import { chooseRoom } from "../src/render/rooms.ts";
 
-describe("Eichelober – secret characters", () => {
+describe("Eichelober and his gang", () => {
   const onto = coreOntology();
 
-  it("both are secret, bring their own picture and can still be beaten", () => {
+  it("both are in the grimoire from the start, bring their standard picture and can still be beaten", () => {
     for (const id of ["eichelober", "eichelober_gang"]) {
       const f = onto.formById(id);
       assert.ok(f !== undefined, id);
-      assert.equal(f.secret, true, `${id}: secret`);
+      assert.ok(onto.lexicon.includes(f), `${id}: in the lexicon`);
       assert.ok(artFor(f) !== undefined, `${id}: picture`);
       assert.ok(findCounters(onto, f).length > 0, `${id}: counterable`);
     }
