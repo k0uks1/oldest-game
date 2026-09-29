@@ -7,7 +7,7 @@
  *   display (1920×1080) = base ×4 nearest + bloom + crisp glow core + impact flash
  */
 import type { Ontology } from "../engine/ontology/ontology.ts";
-import { canvas, ctx2d, easeOut, HEIGHT, UPSCALE, WIDTH, type Fighter, type Side } from "./arena.ts";
+import { canvas, ctx2d, easeOut, HEIGHT, UPSCALE, WIDTH, type Fighter, type ImageDraw, type Side } from "./arena.ts";
 import { CanvasPen } from "./pen.ts";
 import { ArenaScene } from "./scene.ts";
 import type { StageLayout } from "./stage.ts";
@@ -49,12 +49,32 @@ export class CanvasArena extends ArenaScene {
     b.translate(sx, sy);
     g.translate(sx, sy);
     b.drawImage(this.backdrop, 0, 0);
+    const pictures = this.imageDraws();
+    this.drawPictures(pictures, "backdrop");
     this.drawBack(this.pens.base, this.pens.glow);
     for (const [side, f] of this.fighters.entries()) if (f !== null) this.drawFighter(side as Side, f);
+    this.drawPictures(pictures, "front");
     this.drawFront(this.pens.base, this.pens.glow);
     b.restore();
     g.restore();
     this.composite();
+  }
+
+  private drawPictures(list: readonly ImageDraw[], layer: ImageDraw["layer"]): void {
+    for (const p of list) {
+      if (p.layer !== layer || p.alpha <= 0) continue;
+      for (const [ctx, a] of [[this.base, p.alpha], [this.glow, p.alpha * p.glow]] as const) {
+        if (a <= 0) continue;
+        ctx.save();
+        ctx.globalAlpha = a;
+        if (p.flip) {
+          ctx.translate(p.x + p.w, p.y);
+          ctx.scale(-1, 1);
+          ctx.drawImage(p.image, 0, 0, p.w, p.h);
+        } else ctx.drawImage(p.image, p.x, p.y, p.w, p.h);
+        ctx.restore();
+      }
+    }
   }
 
   /** base ×4 nearest-neighbour, then two blurred bloom passes added on top. */

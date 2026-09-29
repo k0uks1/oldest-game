@@ -35,6 +35,7 @@ import { describeInsight } from "../game/insight.ts";
 import { artFor, hasArt, trimmed } from "../render/art.ts";
 import { renderSprite, type PixelImage } from "../render/sprite.ts";
 import { cardView } from "./card-view.ts";
+import { chooseEffect } from "../render/effects.ts";
 import { LoreClient } from "./lore-client.ts";
 import { AnimClient, httpAnimTransport, socketAnimTransport } from "./anim-client.ts";
 import { ANIM_ACTION_IDS, animLabel, MOVE_ACTIONS, type AnimAction } from "../online/protocol.ts";
@@ -660,7 +661,7 @@ export class App {
         this.flashBanner(hidden ? "Versteckt." : "Entkommen.", "good");
       } else if (move.verb !== null) {
         const kind = move.check?.outcome ?? "vernichtet";
-        await this.arena.attack(actor, this.styleOf(move.verb), move.check?.weaknessHit === true, attackOutcome(kind));
+        await this.arena.attack(actor, this.styleOf(move.verb), move.check?.weaknessHit === true, attackOutcome(kind), this.effectOf(form, move.verb));
         const how = VICTORY_TEXT[kind] ?? "";
         this.flashBanner(`Es genügt${how === "" ? "." : ` – ${how}`}${move.eleganz > 1 ? `  ✦ ${String(move.eleganz)}` : ""}`, "good");
       }
@@ -671,7 +672,7 @@ export class App {
       why = [...(f.closest?.check.steps.map((st) => st.text) ?? []), f.reason].filter((t, i, a) => a.indexOf(t) === i);
       const verb = f.closest?.verb;
       const answer = this.onto.compileForm(f.target).verbs.find((v) => reaches(this.onto, v, f.form));
-      await this.arena.fizzle(actor, verb === undefined ? "slash" : this.styleOf(verb), answer === undefined ? null : this.styleOf(answer));
+      await this.arena.fizzle(actor, verb === undefined ? "slash" : this.styleOf(verb), answer === undefined ? null : this.styleOf(answer), verb === undefined ? undefined : this.effectOf(form, verb));
       this.flashBanner("Es genügt nicht.", "bad");
       if (f.closest !== null) this.showWhy(form, f.closest.check, false, f.reason);
     }
@@ -838,6 +839,11 @@ export class App {
         ...fields.map((f) => h("p", {}, h("strong", {}, f.spec.label), ` – ${f.spec.hint} (noch ${String(f.remaining)} Zug${f.remaining === 1 ? "" : "e"})`)),
       );
     }
+  }
+
+  /** The painted attack animation that fits this winner and mechanism best (if the arena has it). */
+  private effectOf(form: Form, verb: string): string | undefined {
+    return chooseEffect(this.onto, form, verb, (id) => this.arena.hasEffect(id))?.id;
   }
 
   private styleOf(verb: string): AttackStyle {

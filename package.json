@@ -17,6 +17,8 @@
     "test": "tsx --test tests/*.test.ts",
     "art": "tsx scripts/art.ts",
     "scenery": "tsx scripts/scenery.ts",
+    "effects": "tsx scripts/effects.ts",
+    "rooms": "tsx scripts/rooms.ts",
     "audit": "tsx scripts/audit.ts",
     "sheet": "tsx scripts/sheet.ts",
     "simulate": "tsx scripts/simulate.ts",

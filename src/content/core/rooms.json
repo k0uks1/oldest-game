@@ -1,0 +1,16 @@
+[
+  {"id": "flut", "field": "nass", "repaint": "the dungeon is flooded: dark water up to the ankles covering the floor, reflections, dripping walls, extinguished torches", "motion": "water rippling gently, drops falling, reflections shimmering"},
+  {"id": "brand", "field": "glut", "repaint": "the dungeon is on fire: flames on the floor and the banners, glowing embers, orange firelight", "motion": "flames flickering and dancing, embers drifting upward, firelight pulsing"},
+  {"id": "eis", "field": "frost", "repaint": "the dungeon is frozen: ice covering the walls and floor, icicles hanging, frost crystals, cold blue light", "motion": "snow falling softly, frost glittering, cold mist drifting"},
+  {"id": "finster", "field": "finsternis", "repaint": "the dungeon in near total darkness, only faint shapes, glowing eyes in the shadows, black mist", "motion": "shadows creeping and swirling, eyes blinking in the dark"},
+  {"id": "nebel", "field": "stille", "repaint": "the dungeon filled with thick pale grey fog, silent and still, faded colors", "motion": "fog drifting slowly across the floor"},
+  {"id": "sturm", "field": "sturm", "repaint": "a violent storm inside the dungeon: wind blowing debris and leaves, banners torn sideways, dust whirling", "motion": "wind gusting, debris flying sideways, banners flapping"},
+  {"id": "einsturz", "field": "staub", "repaint": "the dungeon partly collapsed: fallen stones, cracked walls, thick dust in the air", "motion": "dust drifting down, small stones falling"},
+  {"id": "heilig", "tags": ["heilig", "licht"], "repaint": "holy golden light pouring into the dungeon from above, glowing rays, floating light motes, warm glow on the stones", "motion": "light rays shimmering, golden motes floating upward"},
+  {"id": "gruft", "tags": ["untot"], "repaint": "the dungeon turned into a haunted crypt: tombstones, cobwebs, eerie green ghost fire on candles", "motion": "ghost fire flickering, faint spirits drifting"},
+  {"id": "arkan", "tags": ["magisch"], "repaint": "arcane magic fills the dungeon: floating glowing runes, purple magic circles on the walls, sparkling energy", "motion": "runes floating and rotating, sparkles twinkling"},
+  {"id": "wald", "tags": ["pflanze"], "repaint": "the dungeon overgrown by a magic forest: vines and roots covering the walls, flowers and moss on the floor, leaves", "motion": "leaves swaying, flowers bobbing, pollen drifting"},
+  {"id": "gift", "tags": ["gift", "giftig", "saeure"], "repaint": "toxic green poison fog in the dungeon, bubbling green puddles, sickly green light", "motion": "green fog swirling, bubbles popping in the puddles"},
+  {"id": "funken", "tags": ["maschine", "elektrisch"], "repaint": "the dungeon filled with machinery: pipes, gears, sparking cables, electric blue arcs, steam", "motion": "sparks crackling, gears turning, steam puffing"},
+  {"id": "traum", "tags": ["traum"], "repaint": "a dreamlike dungeon: pastel colored clouds, floating stars and moons, soft glow, surreal", "motion": "clouds drifting, stars twinkling softly"}
+]

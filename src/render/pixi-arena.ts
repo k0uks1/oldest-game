@@ -65,6 +65,11 @@ export class PixiArena extends ArenaScene {
   private readonly front: { readonly base: PixiPen; readonly glow: PixiPen };
   private readonly fightersBase = new Container();
   private readonly fightersGlow = new Container();
+  /** Pictures (attack effects, room states) – a pool of sprites per layer, reused every frame. */
+  private readonly pictureLayers = {
+    backdrop: { base: new Container(), glow: new Container() },
+    front: { base: new Container(), glow: new Container() },
+  } as const;
   private readonly flashRect = new Graphics();
 
   constructor(
@@ -81,8 +86,9 @@ export class PixiArena extends ArenaScene {
     this.front = { base: pen(), glow: pen() };
     this.backdropTex = Texture.from(this.backdrop);
     this.backdropTex.source.scaleMode = "nearest";
-    this.baseRoot.addChild(new Sprite(this.backdropTex), this.back.base.root, this.fightersBase, this.front.base.root);
-    this.glowRoot.addChild(this.back.glow.root, this.fightersGlow, this.front.glow.root);
+    const pl = this.pictureLayers;
+    this.baseRoot.addChild(new Sprite(this.backdropTex), pl.backdrop.base, this.back.base.root, this.fightersBase, pl.front.base, this.front.base.root);
+    this.glowRoot.addChild(pl.backdrop.glow, this.back.glow.root, this.fightersGlow, pl.front.glow, this.front.glow.root);
     this.baseRoot.scale.set(DENSITY);
     this.glowRoot.scale.set(DENSITY);
     this.ready = this.init();
@@ -199,6 +205,7 @@ export class PixiArena extends ArenaScene {
 
     const pens = [this.back.base, this.back.glow, this.front.base, this.front.glow];
     for (const p of pens) p.begin();
+    this.syncPictures();
     this.drawBack(this.back.base, this.back.glow);
     this.syncFighters();
     this.drawFront(this.front.base, this.front.glow);
@@ -212,6 +219,28 @@ export class PixiArena extends ArenaScene {
     this.flashRect.clear();
     if (this.flash > 0) this.flashRect.rect(0, 0, WIDTH * UPSCALE, HEIGHT * UPSCALE).fill({ color: colorNum(this.flashColor), alpha: this.flash });
     r.render({ container: this.screen });
+  }
+
+  /** This frame's pictures into the pooled sprites of their layer (base, and the bloom share). */
+  private syncPictures(): void {
+    const list = this.imageDraws();
+    for (const layer of ["backdrop", "front"] as const) {
+      const mine = list.filter((p) => p.layer === layer);
+      for (const [pool, glow] of [[this.pictureLayers[layer].base, false], [this.pictureLayers[layer].glow, true]] as const) {
+        while (pool.children.length < mine.length) pool.addChild(new Sprite());
+        for (const [i, child] of pool.children.entries()) {
+          const p = mine[i];
+          const s = child as Sprite;
+          s.visible = p !== undefined && (glow ? p.glow * p.alpha : p.alpha) > 0;
+          if (p === undefined || !s.visible) continue;
+          const tex = this.texture(p.image);
+          if (s.texture !== tex) s.texture = tex;
+          s.alpha = glow ? p.alpha * p.glow : p.alpha;
+          s.scale.set(((p.flip ? -1 : 1) * p.w) / tex.width, p.h / tex.height);
+          s.position.set(p.flip ? p.x + p.w : p.x, p.y);
+        }
+      }
+    }
   }
 
   /** Mirror each fighter's state into its sprites (materialise rows, reveal, stone, flash, squash). */
