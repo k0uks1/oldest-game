@@ -202,6 +202,12 @@ export interface RulingSpec {
   /** Mechanism the victory uses (existing id). */
   readonly verb: string;
   readonly reason: string;
+  /**
+   * Who ruled: the referee settles a near miss inside the engine's proportions; the judge weighed
+   * the whole pair (size included) and is trusted – its "yes" is not vetoed by reach, intensity
+   * or the power budget again (only the outright size limit stays).
+   */
+  readonly by?: "judge" | "referee";
 }
 
 /**
@@ -478,7 +484,14 @@ export function parsePack(input: unknown): PackResult {
             const w = `${id}.rulings[${i}]`;
             const valid = o["valid"];
             if (typeof valid !== "boolean") c.errors.push(`${w}: "valid" muss true/false sein`);
-            return { attacker: c.str(o, "attacker", w), target: c.str(o, "target", w), valid: valid === true, verb: c.str(o, "verb", w), reason: c.str(o, "reason", w) };
+            return {
+              attacker: c.str(o, "attacker", w),
+              target: c.str(o, "target", w),
+              valid: valid === true,
+              verb: c.str(o, "verb", w),
+              reason: c.str(o, "reason", w),
+              ...(o["by"] === "judge" || o["by"] === "referee" ? { by: o["by"] } : {}),
+            };
           }),
         }),
     ...(input["fields"] === undefined

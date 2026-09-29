@@ -17,21 +17,22 @@ const TOOL = {
   input_schema: {
     type: "object",
     properties: {
-      sieg: { type: "boolean", description: "true, wenn der Angreifer das Ziel plausibel besiegt – sonst false." },
+      bester_weg: { type: "string", description: "Zuerst, als Anwalt des Angreifers: sein stärkster, stimmigster Weg zum Sieg (ein Satz)." },
+      sieg: { type: "boolean", description: "true, wenn dieser Weg eine stimmige Antwort auf das Ziel ist – sonst false." },
       mechanismus: { type: "string", description: "ID des Mechanismus, mit dem der Sieg gelingt (aus der Liste). Bei false: der am nächsten liegende." },
       begruendung: { type: "string", description: "Ein kurzer deutscher Satz (höchstens 20 Wörter), warum." },
     },
-    required: ["sieg", "mechanismus", "begruendung"],
+    required: ["bester_weg", "sieg", "mechanismus", "begruendung"],
   },
 } as const;
 
 const SYSTEM = `Du bist der Schiedsrichter im „ältesten Spiel“: Zwei Spieler verwandeln sich abwechselnd in
-etwas, das die letzte Gestalt des Gegners besiegt. Eine Regel-Engine entscheidet fast alles; sie ruft
-dich nur, wenn sie unsicher ist. Urteile mit gesundem Menschenverstand und mythischer Logik (Märchen,
-Sagen, Physik des Alltags): Ein Messer zerschneidet ein Netz, Wasser löscht Feuer, Hoffnung trotzt dem Ende.
-Sei aber streng: Kein Sieg durch bloße Größe, keine Ausreden, kein „irgendwie“. Größenverhältnisse
-zählen: Eine Schere zerschneidet keinen Felsen, eine Maus hält keinen Damm auf. Wenn es nur mit viel
-Fantasie ginge, entscheide false. Antworte nur mit dem Werkzeug.`;
+etwas, das die letzte Gestalt des Gegners besiegt. Eine Regel-Engine entscheidet fast alles; sie ruft dich nur, wenn
+ein Zug KNAPP gescheitert ist und sie sich unsicher ist. Der Angreifer hat seine Gestalt gezielt als Antwort gewählt –
+eine stimmige Antwort (Märchen, Sagen, Physik des Alltags: ein Messer zerschneidet ein Netz, Wasser löscht Feuer,
+Hoffnung trotzt dem Ende) gewinnt, auch wenn sie etwas Fantasie braucht. Denke zuerst als Anwalt des Angreifers
+(bester_weg), dann urteile. Kein Sieg, wenn es keinen stimmigen Bezug gibt oder die Größe jede Wirkung ausschließt
+(eine Schere zerschneidet keinen Felsen). Das Ziel ist nicht im Vorteil, nur weil es zuerst da war. Antworte nur mit dem Werkzeug.`;
 
 export interface RefereeVerdict {
   readonly ruling: RulingSpec;
@@ -84,5 +85,5 @@ export function verdictFrom(onto: Ontology, failure: Failure, raw: unknown): Ref
   if (resolved === undefined || !onto.verbs.has(resolved)) return undefined;
   // A victory must use a mechanism the attacker actually has.
   if (sieg && !onto.compileForm(failure.form).verbs.includes(resolved)) return undefined;
-  return { ruling: { attacker: failure.form.id, target: failure.target.id, valid: sieg, verb: resolved, reason } };
+  return { ruling: { attacker: failure.form.id, target: failure.target.id, valid: sieg, verb: resolved, reason, by: "referee" } };
 }

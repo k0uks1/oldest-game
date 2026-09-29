@@ -451,3 +451,13 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Jede Gestalt ansehen** | Ein Klick auf den Namen unter einer Gestalt öffnet ihre Karte – für Spieler und Zuschauer, egal wer am Zug ist. | `showFighter` |
 | **Keine Winzlinge** | Bilder werden auf die Figur zugeschnitten (kein leerer Rand, sie stehen auf dem Boden) und folgen einer feineren Größenleiter: eine Katze ist größer als ein Floh, ein Drache größer als ein Ritter. Gemalt wird in genau der doppelten Größe. | `trimmed`, `displaySize` |
 
+
+## Faire Urteile (Nutzerwunsch: „Claude bevorzugt bei Schiedssprüchen die bestehende Gestalt“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Erst der Anwalt, dann der Richter** | Claude muss zuerst den stärksten Weg des Angreifers ausformulieren (`bester_weg`, das erste Feld im Werkzeug) und erst danach urteilen – vorher kam das Urteil zuerst und die Begründung hinterher. | `judge.ts`, `referee.ts` |
+| **Das Spiel erklärt** | Der Prompt sagt jetzt, was das Spiel will: Der Angreifer hat seine Gestalt gezielt als Antwort gewählt, eine stimmige Antwort gewinnt – auch mit Fantasie. „Das Ziel ist nicht im Vorteil, nur weil es zuerst da war.“ Die alte Regel „wenn es nur mit Fantasie ginge: false“ ist raus. | `judge.ts`, `referee.ts` |
+| **Kein Anker** | Der Richter sah bisher das Urteil der Engine („kein Sieg – …“) und stimmte ihm meist zu. Jetzt sieht er nur die beiden Gestalten und ggf. den Einspruch des Spielers. | `Resolver.judge`, `reconsider` |
+| **Ein Ja des Richters gilt** | Hatte der Richter „Sieg“ gesagt, prüfte die Engine beim Abspielen trotzdem Reichweite, Intensität und Stärke nach – bei knappen Paaren (1–2 Stufen Unterschied) kippte das rund jedes fünfte Ja wieder um. Urteile tragen jetzt ihre Herkunft (`by`); ein Richterspruch steht, nur „Maßlos“ und „beherrscht den Mechanismus“ gelten weiter. | `checkRuling` |
+| **Messbar** | `npm run judge-eval` legt dem Richter beschriftete Paare vor (Wasser → Feuer soll gewinnen, Schere → Fels nicht) und zählt beide Quoten. | `scripts/judge-eval.ts` |
