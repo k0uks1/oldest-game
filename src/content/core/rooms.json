@@ -1,4 +1,5 @@
 [
+  {"id": "eichel", "tags": ["kaesig"], "anyScale": true, "repaint": "the dungeon turned into an acorn hall: golden autumn light, oak leaves and acorns all over the floor, a giant acorn statue in the corner, yellow banners with an acorn rider", "motion": "acorns and oak leaves falling, golden light flickering"},
   {"id": "flut", "field": "nass", "repaint": "the dungeon is flooded: dark water up to the ankles covering the floor, reflections, dripping walls, extinguished torches", "motion": "water rippling gently, drops falling, reflections shimmering"},
   {"id": "brand", "field": "glut", "repaint": "the dungeon is on fire: flames on the floor and the banners, glowing embers, orange firelight", "motion": "flames flickering and dancing, embers drifting upward, firelight pulsing"},
   {"id": "eis", "field": "frost", "repaint": "the dungeon is frozen: ice covering the walls and floor, icicles hanging, frost crystals, cold blue light", "motion": "snow falling softly, frost glittering, cold mist drifting"},

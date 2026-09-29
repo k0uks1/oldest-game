@@ -4,6 +4,7 @@ import { coreOntology } from "../src/content/index.ts";
 import { findCounters } from "../src/engine/rules.ts";
 import { signatureFor } from "../src/render/eichel.ts";
 import { artFor } from "../src/render/art.ts";
+import { chooseRoom } from "../src/render/rooms.ts";
 
 describe("Eichelober – secret characters", () => {
   const onto = coreOntology();
@@ -30,5 +31,13 @@ describe("Eichelober – secret characters", () => {
     assert.equal(signatureFor("Eichelober-Gang"), "eichelhagel");
     assert.equal(signatureFor("die Eichelbande"), "eichelhagel");
     assert.equal(signatureFor("Eiche"), null);
+  });
+
+  it("the Eichel-Arena comes at once, at any scale and before any field", () => {
+    const f = (id: string) => onto.formById(id) ?? assert.fail(id);
+    const all = (): boolean => true;
+    assert.equal(chooseRoom(onto, [], [f("eichelober_gang")], all)?.id, "eichel", "the gang is only scale 3");
+    assert.equal(chooseRoom(onto, ["nass"], [f("eichelober")], all)?.id, "eichel");
+    assert.equal(chooseRoom(onto, [], [f("drache"), f("eichelober")], all)?.id, "eichel", "an older form on stage does not stop it");
   });
 });

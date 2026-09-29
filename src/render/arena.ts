@@ -11,7 +11,7 @@ import { carriesField, chooseRoom, ROOM_MIN_SCALE } from "./rooms.ts";
 import { ROOM_PICTURES } from "./rooms/index.ts";
 import { displaySize, renderGlow, renderSprite, type PixelImage } from "./sprite.ts";
 import { ISO } from "./stage-iso.ts";
-import { acornImage, cheeseImage, tattooImage, type Signature } from "./eichel.ts";
+import { acornImage, cheeseImage, signatureFor, tattooImage, type Signature } from "./eichel.ts";
 import { FLOOR_Y, GROUND_Y, HEIGHT, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
 
 export { FLOOR_Y, GROUND_Y, HEIGHT, TORCH_X, WIDTH } from "./stage.ts";
@@ -1426,6 +1426,7 @@ export abstract class ArenaSim {
     this.stepAnimations(dt);
     this.stepEffects(dt);
     this.stepProps(dt);
+    this.emitEichelRain(dt);
     this.stepRoom(dt);
     this.updateCosmos(dt);
     for (const fx of this.fieldFx.values()) fx.level += (fx.target - fx.level) * Math.min(1, dt * 1.5);
@@ -1762,7 +1763,8 @@ export abstract class ArenaSim {
       for (const id of fields) if (forms.some((f) => f.scale >= ROOM_MIN_SCALE && carriesField(this.onto, f, id))) this.latched.add(id);
       this.room = chooseRoom(this.onto, fields, forms, (id) => this.rooms.has(id), this.latched)?.id ?? null;
     }
-    const speed = this.reducedMotion ? 10 : 0.7;
+    // the Eichel-Arena rolls in at once, the other moods take their time
+    const speed = this.reducedMotion ? 10 : this.room === "eichel" ? 3 : 0.7;
     for (const id of this.rooms.keys()) {
       const now = this.roomFade.get(id) ?? 0;
       const want = id === this.room ? 1 : 0;
@@ -1784,6 +1786,28 @@ export abstract class ArenaSim {
       p.vy += p.gravity * dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
+    }
+  }
+
+  /**
+   * Eichel-Arena: while the Eichelober or his gang stands in the arena – at any tier – acorns and oak
+   * leaves keep falling from the vault (the room itself turns into the acorn hall, see rooms.json).
+   */
+  private emitEichelRain(dt: number): void {
+    if (this.reducedMotion || !this.fighters.some((f) => f !== null && f.alpha > 0 && signatureFor(f.form.name) !== null)) return;
+    const r = this.rand;
+    if (r() < dt * 2.2) {
+      const { acorn } = this.eichelProps();
+      const land = GROUND_Y + r() * 20;
+      const vy = 20 + r() * 30;
+      const g = 140;
+      // falls until it reaches the floor, then bounces off as a few crumbs
+      const t = (-vy + Math.sqrt(vy * vy + 2 * g * (land + 12))) / g;
+      this.props.push({ image: acorn, x: 20 + r() * (WIDTH - 40), y: -12, vx: (r() - 0.5) * 12, vy, life: 0, max: t, gravity: g, w: 8, h: 9, flip: r() < 0.5, fade: 0.1, glow: 0 });
+    }
+    if (r() < dt * 9) {
+      const c = ["#c86a20", "#e0a030", "#8a4a1a", "#6e7828"][Math.floor(r() * 4)] ?? "#c86a20";
+      this.particles.push({ x: r() * WIDTH, y: -4, vx: (r() - 0.5) * 24, vy: 14 + r() * 12, life: 0, max: 5 + r() * 3, color: c, size: 2, gravity: 2, glow: false });
     }
   }
 

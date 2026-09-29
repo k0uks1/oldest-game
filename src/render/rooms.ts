@@ -15,6 +15,8 @@ export interface RoomSpec {
   readonly field?: string;
   /** … or while a form with one of these properties stands on stage. */
   readonly tags?: readonly string[];
+  /** Any form with those properties changes the room at once – whatever its scale, before any field (Eichel-Arena). */
+  readonly anyScale?: boolean;
 }
 
 export const ROOMS: readonly RoomSpec[] = roomsJson;
@@ -31,7 +33,8 @@ export function carriesField(onto: Ontology, form: Form, field: string): boolean
 }
 
 /**
- * The room state – or undefined for the plain dungeon. Only forms of at least ROOM_MIN_SCALE count.
+ * The room state – or undefined for the plain dungeon. An `anyScale` room comes first, for any form on stage;
+ * otherwise only forms of at least ROOM_MIN_SCALE count.
  * An active field (newest last) shows its room once a big form brought it (`latched`: it stays
  * while the field lasts, even after that form is gone); otherwise a big form on stage sets the
  * mood (newest first). Only painted rooms (`available`).
@@ -43,6 +46,10 @@ export function chooseRoom(
   available: (id: string) => boolean,
   latched: ReadonlySet<string> = new Set(),
 ): RoomSpec | undefined {
+  for (const form of forms) {
+    const r = ROOMS.find((x) => x.anyScale === true && available(x.id) && (x.tags ?? []).some((t) => onto.hasTag(t) && onto.formHas(form, t)));
+    if (r !== undefined) return r;
+  }
   const big = forms.filter((f) => f.scale >= ROOM_MIN_SCALE);
   for (const f of [...fields].reverse()) {
     if (!latched.has(f) && !big.some((form) => carriesField(onto, form, f))) continue;

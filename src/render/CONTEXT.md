@@ -78,4 +78,6 @@ summoned (`oldest-game:secrets`). Their pictures come with the game (`content/co
 drawn from a design, not PixelLab). The **Eichelober** arrives in a shower of acorns and attacks with the
 *Eichelkäseattacke* (acorn ride across the arena, cheese explosion); the **Eichelober-Gang** flashes its tattoo (the
 Eichelober picture as ink) and fires three volleys of acorns with slingshots (*Eichelhagel*). Chosen by name
-(`signatureFor`, like the easter eggs) – pure show, the engine decides as for every form.
+(`signatureFor`, like the easter eggs) – pure show, the engine decides as for every form. **Eichel-Arena:** the room
+`eichel` (`rooms.json`, `anyScale`: any form with `kaesig`, whatever its scale, before any field; picture drawn from the
+iso room, not PixelLab) rolls in at once, and acorns and oak leaves fall while one of them stands in the arena.
