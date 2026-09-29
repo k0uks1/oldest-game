@@ -21,6 +21,8 @@ npm run art -- status    # picture store: status | ingest <png-dir> | warm [--li
 npm run scenery          # repaint the arena rooms + void with PixelLab from our procedural render (needs the key + Playwright)
 npm run effects          # paint the attack animations (content/core/effects.json) – resumable, needs PIXELLAB_API_KEY
 npm run rooms            # paint + animate the room states (content/core/rooms.json) – resumable; a repaint costs ~30–40 generations
+npm run spec             # openspec validate --all --strict (part of check and CI)
+npm run backlog          # dry run of the OpenSpec → GitHub issues sync (CI applies it, see Planning & backlog)
 ```
 
 ## Architecture
@@ -51,6 +53,9 @@ server/              Claude proxy core + Node game server (local.ts) + online ro
 Dockerfile, compose.yml, Caddyfile   self-hosting (public mode: HOST=0.0.0.0 → rooms only, no browser proxy)
 scripts/             build (esbuild → single HTML), simulate, gen-pack (stress data)
 tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k forms)
+openspec/            specs/ = what the game does today (requirements + scenarios); changes/ = work in flight
+docs/agents/         how agent skills reach the issue tracker and the domain docs
+.claude/skills/      OpenSpec skills (generated) + vendored planning skills (see .claude/skills/VENDORED.md)
 ```
 
 ### Core invariants – do not break
@@ -212,6 +217,41 @@ Other forms get a legend on demand: `Resolver.legend` → `loreWithClaude`; onli
 server's `LoreStore` (`learned/lore.json`, one Claude call per form, hourly budget); the browser remembers them
 (`LoreClient`). Presentation only – the engine never reads base, mods, lore or tone.
 
+## Planning & backlog
+
+Four places, each with one job – don't duplicate between them:
+
+| What | Where | Maintained |
+|---|---|---|
+| Invariants, architecture, conventions | this file | by hand, in the PR that changes them |
+| What the game does (requirements + scenarios) | `openspec/specs/` | by archiving changes (`/opsx:archive`) |
+| Work in flight: why, design, tasks | `openspec/changes/<name>/` | `/opsx:propose` → `/opsx:apply` → `/opsx:archive` |
+| Backlog: everything not started, and the state of what is | GitHub issues | **automatic** for OpenSpec changes, see below |
+
+- **Non-trivial feature or rule change** → `/opsx:propose` first (from an issue: `Issue: #<n>` under "## Why"),
+  then `/opsx:apply`, and archive in the same PR that finishes it. Small fixes need no change folder.
+- **The backlog keeps itself.** `.github/workflows/backlog.yml` runs `scripts/backlog.ts` on every PR and push to
+  `main` touching `openspec/`: one issue per change (label `openspec`), progress from `tasks.md`, the PRs that
+  touch it; archiving on `main` closes it. Never edit the block between the `openspec:begin/end` markers by hand.
+- **Found something out of scope while working** (bug, idea, debt, a user wish that won't be done now): search
+  the issues, then open one short issue instead of fixing it on the side or leaving it in chat.
+  How to reach GitHub (gh locally, MCP tools in the cloud): `docs/agents/issue-tracker.md`.
+- **Huge, foggy efforts** (more than one session, the way not yet clear – e.g. the engine rebuild): `/wayfinder`
+  charts a decision map (`wayfinder:map` issue + sub-issues); once the way is clear, the buildable pieces become
+  OpenSpec changes.
+- `docs/eigene-ideen.md` stays the log of ideas Claude added on its own; `docs/engine-neubau.md` collects
+  absurd-win cases until the rebuild is charted.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub issues of `k0uks1/oldest-game`, OpenSpec changes synced automatically. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` + `docs/adr/` at the root, created lazily by `domain-modeling`. See `docs/agents/domain.md`.
+
 ## UI principles
 
 - As little as possible on screen: the arena, one glowing input line, a sigil (menu, also `Esc`).
@@ -228,7 +268,7 @@ server's `LoreStore` (`learned/lore.json`, one Claude call per form, hourly budg
 - Balancing changes: run `npm run simulate -- --games 2000` before and after, mention the diff in the PR.
 - **Versions:** every PR bumps `package.json` `version` (minor for features/content, patch for pure fixes). The build
   injects it (`src/version.ts`); it is shown subtly on the start screen and in the menu (“v0.32.0”, previews add “· PR n”).
-- Workflow: feature branch → PR (CI must be green: typecheck, lint, tests, build) → squash merge.
+- Workflow: feature branch → PR (CI must be green: typecheck, lint, tests, OpenSpec validation, build) → squash merge.
   CI posts a PR comment with the playable build; `pages.yml` deploys `main` to GitHub Pages and every PR
   to `pr-preview/pr-<n>/` (gh-pages branch).
 
