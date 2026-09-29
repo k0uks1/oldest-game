@@ -70,3 +70,12 @@ Animations use `animate-pixminimax` (short queue, 1 generation at 64 px); Tier 2
 symbols `m`/`n`), `emblem` + `badge` (library symbols composed into one sketch – concepts get icons, not
 freehand drawings), `main`/`second` colours. Claude picks ids from closed enums (`aussehen` in the parser);
 a freehand `skizze` only when no part fits. Unknown ids are dropped (`knownLook`).
+
+## Secret characters (`render/eichel.ts`)
+
+Forms with `secret: true` (`content/core/forms/geheim.json`) stay out of the grimoire until this browser has seen them
+summoned (`oldest-game:secrets`). Their pictures come with the game (`content/core/secret-art.json`, id → art string,
+drawn from a design, not PixelLab). The **Eichelober** arrives in a shower of acorns and attacks with the
+*Eichelkäseattacke* (acorn ride across the arena, cheese explosion); the **Eichelober-Gang** flashes its tattoo (the
+Eichelober picture as ink) and fires three volleys of acorns with slingshots (*Eichelhagel*). Chosen by name
+(`signatureFor`, like the easter eggs) – pure show, the engine decides as for every form.

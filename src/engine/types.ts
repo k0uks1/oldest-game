@@ -60,6 +60,8 @@ export interface Form {
   /** Where this form came from – lexicon entry, composed, or LLM. */
   readonly origin: "lexikon" | "komponiert" | "llm";
   readonly flavor?: string;
+  /** Secret character: hidden from the grimoire until someone has summoned it. Presentation only – rules never see it. */
+  readonly secret?: true;
   /** Custom 16×16 pixel art (validated, see engine/pixelart.ts) – drawn by Claude for brand-new forms. */
   readonly sprite?: readonly string[];
   /** SVG sketch (see render/svgsprite.ts) – rasterized to a 32×32 sprite when there is no `sprite`. */

@@ -30,9 +30,11 @@ import verbs from "./core/verbs.json" with { type: "json" };
 import qualities from "./core/qualities.json" with { type: "json" };
 import combos from "./core/combos.json" with { type: "json" };
 import sketches from "./core/sketches.json" with { type: "json" };
+import secretArt from "./core/secret-art.json" with { type: "json" };
+import geheim from "./core/forms/geheim.json" with { type: "json" };
 
 /** Forms are split by theme to keep files reviewable; order = lookup priority for aliases. */
-const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte, alltag, maerchen, film, werbung, alltag2, zukunft, tierreich, goetter, grundelemente, selbstspiel1, selbstspiel2, werkzeug, spiele, basis, basis2];
+const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte, alltag, maerchen, film, werbung, alltag2, zukunft, tierreich, goetter, grundelemente, selbstspiel1, selbstspiel2, werkzeug, spiele, basis, basis2, geheim];
 
 /** Hand-drawn SVG sketches for everyday things live in one file (id → svg), merged in here. */
 function withSketches(forms: readonly unknown[]): unknown[] {
@@ -44,6 +46,16 @@ function withSketches(forms: readonly unknown[]): unknown[] {
   });
 }
 
+/** Pictures that come with the game (secret characters, drawn from a design) – id → art string, merged in here. */
+function withArt(forms: readonly unknown[]): unknown[] {
+  const byId = secretArt as Readonly<Record<string, string>>;
+  return forms.map((f) => {
+    if (typeof f !== "object" || f === null || !("id" in f) || typeof f.id !== "string") return f;
+    const art = byId[f.id];
+    return art === undefined ? f : { ...f, art };
+  });
+}
+
 /** The built-in content pack ("Grundspiel"). */
 export const CORE_PACK_RAW: unknown = {
   id: "core",
@@ -52,7 +64,7 @@ export const CORE_PACK_RAW: unknown = {
   tags,
   verbs,
   modifiers,
-  forms: withSketches(FORM_FILES.flat()),
+  forms: withArt(withSketches(FORM_FILES.flat())),
   fields,
   qualities,
   combos,

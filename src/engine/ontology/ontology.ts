@@ -433,6 +433,7 @@ export class Ontology {
       ...(spec.artPrompt === undefined ? {} : { artPrompt: spec.artPrompt }),
       ...(spec.moves === undefined ? {} : { moves: spec.moves }),
       ...(spec.flavor === undefined ? {} : { flavor: spec.flavor }),
+      ...(spec.secret === true ? { secret: true as const } : {}),
       ...presentationOf(spec),
       ...spriteOf(spec),
     };

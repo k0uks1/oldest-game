@@ -23,6 +23,7 @@ import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
 import { narrateEnd } from "../narrate/offline.ts";
 import { Resolver, type Novelty, type PlayedOutcome, type Turn } from "../game/resolver.ts";
 import { attackOutcome, attackStyle, easterEggFor, type AttackStyle } from "../render/arena.ts";
+import { SIGNATURE_CRY, signatureFor } from "../render/eichel.ts";
 import { createArena, type Arena } from "../render/arenas.ts";
 import { clear, h } from "./dom.ts";
 import { OnlineLink, savedSeat, type LinkStatus } from "../online/link.ts";
@@ -129,6 +130,31 @@ function rememberedName(): string {
   } catch {
     return "";
   }
+}
+
+const SECRETS_KEY = "oldest-game:secrets";
+
+/** Secret characters this browser has seen summoned (they show in the grimoire from then on). */
+function unlockedSecrets(): Set<string> {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(SECRETS_KEY) ?? "[]");
+    return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Remember a secret character; true when it was not known yet. */
+function unlockSecret(id: string): boolean {
+  const known = unlockedSecrets();
+  if (known.has(id)) return false;
+  known.add(id);
+  try {
+    localStorage.setItem(SECRETS_KEY, JSON.stringify([...known]));
+  } catch {
+    /* storage unavailable */
+  }
+  return true;
 }
 
 function rememberName(name: string): void {
@@ -643,6 +669,10 @@ export class App {
     }
     const egg = easterEggFor(form.name);
     if (egg !== null) await this.arena.easterEgg(egg, actor);
+    if (form.secret === true && unlockSecret(form.id)) {
+      this.showSub("★ Geheimfigur freigeschaltet", false);
+      await sleep(900);
+    }
     if (discovery) {
       this.showSub(novelty.extra.length > 0 ? `✦ zum ersten Mal beschworen · ${novelty.extra.join(" · ")}` : "✦ zum ersten Mal beschworen", false);
       await this.arena.discover(actor);
@@ -670,7 +700,9 @@ export class App {
         this.flashBanner(hidden ? "Versteckt." : "Entkommen.", "good");
       } else if (move.verb !== null) {
         const kind = move.check?.outcome ?? "vernichtet";
-        await this.arena.attack(actor, this.styleOf(move.verb), move.check?.weaknessHit === true, attackOutcome(kind), this.effectOf(form, move.verb));
+        const signature = signatureFor(form.name);
+        if (signature !== null) this.flashBanner(SIGNATURE_CRY[signature], "info");
+        await this.arena.attack(actor, this.styleOf(move.verb), move.check?.weaknessHit === true, attackOutcome(kind), this.effectOf(form, move.verb), signature ?? undefined);
         const how = VICTORY_TEXT[kind] ?? "";
         this.flashBanner(`Es genügt${how === "" ? "." : ` – ${how}`}${move.eleganz > 1 ? `  ✦ ${String(move.eleganz)}` : ""}`, "good");
       }
@@ -1792,7 +1824,10 @@ export class App {
       },
     });
     const learnedIds = new Set(this.learned.forms.map((f) => f.id));
-    const tabAll = h("button", { class: "tab" }, `Alle · ${String(this.onto.lexicon.length)}`);
+    // secret characters stay out of the grimoire until they have been summoned here once
+    const secrets = unlockedSecrets();
+    const shown = this.onto.lexicon.filter((f) => f.secret !== true || secrets.has(f.id));
+    const tabAll = h("button", { class: "tab" }, `Alle · ${String(shown.length)}`);
     const tabNew = h("button", { class: "tab" }, `✦ Entdeckt · ${String(this.learned.forms.length)}`);
     const tabs = h("div", { class: "tabs" }, tabNew, tabAll);
     tabAll.onclick = () => {
@@ -1837,7 +1872,7 @@ export class App {
       if (onlyDiscovered && needle === "" && ways.length > 0) {
         list.append(h("div", { class: "learned-tags" }, h("span", { class: "label" }, "Neue Siegwege (aus Schiedssprüchen verallgemeinert): "), ways.join(" · ")));
       }
-      const forms = this.onto.lexicon
+      const forms = shown
         .filter((f) => (!onlyDiscovered || learnedIds.has(f.id)) && (needle === "" || f.name.toLowerCase().includes(needle) || (this.debug && this.onto.formTags(f).some((t) => t.includes(needle)))))
         .sort((a, b) => Number(learnedIds.has(b.id)) - Number(learnedIds.has(a.id)))
         .slice(0, 150);
