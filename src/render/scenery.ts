@@ -10,7 +10,7 @@ import iso from "./scenery/iso.png";
 import cosmos from "./scenery/void.png";
 
 export const SCENERY = { iso, flat } as const;
-/** The void behind the wall (only the wall area – the floor stays transparent). */
+/** The void behind the wall, the whole picture (the iso side walls reach below the floor line). */
 export const VOID = cosmos;
 
 export function loadImage(url: string): Promise<HTMLImageElement | undefined> {

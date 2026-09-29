@@ -82,23 +82,26 @@ export function openBricks(ctx: CanvasRenderingContext2D, starfield: HTMLCanvasE
   for (const [x, y0, y1] of br.cols) if (y1 > y0) ctx.drawImage(starfield, x, y0, 1, y1 - y0, x, y0, 1, y1 - y0);
 }
 
-/** The void behind the wall: deep violet with a faint nebula band. */
+/**
+ * The void behind the wall: deep violet with a faint nebula band. It fills the whole picture – the side walls of the
+ * iso room reach below the floor line, and whatever is left transparent here comes back white from PixelLab.
+ */
 export function paintStarfield(): HTMLCanvasElement {
   const c = newCanvas();
   const ctx = c.getContext("2d");
   if (ctx === null) return c;
   ctx.fillStyle = "#05030b";
-  ctx.fillRect(0, 0, WIDTH, FLOOR_Y);
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
   const neb = ctx.createLinearGradient(0, 20, WIDTH, 140);
   neb.addColorStop(0, "rgba(60,20,90,0)");
   neb.addColorStop(0.45, "rgba(80,30,120,0.35)");
   neb.addColorStop(0.6, "rgba(30,60,120,0.3)");
   neb.addColorStop(1, "rgba(20,10,40,0)");
   ctx.fillStyle = neb;
-  ctx.fillRect(0, 0, WIDTH, FLOOR_Y);
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
   // dither the nebula into pixel noise
   const r = rng(5);
-  for (let y = 0; y < FLOOR_Y; y++) {
+  for (let y = 0; y < HEIGHT; y++) {
     for (let x = 0; x < WIDTH; x++) {
       if (r() < 0.25) {
         ctx.fillStyle = "rgba(5,3,11,0.6)";
