@@ -5,6 +5,10 @@ import type { Form } from "../engine/types.ts";
 import { paletteFor, type SpritePalette } from "./palette.ts";
 import { alphaBox, artFor, artGlow, crop, resample, unionBox, type Box } from "./art.ts";
 import { EMPTY_MASK, fitMask, maskOf, type Mask } from "./morph.ts";
+import { EFFECTS, type EffectKind } from "./effects.ts";
+import { EFFECT_SHEETS } from "./effects/index.ts";
+import { carriesField, chooseRoom, ROOM_MIN_SCALE } from "./rooms.ts";
+import { ROOM_PICTURES } from "./rooms/index.ts";
 import { displaySize, renderGlow, renderSprite, type PixelImage } from "./sprite.ts";
 import { ISO } from "./stage-iso.ts";
 import { FLOOR_Y, GROUND_Y, HEIGHT, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
@@ -111,6 +115,47 @@ export interface FighterAnim {
 export interface Aura {
   readonly kind: "fire" | "sparkle" | "smoke" | "motes" | "wisps" | "none";
   readonly color: string;
+}
+
+/**
+ * A picture drawn this frame (attack effects, room states): renderers put "backdrop" pictures right
+ * over the room and "front" ones over the fighters, and feed `glow` of them into the bloom.
+ */
+export interface ImageDraw {
+  readonly image: HTMLCanvasElement;
+  /** Top-left and size in arena pixels (the canvas may carry more detail). */
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+  readonly flip: boolean;
+  readonly alpha: number;
+  /** 0..1 – how much of it also lights up the bloom layer. */
+  readonly glow: number;
+  readonly layer: "backdrop" | "front";
+}
+
+/** A painted animation cut into its frames (square, side by side in the bundled strip). */
+interface Sheet {
+  readonly frames: readonly HTMLCanvasElement[];
+  /** Frame size in picture pixels. */
+  readonly size: number;
+}
+
+/** One effect animation playing: frames over time, moving from `from` to `to` (projectiles). */
+interface EffectPlay {
+  readonly sheet: Sheet;
+  t: number;
+  readonly fps: number;
+  /** Loops for `dur` seconds (a projectile in flight), else plays once. */
+  readonly loop: boolean;
+  readonly dur: number;
+  readonly from: readonly [number, number];
+  readonly to: readonly [number, number];
+  /** Height on screen, arena pixels (centered on its path). */
+  readonly size: number;
+  readonly flip: boolean;
+  readonly alpha: number;
 }
 
 /** "Beschwörungsmatrix" state – see {@link ArenaSim.startConjuring}. */
@@ -303,6 +348,18 @@ export abstract class ArenaSim {
   protected conjureBurst = 0;
   /** "Beschwörungsmatrix": shapes forming in purple flames where the form will stand. */
   protected summoning: Summoning | null = null;
+  /** Painted attack animations (bundled strips, decoded once) and the ones playing now. */
+  private readonly sheets = new Map<string, Sheet>();
+  private readonly plays: EffectPlay[] = [];
+  /** Painted room states: a still and (optionally) its animation loop, faded in and out. */
+  private readonly rooms = new Map<string, { still: HTMLCanvasElement; frames: readonly HTMLCanvasElement[] }>();
+  private readonly roomFade = new Map<string, number>();
+  private room: string | null = null;
+  private roomCheck = 0;
+  /** Fields a big form brought: their room stays while they last. */
+  private readonly latched = new Set<string>();
+  /** Side of the newest fighter (its mood counts first). */
+  private newest: Side = 0;
   protected time = 0;
   protected last = 0;
   protected running = false;
@@ -361,6 +418,8 @@ export abstract class ArenaSim {
     this.backdrop = canvas(WIDTH, HEIGHT);
     ctx2d(this.backdrop).drawImage(this.background, 0, 0);
     void this.loadScenery();
+    void this.loadEffects();
+    void this.loadRooms();
     const r = rng(4242);
     for (let i = 0; i < 38; i++) this.motes.push({ x: r() * WIDTH, y: 20 + r() * (GROUND_Y - 20), vx: (r() - 0.5) * 3, vy: (r() - 0.5) * 2, phase: r() * 10 });
     for (let i = 0; i < 12; i++) {
@@ -825,6 +884,7 @@ export abstract class ArenaSim {
    * and stays unknown until {@link reveal} is called.
    */
   summon(side: Side, form: Form, hidden = false): Promise<void> {
+    this.newest = side;
     const sprite = this.sprite(form);
     this.fighters[side] = {
       form,
@@ -878,12 +938,13 @@ export abstract class ArenaSim {
   }
 
   /** Attacker on `side` strikes the other side, which is destroyed. */
-  async attack(side: Side, style: AttackStyle, weaknessHit: boolean, outcome: AttackOutcome = "destroy"): Promise<void> {
+  /** `effect`: a painted attack animation (see `chooseEffect`) instead of the drawn one, if it is loaded. */
+  async attack(side: Side, style: AttackStyle, weaknessHit: boolean, outcome: AttackOutcome = "destroy", effect?: string): Promise<void> {
     const other: Side = side === 0 ? 1 : 0;
     const attacker = this.fighters[side];
     const target = this.fighters[other];
     if (attacker === null) return;
-    await this.strike(side, style, false);
+    await this.strike(side, style, false, effect);
     if (target === null) return;
     await this.suspense(other);
     this.onCue?.("impact");
@@ -948,10 +1009,10 @@ export abstract class ArenaSim {
 
   /** A failed attempt: the attacker's strike breaks on the target, then the attacker shatters. */
   /** `answer`: how the target strikes back – the failed attacker perishes by *that* (the wave washes the knight away). */
-  async fizzle(side: Side, style: AttackStyle, answer: AttackStyle | null = null): Promise<void> {
+  async fizzle(side: Side, style: AttackStyle, answer: AttackStyle | null = null, effect?: string): Promise<void> {
     const other: Side = side === 0 ? 1 : 0;
     const target = this.fighters[other];
-    await this.strike(side, style, true);
+    await this.strike(side, style, true, effect);
     await this.suspense(other);
     const x = SIDE_X[other] + (side === 0 ? -1 : 1) * ((target?.sprite.width ?? 40) / 2 + 6);
     this.onCue?.("fizzle");
@@ -1097,7 +1158,12 @@ export abstract class ArenaSim {
     if (f !== null) f.offsetX = 0;
   }
 
-  private async strike(side: Side, style: AttackStyle, stopShort: boolean): Promise<void> {
+  private async strike(side: Side, style: AttackStyle, stopShort: boolean, effect?: string): Promise<void> {
+    const kind = EFFECTS.find((e) => e.id === effect)?.kind;
+    if (effect !== undefined && kind !== undefined && this.sheets.has(effect)) {
+      await this.strikeWith(effect, kind, side, stopShort);
+      return;
+    }
     const attacker = this.fighters[side];
     if (attacker === null) return;
     const other: Side = side === 0 ? 1 : 0;
@@ -1304,6 +1370,8 @@ export abstract class ArenaSim {
     this.stepSummoning(dt);
     this.emitSummoningFlames(dt);
     this.stepAnimations(dt);
+    this.stepEffects(dt);
+    this.stepRoom(dt);
     this.updateCosmos(dt);
     for (const fx of this.fieldFx.values()) fx.level += (fx.target - fx.level) * Math.min(1, dt * 1.5);
     this.emitFieldParticles(dt);
@@ -1584,6 +1652,162 @@ export abstract class ArenaSim {
   }
 
   /** Swap the procedural room and void for the painted ones once they are decoded. */
+  /** Decode the bundled effect strips into frames (the drawn particles stand in until then). */
+  private async loadEffects(): Promise<void> {
+    await Promise.all(
+      Object.entries(EFFECT_SHEETS).map(async ([id, url]) => {
+        const img = await loadImage(url);
+        if (img === undefined || img.height === 0) return;
+        const size = img.height;
+        const frames = Array.from({ length: Math.floor(img.width / size) }, (_, k) => {
+          const c = canvas(size, size);
+          ctx2d(c).drawImage(img, k * size, 0, size, size, 0, 0, size, size);
+          return c;
+        });
+        if (frames.length >= 2) this.sheets.set(id, { frames, size });
+      }),
+    );
+  }
+
+  /** Decode the painted room states (the plain room shows until then; only the default iso room has them). */
+  private async loadRooms(): Promise<void> {
+    if (this.stage !== ISO) return;
+    const ids = Object.keys(ROOM_PICTURES).filter((k) => !k.endsWith("-anim"));
+    await Promise.all(
+      ids.map(async (id) => {
+        const [still, anim] = await Promise.all([loadImage(ROOM_PICTURES[id] ?? ""), loadImage(ROOM_PICTURES[`${id}-anim`] ?? "")]);
+        if (still === undefined) return;
+        const s = canvas(still.width, still.height);
+        ctx2d(s).drawImage(still, 0, 0);
+        // the loop: frames of the room's shape side by side
+        const fw = anim === undefined ? 0 : Math.round((anim.height * WIDTH) / HEIGHT);
+        const frames =
+          anim === undefined || fw === 0
+            ? []
+            : Array.from({ length: Math.floor(anim.width / fw) }, (_, k) => {
+                const c = canvas(fw, anim.height);
+                ctx2d(c).drawImage(anim, k * fw, 0, fw, anim.height, 0, 0, fw, anim.height);
+                return c;
+              });
+        this.rooms.set(id, { still: s, frames });
+      }),
+    );
+  }
+
+  /** Which room state fits now – checked a few times a second; the change fades over ~1.5 s. */
+  private stepRoom(dt: number): void {
+    this.roomCheck -= dt;
+    if (this.roomCheck <= 0) {
+      this.roomCheck = 0.25;
+      const fields = [...this.fieldFx].filter(([, fx]) => fx.target > 0).map(([id]) => id);
+      const older: Side = this.newest === 0 ? 1 : 0;
+      const forms = [this.fighters[this.newest], this.fighters[older]].flatMap((f) => (f === null ? [] : [f.form]));
+      // a field a big form brought keeps its room while it lasts (the fire burns on after the dragon)
+      for (const id of this.latched) if (!fields.includes(id)) this.latched.delete(id);
+      for (const id of fields) if (forms.some((f) => f.scale >= ROOM_MIN_SCALE && carriesField(this.onto, f, id))) this.latched.add(id);
+      this.room = chooseRoom(this.onto, fields, forms, (id) => this.rooms.has(id), this.latched)?.id ?? null;
+    }
+    const speed = this.reducedMotion ? 10 : 0.7;
+    for (const id of this.rooms.keys()) {
+      const now = this.roomFade.get(id) ?? 0;
+      const want = id === this.room ? 1 : 0;
+      if (now !== want) this.roomFade.set(id, want > now ? Math.min(1, now + dt * speed) : Math.max(0, now - dt * speed));
+    }
+  }
+
+  /** Is this painted effect ready to play? */
+  hasEffect(id: string): boolean {
+    return this.sheets.has(id);
+  }
+
+  /** Advance the playing effects; the finished ones go. */
+  private stepEffects(dt: number): void {
+    for (const p of this.plays) p.t += dt;
+    for (let i = this.plays.length - 1; i >= 0; i--) {
+      const p = this.plays[i];
+      if (p !== undefined && p.t >= (p.loop ? p.dur : p.sheet.frames.length / p.fps)) this.plays.splice(i, 1);
+    }
+  }
+
+  /** Start one effect animation; resolves when it has played (or flown). */
+  private play(id: string, opts: { from: readonly [number, number]; to?: readonly [number, number]; size: number; flip: boolean; fly?: number; fps?: number; alpha?: number }): Promise<void> {
+    const sheet = this.sheets.get(id);
+    if (sheet === undefined) return Promise.resolve();
+    const fps = opts.fps ?? 14;
+    const loop = opts.fly !== undefined;
+    const dur = this.reducedMotion ? 0.12 : (opts.fly ?? sheet.frames.length / fps);
+    this.plays.push({ sheet, t: 0, fps, loop, dur, from: opts.from, to: opts.to ?? opts.from, size: opts.size, flip: opts.flip, alpha: opts.alpha ?? 1 });
+    return wait(dur * 1000);
+  }
+
+  /** Everything painted this frame: room states behind, effects in front of the fighters. */
+  protected imageDraws(): ImageDraw[] {
+    const out: ImageDraw[] = [];
+    for (const [id, level] of this.roomFade) {
+      const r = this.rooms.get(id);
+      if (r === undefined || level <= 0) continue;
+      const a = easeOut(level);
+      // the loop (made from this very still) when there is one – the still alone otherwise
+      const frame = r.frames.length === 0 || this.reducedMotion ? undefined : r.frames[Math.floor(this.time * 7) % r.frames.length];
+      out.push({ image: frame ?? r.still, x: 0, y: 0, w: WIDTH, h: HEIGHT, flip: false, alpha: a, glow: 0, layer: "backdrop" });
+    }
+    for (const p of this.plays) {
+      const n = p.sheet.frames.length;
+      const k = p.loop ? Math.floor(p.t * p.fps) % n : Math.min(n - 1, Math.floor(p.t * p.fps));
+      const image = p.sheet.frames[k];
+      if (image === undefined) continue;
+      const u = p.loop ? Math.min(1, p.t / Math.max(0.01, p.dur)) : 1;
+      const x = p.from[0] + (p.to[0] - p.from[0]) * u;
+      const y = p.from[1] + (p.to[1] - p.from[1]) * u;
+      // the last frames of a one-shot fade out
+      const fade = p.loop ? 1 : Math.min(1, (n - p.t * p.fps) / 2);
+      out.push({ image, x: Math.round(x - p.size / 2), y: Math.round(y - p.size / 2), w: p.size, h: p.size, flip: p.flip, alpha: p.alpha * Math.max(0, fade), glow: 0.55, layer: "front" });
+    }
+    return out;
+  }
+
+  /**
+   * A victory (or a near miss, `stopShort`) with a painted effect: a projectile flies from the
+   * winner and bursts on the loser, a strike happens right at the loser, a drain flows back.
+   */
+  private async strikeWith(id: string, kind: EffectKind, side: Side, stopShort: boolean): Promise<void> {
+    const attacker = this.fighters[side];
+    if (attacker === null) return;
+    const other: Side = side === 0 ? 1 : 0;
+    const target = this.fighters[other];
+    const dir = side === 0 ? 1 : -1;
+    const th = target?.sprite.height ?? 40;
+    const ty = this.gy(other) - th / 2;
+    const tx = stopShort ? SIDE_X[side] + (SIDE_X[other] - SIDE_X[side]) * 0.72 : SIDE_X[other];
+    const ax = SIDE_X[side] + dir * (attacker.sprite.width / 2);
+    const ay = this.gy(side) - attacker.sprite.height * 0.55;
+    const flip = side === 1;
+    await this.tween(160, (t) => (attacker.offsetX = -dir * 6 * t));
+    this.onCue?.("strike");
+    const back = (): void => void this.tween(250, (t) => (attacker.offsetX = attacker.offsetX * (1 - t)));
+    const burstSize = Math.max(60, Math.min(120, th * 1.2));
+    if (kind === "projectile") {
+      back();
+      await this.play(id, { from: [ax, ay], to: [tx, ty], size: 36, flip, fly: 0.42 });
+      this.shake = Math.max(this.shake, 3);
+      if (this.sheets.has(`${id}-impact`)) void this.play(`${id}-impact`, { from: [tx, ty], size: stopShort ? burstSize * 0.6 : burstSize, flip, alpha: stopShort ? 0.7 : 1 });
+      else this.burst(tx, ty, "#ffe0b0", 30);
+      await wait(this.reducedMotion ? 60 : 260);
+      return;
+    }
+    if (kind === "drain") {
+      back();
+      await this.play(id, { from: [tx, ty], to: [ax, ay], size: 30, flip: !flip, fly: 0.6 });
+      this.burst(ax, ay, "#ff6a6a", 24);
+      return;
+    }
+    // strike: a short lunge, and it happens at the loser
+    await this.tween(this.reducedMotion ? 40 : 120, (t) => (attacker.offsetX = dir * (-6 + 18 * t)));
+    back();
+    this.shake = Math.max(this.shake, stopShort ? 2 : 4);
+    await this.play(id, { from: [tx, ty], size: stopShort ? burstSize * 0.7 : burstSize * 1.15, flip, alpha: stopShort ? 0.75 : 1 });
+  }
+
   private async loadScenery(): Promise<void> {
     if (typeof location !== "undefined" && new URLSearchParams(location.search).has("drawn")) return;
     const [room, space] = await Promise.all([loadImage(SCENERY[this.stage.name]), loadImage(VOID)]);

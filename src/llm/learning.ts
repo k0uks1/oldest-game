@@ -357,13 +357,101 @@ export function notesAbout(learned: ContentPack, ids: readonly string[], limit =
   return (learned.notes ?? []).filter((n) => ids.includes(n.form) || ids.includes(n.other)).slice(-limit);
 }
 
+/** Wordings kept per learned form (its own name and first text included). */
+const MAX_ALIASES = 12;
+
+/** What makes two learned forms the same thing: name, the lexicon form they vary, and how. */
+function sameThingKey(f: { readonly name: string; readonly base?: string | undefined; readonly mods?: readonly string[] | undefined }): string {
+  return `${normalize(f.name)}\u0000${f.base ?? ""}\u0000${(f.mods ?? []).map((m) => normalize(m)).join("|")}`;
+}
+
+/**
+ * A learned form that is this very thing already – same name, same base, same variations ("die
+ * Bibel" after "Bibel"). Then the new wording is an alias, not a second grimoire entry.
+ */
+export function namesakeOf(learned: ContentPack, form: Pick<Form, "name" | "base" | "mods">): FormSpec | undefined {
+  const key = sameThingKey(form);
+  return learned.forms.find((f) => sameThingKey(f) === key);
+}
+
+/** Remember another wording for a learned form – next time it is recognised without asking Claude. */
+export function addAlias(base: readonly ContentPack[], learned: ContentPack, id: string, text: string): { onto: Ontology; pack: ContentPack } | undefined {
+  const alias = normalize(text);
+  const spec = learned.forms.find((f) => f.id === id);
+  if (spec === undefined || alias.length < 3 || (spec.aliases ?? []).includes(alias) || (spec.aliases ?? []).length >= MAX_ALIASES) {
+    const onto = compile(base, learned);
+    return onto === undefined ? undefined : { onto, pack: learned };
+  }
+  const pack: ContentPack = { ...learned, forms: learned.forms.map((f) => (f.id === id ? { ...f, aliases: [...(f.aliases ?? []), alias] } : f)) };
+  const onto = compile(base, pack);
+  return onto === undefined ? undefined : { onto, pack };
+}
+
+/**
+ * Fold learned forms that are the same thing (same name, base and variations – learned twice from
+ * different wordings) into the first: its aliases grow, and precedents, notes and Siegweg evidence
+ * that named a later twin name the first. Nothing else changes.
+ */
+export function mergeNamesakes(pack: ContentPack): ContentPack {
+  const firstOf = new Map<string, number>();
+  const moved = new Map<string, string>();
+  const forms: FormSpec[] = [];
+  for (const f of pack.forms) {
+    const key = sameThingKey(f);
+    const at = firstOf.get(key);
+    const first = at === undefined ? undefined : forms[at];
+    if (at === undefined || first === undefined) {
+      firstOf.set(key, forms.length);
+      forms.push(f);
+      continue;
+    }
+    moved.set(f.id, first.id);
+    forms[at] = { ...first, aliases: [...new Set([...(first.aliases ?? []), ...(f.aliases ?? []), normalize(f.name)])].slice(0, MAX_ALIASES) };
+  }
+  if (moved.size === 0) return pack;
+  const re = (id: string): string => moved.get(id) ?? id;
+  const rulings = new Map<string, RulingSpec>();
+  for (const r of pack.rulings ?? []) {
+    const a = re(r.attacker);
+    const t = re(r.target);
+    if (a !== t) rulings.set(`${a}>${t}`, { ...r, attacker: a, target: t });
+  }
+  return {
+    ...pack,
+    forms,
+    ...(pack.rulings === undefined ? {} : { rulings: [...rulings.values()] }),
+    ...(pack.notes === undefined ? {} : { notes: pack.notes.map((n) => ({ ...n, form: re(n.form), other: re(n.other) })) }),
+    ...(pack.extensions === undefined
+      ? {}
+      : {
+          extensions: pack.extensions.map((x) =>
+            x.evidence === undefined
+              ? x
+              : {
+                  ...x,
+                  evidence: [
+                    ...new Set(
+                      x.evidence.map((e) => {
+                        const [a = "", t = ""] = e.split(">");
+                        return `${re(a)}>${re(t)}`;
+                      }),
+                    ),
+                  ],
+                },
+          ),
+        }),
+  };
+}
+
 /**
  * Keep a stored learned pack loadable after the core has grown: entries the core now defines
  * itself (same id – e.g. a learned "Löschdecke" that became a hand-drawn core form) are dropped
  * in favour of the core, and any form that no longer compiles is left out instead of
  * discarding the whole pack. Returns undefined if nothing usable remains.
  */
-export function reconcileLearned(base: readonly ContentPack[], pack: ContentPack): ContentPack | undefined {
+export function reconcileLearned(base: readonly ContentPack[], stored: ContentPack): ContentPack | undefined {
+  // a form learned twice from different wordings is one grimoire entry
+  const pack = mergeNamesakes(stored);
   const ids = (pick: (p: ContentPack) => readonly { readonly id: string }[]): Set<string> =>
     new Set(base.flatMap((p) => pick(p).map((x) => x.id)));
   const tags = ids((p) => p.tags);

@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { dirname } from "node:path";
 import { Ontology, OntologyError } from "../src/engine/ontology/ontology.ts";
 import { parsePack, type ContentPack } from "../src/engine/ontology/pack.ts";
-import { LEARNED_PACK_ID, emptyLearnedPack, reconcileLearned } from "../src/llm/learning.ts";
+import { LEARNED_PACK_ID, emptyLearnedPack, mergeNamesakes, reconcileLearned } from "../src/llm/learning.ts";
 
 const MAX_BYTES = 4_000_000;
 
@@ -61,7 +61,8 @@ export function readLearnedFile(base: readonly ContentPack[], file: string): Con
   if (!existsSync(file)) return emptyLearnedPack();
   try {
     const v = validateLearned(base, JSON.parse(readFileSync(file, "utf8")));
-    if (v.ok) return v.pack;
+    // forms learned twice from different wordings become one (older servers made such twins)
+    if (v.ok) return mergeNamesakes(v.pack) === v.pack ? v.pack : (reconcileLearned(base, v.pack) ?? v.pack);
     const parsed = parsePack(JSON.parse(readFileSync(file, "utf8")));
     return (parsed.ok ? reconcileLearned(base, parsed.pack) : undefined) ?? emptyLearnedPack();
   } catch {

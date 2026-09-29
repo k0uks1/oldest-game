@@ -495,3 +495,27 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Was die Gestalt ausmacht** | Statt „atmet / greift an / triumphiert“ bietet „✦ beleben“ drei Bewegungen, die zu genau dieser Gestalt passen: der Wolf heult den Mond an, schleicht geduckt, fletscht die Zähne; die Motorsäge heult auf, sägt in die Luft, tuckert im Leerlauf. PixelLab nimmt freien Text – die drei waren nur unsere Vorgabe. | `Form.moves` |
 | **Ohne Extra-Aufruf für Neues** | Erfundene Gestalten bekommen ihre Bewegungen gleich bei der Klassifizierung (`bewegungen`). Kerngestalten fragt der Server beim ersten Beleben einmal bei Claude an und merkt sie sich für alle. Ohne Claude bleiben die drei allgemeinen. | `movesWithClaude`, `MoveStore` |
 | **Nur der Server spricht mit dem Animator** | Der Browser nennt nur eine Position (m0–m2); was PixelLab gesagt bekommt, weiß allein der Server. So landet nie fremder Text in einem bezahlten Auftrag. | `animPrompt` |
+
+## Gemalte Angriffe (Nutzerwunsch: „10–20 allgemeine Angriffsanimationen statt der leuchtenden Partikel, passend zum Sieger“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Eine feste Bibliothek** | 27 Angriffe (Feuerball, Kugel, Pfeil, Schwerthieb, Krallen, Biss, Blitz, Eissplitter, Welle, Tornado, Gift, Säure, Ketten, Schatten, heiliges Licht, Zauberkugel, Schallwellen, Herzchen, Schlaf-Zs, Lebenssog, Papierflut, Hypnose, Versteinerung, schwarzes Loch …), dazu Einschläge. Einmal von PixelLab gemalt und animiert, im Spiel ohne Wartezeit und ohne Kosten. | `effects.json`, `npm run effects` |
+| **Passend zum Sieger** | Der Mechanismus zählt am meisten, dann was die Gestalt in der Hand hält, dann was sie ist: Der Jäger durchbohrt mit einer Kugel (er trägt eine Flinte), der Ritter mit der Lanzenspitze, der Wolf zerreißt mit Krallen, der Drache verbrennt mit einem Feuerball. | `chooseEffect` |
+| **Drei Arten** | Geschosse fliegen vom Sieger zum Verlierer und schlagen ein, Hiebe und Blitze geschehen direkt am Verlierer, Lebenssog fließt zurück zum Sieger. Beim knappen Scheitern bleibt es kurz davor stehen. | `strikeWith` |
+
+## Lebender Raum (Nutzerwunsch: „Etwas Feuriges setzt den Raum in Brand – aber ein Streichholz nicht, ein Drache schon“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Der Kerker verwandelt sich** | Unser Raum, von PixelLab umgemalt: geflutet, brennend, vereist, finster, im Nebel, im Sturm, halb eingestürzt – dazu Stimmungen (heiliges Licht, Gruft, Arkan, Wald, Giftnebel, Maschinenhalle, Traum). Die Geometrie bleibt, und jede Variante läuft als Schleife. | `rooms.json`, `npm run rooms` |
+| **Nur große Gestalten** | Erst ab Stufe 4 verändert eine Gestalt den ganzen Raum: Feuerelementar, Drache und Vulkan setzen ihn in Brand, Streichholz, Fackel und Lagerfeuer nicht. Ein Feld, das eine große Gestalt gebracht hat, hält seinen Raum, solange es wirkt – das Feuer brennt weiter, auch wenn der Drache fällt. | `ROOM_MIN_SCALE`, `latched` |
+| **Weich** | Der Wechsel blendet über etwa anderthalb Sekunden; Felder mit Regeln dahinter gehen vor Stimmungen. | `stepRoom` |
+
+## Eine Gestalt, ein Eintrag (Fehlerbericht: „Bibel taucht doppelt im Grimoire auf“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Andere Worte, dieselbe Gestalt** | Gelernt wurde bisher nach dem getippten Text: „die Bibel“ nach „Bibel“ ergab eine zweite Bibel. Jetzt ist eine gelernte Gestalt mit gleichem Namen (und gleicher Basis und Abwandlung) dieselbe – der neue Wortlaut wird ihr Alias, beim nächsten Mal ohne Claude erkannt. | `namesakeOf`, `addAlias` |
+| **Alte Doppel verschwinden** | Beim Laden werden Zwillinge zusammengelegt; Urteile, Einwände und Siegweg-Belege der zweiten gelten dann für die erste. | `mergeNamesakes` |
+| **Dein Name bleibt deiner** | „unheiliger Franzose“ wurde als Mönch beschworen: Die Ähnlichkeitssuche machte aus „unheiliger“ ein „heiliger“ (ein Beiname des Mönchs), und eine Gestalt, die aussah wie ihr Anker, wurde durch den Anker ersetzt – samt Namen. Jetzt zählen ähnliche Wörter nur als Tippfehler (ein Buchstabe), und eine Gestalt mit eigenem Namen oder Abwandlungen wird nie gegen ihren Anker getauscht. | `anchorsFor`, `Resolver.classify` |
