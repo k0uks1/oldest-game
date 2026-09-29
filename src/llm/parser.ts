@@ -103,7 +103,11 @@ const TOOL: ToolDef = {
       },
       scale: { type: "integer", minimum: 1, maximum: 8 },
       plane: { type: "string", enum: [...PLANES] },
-      archetype: { type: "string", enum: [...ARCHETYPES], description: "Silhouette für das Sprite." },
+      archetype: {
+        type: "string",
+        enum: [...ARCHETYPES],
+        description: "Silhouette für das Sprite. humanoid/giant nur für Personen und menschengestaltige Wesen – ein Ding, ein Zustand, eine Idee bekommt die Form des Dings (weapon, box, bottle, flame, heart …).",
+      },
       properties: {
         type: "array",
         items: { type: "string" },
@@ -148,7 +152,8 @@ const TOOL: ToolDef = {
       },
       bild: {
         type: "string",
-        description: "Kurze englische Bildbeschreibung für einen Pixel-Art-Generator: was man sieht (max. 20 Wörter). Keine Namen geschützter Figuren – beschreibe sie.",
+        description:
+          "Kurze ENGLISCHE Bildbeschreibung für einen Pixel-Art-Generator (er versteht kein Deutsch): die Gestalt SELBST, max. 20 Wörter. Ein Ding bleibt ein Ding – niemand, der es hält. Keine Namen geschützter Figuren – beschreibe sie.",
       },
       aussehen: {
         type: "object",
@@ -247,8 +252,11 @@ REGELN FÜR DICH:
   Fähigkeits-Eigenschaften bringen ihren Mechanismus selbst mit. Was die Gestalt nicht kann, lässt die Engine weg.
 - intended_mechanism nur setzen, wenn der Spieler ausdrücklich beschreibt, WIE angegriffen wird.
   Beschreibt er Flucht oder Ausweichen („fliegt davon“, „taucht ab“, „gräbt sich ein“), setze "entkommt".
-- bild: immer ausfüllen – eine kurze englische Beschreibung dessen, was man sieht („a hunter in green cloak holding a
-  rifle“, „a fat money bag with a golden crown“). Filmfiguren, Marken, Spielfiguren nie beim Namen nennen, sondern beschreiben.
+- bild: immer ausfüllen, immer auf Englisch (der Bildgenerator versteht kein Deutsch) – die Gestalt SELBST, nicht jemand,
+  der sie benutzt. Menschen nur, wenn die Gestalt ein Mensch ist („a hunter in green cloak holding a rifle“). Ein Ding ist
+  ein Ding („Motorsäge“ = „a chainsaw“, nicht „a man with a saw“). Zustände, Mängel, Ideen werden ein sprechendes Ding
+  („Gasmangel“ = „an empty gas canister with a dying blue flame“, „Korruption“ = „a fat money bag with a golden crown“).
+  Filmfiguren, Marken, Spielfiguren nie beim Namen nennen, sondern beschreiben.
 - Das Bild entsteht aus fertigen Teilen (aussehen). Begriffe, Gefühle, Ideen, Institutionen bekommen KEINE skizze,
   sondern ein emblem und oft ein abzeichen: Korruption = geldsack + krone, Verrat = theatermaske + dolch,
   Bürokratie = stempel + paragraf, Freundschaft = handschlag + herz, Zensur = verbotsschild + megafon.

@@ -65,7 +65,7 @@ if (cmd === "status") {
     .filter((r) => only === undefined || only.includes(r.form.id))
     .flatMap((r) => (r.req === undefined || store.stored(store.lookupKey(r.req)) !== undefined ? [] : [r.req]))
     .slice(0, limit);
-  console.log(`${String(todo.length)} Bilder · Stil: „${STYLE_SUFFIX}“`);
+  console.log(`${String(todo.length)} Bilder · Stil: „${STYLE_SUFFIX}“ (Dinge ohne „full body“)`);
   await Promise.all(todo.map((r) => store.request(store.lookupKey(r), r.prompt, r.size)));
   await store.idle();
   console.log(`fertig · diesen Monat erzeugt: ${String(store.used)}`);
