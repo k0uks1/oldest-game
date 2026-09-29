@@ -16,6 +16,7 @@ npm run build      # → dist/index.html (single self-contained file, opens from
 npm run simulate   # balancing report; add `-- --games 2000` for bot self-play
 npm run sheet -- items   # sprite contact sheet PNG (items | emblems a+b,c | form ids)
 npm run audit            # Prüfstand: suspicious wins in the lexicon (the engine-rebuild yardstick)
+npm run judge-eval       # judge bias check on labelled pairs (needs ANTHROPIC_API_KEY or --proxy)
 npm run art -- status    # picture store: status | ingest <png-dir> | warm [--limit N] (needs PIXELLAB_API_KEY)
 npm run scenery          # repaint the arena rooms + void with PixelLab from our procedural render (needs the key + Playwright)
 ```
@@ -64,7 +65,11 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
    only a remaining disagreement is stored as a ruling. Once per pair. A player's objection – „Quatsch?“ on a win,
    „Hätte klappen müssen?“ on a failure – has any pair judged again (`Resolver.reconsider`, counts from the next time;
    only invented forms learn, hand-written pairs get a ruling at most). A denying ruling holds for every mechanism of the pair
-   (escape stays possible).
+   (escape stays possible). Rulings carry `by`: a **judge** yes stands as given (it weighed size, reach and strength;
+   only `maxScaleJump` and "has the mechanism" still apply), a **referee** yes still passes reach and intensity.
+   **Against defender bias:** both prompts argue the attacker's best case first (`bester_weg`, first tool field), frame
+   the game as "a fitting answer wins", and never see the engine's own verdict (it anchored them towards "no").
+   `npm run judge-eval` (needs a key) measures fitting-answer wins vs. nonsense wins on labelled pairs.
 2. **Classification is independent of the opponent.** `parseWithClaude` gets only the player's
    text plus lexicon anchors, never the current target. Results are cached per text.
 3. **Rules reference tags, never concrete forms.** No `if (form.id === "drache")` anywhere.

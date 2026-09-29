@@ -184,5 +184,36 @@ describe("Urteil für zwei erfundene Gestalten", () => {
     assert.equal(r.onto.rulingFor("ritter", "ratte")?.valid, true);
     assert.deepEqual(r.onto.formById("ritter")?.tags, ritterTags);
   });
+
+  it("balance: the judge's yes stands (no veto by power or strength), the referee stays inside proportions", async () => {
+    const { checkRuling } = await import("../src/engine/rules.ts");
+    const onto = Ontology.compile([core]);
+    const funke = onto.formById("funke");
+    const ritter = onto.formById("ritter");
+    assert.ok(funke && ritter);
+    const verb = onto.compileForm(funke).verbs[0] ?? "verbrennt";
+    const ruling = { attacker: "funke", target: "ritter", valid: true, verb, reason: "Der Funke findet die Ritze im Visier." };
+    assert.equal(checkRuling(onto, funke, ritter, { ...ruling, by: "referee" }).valid, false, "referee: still too small");
+    assert.equal(checkRuling(onto, funke, ritter, { ...ruling, by: "judge" }).valid, true, "judge: weighed and decided");
+    const drache = onto.formById("drache");
+    assert.ok(drache);
+    assert.equal(checkRuling(onto, onto.formById("floh") ?? funke, { ...drache, scale: 8 }, { ...ruling, attacker: "floh", verb: onto.compileForm(onto.formById("floh") ?? funke).verbs[0] ?? verb, by: "judge" }).valid, true, "size is the judge's call too");
+  });
+
+  it("the judge is not anchored: it never sees the engine's verdict, and argues the attacker's case first", async () => {
+    const r = resolver();
+    const bodies: string[] = [];
+    fakeClaude((tool, user) => {
+      if (tool === "urteil") bodies.push(user);
+      return tool === "urteil" ? { bester_weg: "Stacheln.", sieg: true, begruendung: "Stacheln.", mechanismus: "durchbohrt" } : user.includes("Kaktuskatze") ? kaktuskatze : blase;
+    });
+    const first = await r.resolve(createGame(["A", "B"]), "Seifenblasen-Drache");
+    assert.equal(first.kind, "turn");
+    await r.resolve(first.turn.state, "Kaktuskatze");
+    assert.equal(bodies.length, 1);
+    assert.doesNotMatch(bodies[0] ?? "", /Engine|kein Sieg/);
+    const { TOOL_ORDER } = await import("../src/llm/judge.ts");
+    assert.equal(TOOL_ORDER[0], "bester_weg");
+  });
 });
 

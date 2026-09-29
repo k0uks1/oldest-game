@@ -21,7 +21,12 @@ const TOOL: ToolDef = {
   input_schema: {
     type: "object",
     properties: {
-      sieg: { type: "boolean", description: "true, wenn der Angreifer das Ziel plausibel besiegt." },
+      // first the attacker's best case – the verdict comes after thinking it through, not before
+      bester_weg: {
+        type: "string",
+        description: "Zuerst, als Anwalt des Angreifers: der stärkste, stimmigste Weg, wie er das Ziel besiegen könnte (ein Satz).",
+      },
+      sieg: { type: "boolean", description: "true, wenn dieser Weg eine stimmige Antwort auf das Ziel ist." },
       begruendung: { type: "string", description: "Ein kurzer deutscher Satz (höchstens 25 Wörter), warum." },
       mechanismus: {
         type: ["string", "null"],
@@ -45,21 +50,30 @@ const TOOL: ToolDef = {
       },
       ...PROPOSAL_PROPERTIES,
     },
-    required: ["sieg", "begruendung", "mechanismus"],
+    required: ["bester_weg", "sieg", "begruendung", "mechanismus"],
   },
 };
 
 const SYSTEM = `Du bist der Richter im „ältesten Spiel“ (Sandman: Morpheus gegen einen Dämon – jeder wird zu etwas,
-das die letzte Gestalt des anderen besiegt). Hier ist mindestens eine Gestalt dabei, die ein Spieler selbst erfunden
-hat; keine Regel kennt dieses Paar, und die Regel-Engine irrt bei neuen Gestalten oft (ein Radio „zersetzt“ einen Marder). Du urteilst – mit gesundem Menschenverstand, Märchenlogik und der inneren Logik
-der Gestalten (auch Witzgestalten nimmst du halb ernst: ihre Pointe gilt).
+das die letzte Gestalt des anderen besiegt). Mindestens eine Gestalt hat ein Spieler selbst erfunden; keine Regel kennt
+dieses Paar. Du urteilst mit Märchenlogik, gesundem Menschenverstand und der inneren Logik der Gestalten (auch
+Witzgestalten nimmst du halb ernst: ihre Pointe gilt).
+
+WIE DAS SPIEL GEMEINT IST: Der Angreifer hat seine Gestalt GEZIELT als Antwort auf das Ziel gewählt. Eine stimmige
+Antwort gewinnt – auch wenn sie Fantasie braucht: Wasser gegen Feuer, Katze gegen Maus, Licht gegen Schatten, der
+Wolf gegen die Großmutter, Hoffnung gegen Verzweiflung, ein Wortspiel, das trifft. Denke deshalb ZUERST als Anwalt des
+Angreifers (bester_weg), dann urteile. Kein Sieg nur, wenn es keinen stimmigen Bezug gibt (bloße Behauptung, „irgendwie“),
+oder wenn der Größenunterschied jede Wirkung ausschließt (eine Maus gegen einen Berg – außer ihre Natur trifft genau seine
+Schwachstelle). Das Ziel ist nicht im Vorteil, nur weil es zuerst da war.
 
 Dein Urteil muss aus Eigenschaften folgen, die das Spiel versteht: Nenne, was dem Angreifer oder dem Ziel an
 Eigenschaften, Fähigkeiten oder Intensität noch fehlte, damit eine Regel-Engine zum selben Ergebnis kommt – bestehende
 Begriffe bevorzugt, sonst neue (new_properties, new_qualities, new_mechanism im bekannten Format). Gestalten ohne
-„(erfunden)“ stammen aus dem Lexikon und ändern sich nicht – nenne dort nichts. Nur was wirklich zur
-Gestalt gehört: nichts erfinden, nur damit es passt. Größe zählt: Eine Maus besiegt keinen Berg, außer ihre Natur trifft
-genau seine Schwachstelle. Sei streng, aber fair: Ein Sieg „irgendwie“ ist kein Sieg. Antworte nur mit dem Werkzeug.`;
+„(erfunden)“ stammen aus dem Lexikon und ändern sich nicht – nenne dort nichts. Nur was wirklich zur Gestalt gehört:
+nichts erfinden, nur damit es passt. Antworte nur mit dem Werkzeug.`;
+
+/** The order Claude fills the tool in: the attacker's best case before the verdict. */
+export const TOOL_ORDER = Object.keys(TOOL.input_schema["properties"] as Record<string, unknown>);
 
 /** A judgement in the game's vocabulary (validated later by `amend` and the engine). */
 export interface Judgement {
@@ -95,13 +109,20 @@ function describe(onto: Ontology, f: Form): string {
     .join("\n");
 }
 
-export async function judgeWithClaude(onto: Ontology, settings: LlmSettings, attacker: Form, target: Form, engine: string): Promise<Judgement | undefined> {
+/**
+ * `objection`: a player's word on this pair ("hätte klappen müssen", "Quatsch") – the only
+ * outside opinion the judge hears. The engine's own verdict is deliberately not shown: it anchored
+ * the judge towards "no" (the form that was there first kept winning).
+ */
+export async function judgeWithClaude(onto: Ontology, settings: LlmSettings, attacker: Form, target: Form, objection?: string): Promise<Judgement | undefined> {
   const user = [
     `Angreifer:\n${describe(onto, attacker)}`,
     `Ziel:\n${describe(onto, target)}`,
-    `Die Regel-Engine meint bisher: ${engine}`,
-    "Besiegt der Angreifer das Ziel? Urteile und nenne, was an Eigenschaften fehlte.",
-  ].join("\n\n");
+    objection === undefined ? "" : `Einspruch eines Spielers: ${objection}`,
+    "Besiegt der Angreifer das Ziel? Erst der beste Weg, dann dein Urteil, dann was an Eigenschaften fehlte.",
+  ]
+    .filter((l) => l !== "")
+    .join("\n\n");
   try {
     const r = await callClaude(settings, { system: SYSTEM, user, maxTokens: 900, temperature: 0, tool: TOOL });
     return judgementFrom(onto, attacker, target, r.toolInput);

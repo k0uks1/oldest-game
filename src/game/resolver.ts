@@ -183,8 +183,8 @@ export class Resolver {
     // written, and where absurd wins came from (a radio corroding a marten).
     if (target === null || first.kind === "rejected" || (!invented(form) && !invented(target)) || !this.useClaude()) return undefined;
     if (this.onto.rulingFor(form.id, target.id) !== undefined) return undefined;
-    const engine = first.kind === "success" ? `Sieg (${this.onto.verbs.get(first.move.verb ?? "")?.spec.label ?? "?"})` : `kein Sieg – ${first.failure.reason}`;
-    const j = await judgeWithClaude(this.onto, this.host.llm(), form, target, engine);
+    // unanchored: the engine's own verdict is not shown to the judge
+    const j = await judgeWithClaude(this.onto, this.host.llm(), form, target);
     if (j === undefined) return undefined;
     const addVerb = j.win && j.verb !== undefined ? [j.verb] : [];
     // only invented forms learn; hand-written ones stay as they are (a precedent covers the rest)
@@ -206,7 +206,7 @@ export class Resolver {
       const own = onto.compileForm(f2).verbs;
       const engineVerb = outcome.kind === "failure" ? outcome.failure.closest?.verb : (outcome.move.verb ?? undefined);
       const rulingVerb = j.verb !== undefined && (own.includes(j.verb) || !j.win) ? j.verb : (engineVerb ?? own[0]);
-      const stored = rulingVerb === undefined ? undefined : addRuling(this.basePacks, pack, { attacker: f2.id, target: t2.id, valid: j.win, verb: rulingVerb, reason: j.reason });
+      const stored = rulingVerb === undefined ? undefined : addRuling(this.basePacks, pack, { attacker: f2.id, target: t2.id, valid: j.win, verb: rulingVerb, reason: j.reason, by: "judge" });
       if (stored !== undefined) {
         onto = stored.onto;
         pack = stored.pack;
@@ -249,10 +249,10 @@ export class Resolver {
     const t = this.onto.formById(targetId);
     if (a === undefined || t === undefined || !this.useClaude()) return undefined;
     // a player's objection is the doubt the referee otherwise waits for – for any pair; only invented forms learn
-    const engine = shouldHaveWon
-      ? `kein Sieg (${verbLabel}) – aber ein Spieler meint, das hätte klappen müssen. Prüfe ehrlich, ob der Angreifer gewinnt.`
-      : `Sieg (${verbLabel}) – aber ein Spieler hält das für Quatsch. Prüfe streng.`;
-    const j = await judgeWithClaude(this.onto, this.host.llm(), a, t, engine);
+    const objection = shouldHaveWon
+      ? `„${verbLabel}“ wurde nicht als Sieg gewertet – der Spieler meint, das hätte klappen müssen.`
+      : `„${verbLabel}“ wurde als Sieg gewertet – ein Spieler hält das für Quatsch.`;
+    const j = await judgeWithClaude(this.onto, this.host.llm(), a, t, objection);
     if (j === undefined) return undefined;
     const changes: Amendment[] = [];
     if (invented(a)) changes.push({ id: a.id, tags: j.attacker.tags, ...(j.attacker.qualities === undefined ? {} : { qualities: j.attacker.qualities }) });
@@ -262,7 +262,7 @@ export class Resolver {
     const pack = amended?.pack ?? this.learned;
     const own = onto.compileForm(onto.formById(a.id) ?? a).verbs;
     const verb = j.verb !== undefined && (own.includes(j.verb) || !j.win) ? j.verb : own[0];
-    const stored = verb === undefined ? undefined : addRuling(this.basePacks, pack, { attacker: a.id, target: t.id, valid: j.win, verb, reason: j.reason });
+    const stored = verb === undefined ? undefined : addRuling(this.basePacks, pack, { attacker: a.id, target: t.id, valid: j.win, verb, reason: j.reason, by: "judge" });
     if (stored === undefined && amended === undefined) return undefined;
     this.onto = stored?.onto ?? onto;
     this.learned = stored?.pack ?? pack;

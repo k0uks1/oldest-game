@@ -179,9 +179,14 @@ export function checkRuling(
   const reject = (text: string, failedAt: NonNullable<CounterCheck["failedAt"]>): CounterCheck => ({ ...common, valid: false, steps: [...steps, { ok: false, text }], power: 0, outcome: "vernichtet", failedAt });
   if (attacker.scale - base > config.maxScaleJump) return reject(`Maßlos: ${attacker.name} ist zu groß.`, "scale");
   if (ruling.valid) {
-    // A ruling decides whether a mechanism the attacker *has* works – never hands out new ones,
-    // and never overrides reach or intensity.
+    // A ruling decides whether a mechanism the attacker *has* works – never hands out new ones.
     if (!onto.compileForm(attacker).verbs.includes(ruling.verb)) return reject(`${attacker.name} beherrscht „${label}“ nicht.`, "other");
+    // The judge weighed the whole pair – size, reach, strength – and said yes: that stands.
+    if (ruling.by === "judge") {
+      steps.push({ ok: true, text: `Urteil: ${ruling.reason}` });
+      return { ...common, valid: true, steps, power: attacker.scale, outcome: verb?.spec.outcome ?? "vernichtet" };
+    }
+    // The referee only settles near misses: reach and intensity still hold.
     const range = inRange(onto, attacker, target, ruling.verb);
     if (!range.ok) return reject(range.text, "reach");
     const heat = intensity(onto, attacker, target, ruling.verb);
