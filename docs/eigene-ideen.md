@@ -469,3 +469,11 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Die Matrix steht, wo die Gestalt erscheinen wird** | Solange PixelLab malt, richtet sich über dem Platz des Spielers ein aufrechter Runenkreis auf: zwei Ringe, kreisende Runen, ein Hexagramm, das sich selbst einzeichnet, eine Lichtsäule. Lila Flammenzungen lecken vom Boden hoch, Funken steigen. | `drawMatrix`, `drawSummoning` |
 | **Gestalten formen sich in den Flammen** | Umrisse bekannter Gestalten (Wolf, Drache, Baum, Katze …) wachsen von unten aus dem Feuer, stehen kurz und schmelzen Zelle für Zelle in die nächste. Am Umriss steigt eine Hitzewelle hoch, durch den Kern läuft ein Lichtband. Auch bei winzigen Gestalten sind die Zwischenformen groß genug zum Erkennen. | `render/morph.ts` |
 | **Zum Schluss die echte Form** | Ist das Bild da, zieht sich das Feuer auf den Umriss des fertigen Bildes zusammen – in dessen Größe und an dessen Platz –, dann Blitz und die Gestalt steht genau dort. Kommt kein Bild, nimmt es den Umriss der gezeichneten Figur an. | `endConjuring(arrived, form)` |
+
+## Dinge bleiben Dinge (Nutzerwunsch: „Motorsäge wurde zu einem Mann, der eine Säge hält“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Kein „full body“ für Dinge** | Unser Stil-Rezept hängte an jede Beschreibung „game sprite, full body“ – für PixelLab heißt das: eine Figur. Getestet: „a chainsaw“ ergab einen Mann mit Kettensäge. Dinge, Elemente und Ideen bekommen jetzt „a single object on its own / a symbolic object, no people, no hands“ und kein „full body“; dann kommt die Kettensäge allein, Gasmangel wird ein Gaskanister mit ersterbender blauer Flamme. | `framing`, `styleFor` |
+| **Wer Hände will, bekommt Hände** | Beschreibungen, die selbst Personen, Figuren oder Hände nennen („ein Stern in hohlen Händen“, „eine weinende Gestalt“), bleiben unverändert. Figuren behalten ihre gespeicherten Bilder; nur Dinge werden beim nächsten Auftritt einmal neu gemalt. | `WANTS_FIGURE` |
+| **Claude beschreibt die Gestalt selbst** | `bild` ist ausdrücklich Englisch (PixelLab versteht kein Deutsch – „eine Kettensäge“ ergab eine beliebige Frau) und zeigt das Ding, nicht jemanden, der es benutzt; Zustände und Ideen werden ein sprechendes Ding. `humanoid` nur für Personen. | Parser-Prompt |

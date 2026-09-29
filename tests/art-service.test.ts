@@ -10,7 +10,11 @@ import type { ArtItem } from "../src/online/protocol.ts";
 import { parseClientMsg } from "../src/online/protocol.ts";
 import { artFor, decodeArt } from "../src/render/art.ts";
 import { ArtClient, type ArtTransport } from "../src/ui/art-client.ts";
+import prompts from "../src/content/core/art-prompts.json" with { type: "json" };
 import { artRequest, artSize } from "../server/art-prompts.ts";
+import { styleFor } from "../server/pixellab.ts";
+
+const CORE_PROMPTS_JAEGER = (prompts as Record<string, string>)["jaeger"];
 import { ArtService, artKey } from "../server/art-service.ts";
 import type { Rgba } from "../server/png.ts";
 
@@ -34,8 +38,19 @@ describe("just-in-time pictures (server store)", () => {
     assert.ok(req);
     assert.equal(req.size, artSize(3));
     assert.equal(artSize(3), 128);
-    assert.equal(artRequest({ id: "g:neu", scale: 1, artPrompt: "a squeaky toy" })?.prompt, "a squeaky toy");
-    assert.equal(artRequest({ id: "g:neu", scale: 1 }), undefined);
+    assert.equal(artRequest({ id: "g:neu", scale: 1, artPrompt: "a grumpy dwarf", archetype: "humanoid", plane: "leben" })?.prompt, "a grumpy dwarf");
+    assert.equal(artRequest({ id: "g:neu", scale: 1, archetype: "humanoid", plane: "leben" }), undefined);
+  });
+
+  it("things stay things: no figure for objects, a symbol for ideas – figures keep their pictures", () => {
+    const saw = artRequest({ id: "g:saege", scale: 2, artPrompt: "a chainsaw", archetype: "weapon", plane: "materie" });
+    assert.ok(saw);
+    assert.equal(saw.prompt, "a chainsaw, a single object on its own, no people, no hands");
+    assert.equal(styleFor(saw.prompt), "dark fantasy pixel art game sprite");
+    const idea = artRequest({ id: "g:gasmangel", scale: 2, artPrompt: "an empty gas canister", archetype: "bottle", plane: "abstrakt" });
+    assert.match(idea?.prompt ?? "", /symbolic object, no people/);
+    assert.equal(artRequest(lx("jaeger"))?.prompt, CORE_PROMPTS_JAEGER, "figures: same description, same key as before");
+    assert.match(styleFor("a hunter"), /full body/);
   });
 
   it("paints once: pending while running, merged requests, stored on disk, ready afterwards", async () => {

@@ -137,6 +137,9 @@ facing right, transparent, one fixed style recipe in `server/pixellab.ts`) and k
 (`learned/art/`, next to the learned pack – the Docker volume). The store key is a hash of the **description**
 and size (`artKey`), not the form: variants (the hunter in a red coat) are separate pictures, equal descriptions
 share one. Descriptions: core forms `content/core/art-prompts.json`, learned forms `artPrompt` (Claude's `bild`).
+Descriptions are English (PixelLab ignores German – tested: „eine Kettensäge“ gives a random woman). `framing()` frames
+non-figures (by archetype) as „a single object on its own / a symbolic object, no people, no hands“ and `styleFor()` drops
+„full body“ for them (it turned a chainsaw into a man holding one); a description that asks for people or hands keeps them.
 Pictures show at `displaySize(scale)` (a finer ladder than drawn sprites: 40 · 48 · 64 · 80 · 96 · 112 · 120 · 128)
 and are made at `ART_DENSITY` (2)× that (`artSize`); transparent margins are cut away (`trimmed`, animation frames
 share one crop), so figures fill their place and stand on the ground. The Pixi arena renders at that density (scene

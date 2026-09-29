@@ -3,19 +3,26 @@
  * One synchronous pixflux call per sprite: side view facing right, transparent background,
  * one fixed style recipe so every generated form looks like part of the same game.
  */
+import { NO_FIGURE } from "./art-prompts.ts";
 import { decodePng, encodePng, type Rgba } from "./png.ts";
 
 const ENDPOINT = "https://api.pixellab.ai/v2/create-image-pixflux";
 
-/** Appended to every description – the shared look. */
+/** Appended to every description – the shared look. Figures are drawn whole; things stay things. */
 export const STYLE_SUFFIX = "dark fantasy pixel art game sprite, full body, facing right";
+const THING_STYLE = "dark fantasy pixel art game sprite";
+
+/** The style for a description: "full body" only for figures (it turns a chainsaw into a man holding one). */
+export function styleFor(description: string): string {
+  return description.includes(NO_FIGURE) ? THING_STYLE : STYLE_SUFFIX;
+}
 
 export async function generatePixelArt(key: string, description: string, size: number, seed = 7): Promise<Rgba> {
   const res = await fetch(ENDPOINT, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      description: `${description}, ${STYLE_SUFFIX}`,
+      description: `${description}, ${styleFor(description)}`,
       image_size: { width: size, height: size },
       outline: "single color black outline",
       shading: "medium shading",
