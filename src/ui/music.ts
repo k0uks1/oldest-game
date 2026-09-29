@@ -33,6 +33,20 @@ function hz(semitonesFromA2: number): number {
   return A2 * 2 ** (semitonesFromA2 / 12);
 }
 
+/** Seconds planned ahead: in a visible tab, and in a hidden one (timers throttled to ~1 s there). */
+const LOOKAHEAD = 0.15;
+const LOOKAHEAD_HIDDEN = 1.5;
+
+/**
+ * Where the scheduler continues: unchanged while it keeps up; after a stall it jumps forward by
+ * whole sixteenths to just ahead of `now`, so the groove stays on its grid and nothing piles up.
+ */
+export function catchUp(nextTime: number, step: number, now: number, secondsPer16th: number): { nextTime: number; step: number } {
+  if (nextTime >= now - 0.05) return { nextTime, step };
+  const skip = Math.ceil((now + 0.02 - nextTime) / secondsPer16th);
+  return { nextTime: nextTime + skip * secondsPer16th, step: step + skip };
+}
+
 export class Music {
   private ctx: AudioContext | null = null;
   private out: GainNode | null = null;
@@ -145,7 +159,13 @@ export class Music {
   private schedule(): void {
     const ctx = this.ctx;
     if (ctx === null) return;
-    while (this.nextTime < ctx.currentTime + 0.15) {
+    // after a pause (hidden tab, another app) skip ahead on the beat instead of playing every missed note at once
+    const caught = catchUp(this.nextTime, this.step, ctx.currentTime, this.secondsPer16th);
+    this.nextTime = caught.nextTime;
+    this.step = caught.step;
+    // a hidden tab gets its timers throttled to about once a second – plan further ahead there
+    const hidden = typeof document !== "undefined" && document.hidden;
+    while (this.nextTime < ctx.currentTime + (hidden ? LOOKAHEAD_HIDDEN : LOOKAHEAD)) {
       if (!this.muted) this.playStep(this.step, this.nextTime);
       this.nextTime += this.secondsPer16th;
       this.step++;

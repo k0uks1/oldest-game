@@ -520,3 +520,10 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Alte Doppel verschwinden** | Beim Laden werden Zwillinge zusammengelegt; Urteile, Einwände und Siegweg-Belege der zweiten gelten dann für die erste. | `mergeNamesakes` |
 | **Dein Name bleibt deiner** | „unheiliger Franzose“ wurde als Mönch beschworen: Die Ähnlichkeitssuche machte aus „unheiliger“ ein „heiliger“ (ein Beiname des Mönchs), und eine Gestalt, die aussah wie ihr Anker, wurde durch den Anker ersetzt – samt Namen. Jetzt zählen ähnliche Wörter nur als Tippfehler (ein Buchstabe), und eine Gestalt mit eigenem Namen oder Abwandlungen wird nie gegen ihren Anker getauscht. | `anchorsFor`, `Resolver.classify` |
 | **Zehn Beine bleiben zehn Beine** | Das Zusammenlegen verglich bei ganz neuen Gestalten nur den Namen: Nannte Claude den „zehnbeinigen Gandalf“ schlicht „Gandalf“, wurden beide eins, und die Eingabe führte fortan zum normalen Gandalf. Jetzt gilt: Wiedererkannt wird nur, wer nichts über den Namen hinaus sagt („die Bibel“); zusammengelegt werden nur exakt gleiche Gestalten; ist Claudes Name schon vergeben, heißt die neue Gestalt so, wie der Spieler sie gerufen hat („Zehnbeiniger Gandalf“). Beim Laden werden fremde Wortlaute wieder von einer Gestalt gelöst. | `saysOnlyName`, `twinKey`, `playerName` |
+
+## Die Musik kommt zurück (Fehlerbericht: „Musik bricht ab, wenn man raustabbt“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Aufwecken** | Mobile Browser legen den Audio-Kontext still, wenn eine andere App nach vorn kommt (iOS: „interrupted“), und wecken ihn nie selbst. Jetzt weckt die Seite ihn beim Zurückkehren (sichtbar, `pageshow`, Fokus) und bei jeder Berührung oder Taste. | `Sound.wake` |
+| **Im Takt weiter** | Ein gedrosselter Hintergrund-Tab lässt den Taktgeber stocken; danach lagen alle Noten in der Vergangenheit. Jetzt springt er ganze Sechzehntel nach vorn – Raster und Taktposition stimmen, nichts wird nachgeholt. Im Hintergrund plant er 1,5 s voraus, damit gedrosselte Timer nicht reißen. | `catchUp`, `LOOKAHEAD_HIDDEN` |

@@ -330,6 +330,15 @@ export class App {
       if (this.els.modal.classList.contains("open")) this.closeModal();
       else this.toggleMenu();
     });
+    // back from another tab or app: the browser paused the sound – wake it (and on the next touch, where
+    // a phone insists on a gesture)
+    const wake = (): void => {
+      if (!document.hidden) this.sound.wake();
+    };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("pageshow", wake);
+    window.addEventListener("focus", wake);
+    for (const ev of ["pointerdown", "keydown", "touchend"] as const) document.addEventListener(ev, wake, { capture: true, passive: true });
     this.arena.start();
     this.render();
     void this.init();
