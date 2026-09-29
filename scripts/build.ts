@@ -33,6 +33,8 @@ const options: esbuild.BuildOptions = {
   sourcemap: serve ? "inline" : false,
   write: false,
   legalComments: "none",
+  // painted scenery travels inside the single HTML file
+  loader: { ".png": "dataurl" },
   define: {
     "process.env.NODE_ENV": serve ? '"development"' : '"production"',
     __PREVIEW_SANDBOX__: artifact ? "true" : "false",

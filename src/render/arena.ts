@@ -1,4 +1,5 @@
 import type { Ontology } from "../engine/ontology/ontology.ts";
+import { loadImage, SCENERY, VOID } from "./scenery.ts";
 import { hash32, rng } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 import { paletteFor, type SpritePalette } from "./palette.ts";
@@ -332,6 +333,7 @@ export abstract class ArenaSim {
     this.stars = scatterStars(this.bricks);
     this.backdrop = canvas(WIDTH, HEIGHT);
     ctx2d(this.backdrop).drawImage(this.background, 0, 0);
+    void this.loadScenery();
     const r = rng(4242);
     for (let i = 0; i < 38; i++) this.motes.push({ x: r() * WIDTH, y: 20 + r() * (GROUND_Y - 20), vx: (r() - 0.5) * 3, vy: (r() - 0.5) * 2, phase: r() * 10 });
     for (let i = 0; i < 12; i++) {
@@ -1439,6 +1441,11 @@ export abstract class ArenaSim {
       }
     }
     if (!changed) return;
+    this.repaintBackdrop();
+  }
+
+  /** Background plus the void behind every open brick → the backdrop renderers show. */
+  private repaintBackdrop(): void {
     const ctx = ctx2d(this.backdrop);
     ctx.drawImage(this.background, 0, 0);
     let n = 0;
@@ -1449,6 +1456,21 @@ export abstract class ArenaSim {
     }
     this.openBricks = n;
     this.backdropVersion++;
+  }
+
+  /** Swap the procedural room and void for the painted ones once they are decoded. */
+  private async loadScenery(): Promise<void> {
+    if (typeof location !== "undefined" && new URLSearchParams(location.search).has("drawn")) return;
+    const [room, space] = await Promise.all([loadImage(SCENERY[this.stage.name]), loadImage(VOID)]);
+    const paint = (target: HTMLCanvasElement, img: HTMLImageElement | undefined): void => {
+      if (img === undefined) return;
+      const g = ctx2d(target);
+      g.clearRect(0, 0, target.width, target.height);
+      g.drawImage(img, 0, 0, target.width, target.height);
+    };
+    paint(this.background, room);
+    paint(this.starfield, space);
+    this.repaintBackdrop();
   }
 
   /** The eyes follow whoever arrived last. */
