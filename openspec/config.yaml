@@ -27,6 +27,7 @@ rules:
 operations:
   apply:
     guidance:
+      - 'Work autonomously: where the workflow would pause to ask (unclear task, design issue, added scope), decide with best judgement, note the decision in design.md or the PR body, and continue. Ask only if the user explicitly asked for feedback on that point.'
       - 'Tick tasks in tasks.md as they are done and commit them with the code – the backlog issue reads progress from there.'
       - 'Mention the change''s issue in the PR body ("Refs #<n>"; the change''s issue closes itself when the change is archived on main).'
   archive:

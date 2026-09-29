@@ -3,9 +3,9 @@
 Copied from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, © 2026 Matt Pocock),
 commit `d81f3a1` (2026-09-29), without the Codex `agents/` files.
 
-**Local changes** (keep them when updating): `wayfinder` has a section „This repo: autonomous by default“ (decide
-what is derivable, park only the human's own decisions as `needs-user` comments, several tickets per session, no
-chat interviews); `grilling`, `domain-modeling` and `prototype` fire only on an explicit request (descriptions
+**Local changes** (keep them when updating): `wayfinder` has a section „This repo: autonomous by default“ (ask only
+when the user asked for feedback, otherwise decide and record it with room for objection; `needs-user` only for
+things only the user can do; several tickets per session; no chat interviews); `grilling`, `domain-modeling` and `prototype` fire only on an explicit request (descriptions
 narrowed), so autonomous sessions are never turned into interviews.
 
 

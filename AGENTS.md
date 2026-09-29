@@ -60,7 +60,8 @@ This file only routes. Content lives in the `CONTEXT.md` of the folder it is abo
   and every PR to `pr-preview/pr-<n>/`
   (gh-pages branch).
 - Ideas Claude adds on its own go into `docs/eigene-ideen.md`.
-- Don't stop to ask: a decision only the user can make goes on its issue as `needs-user` (`docs/agents/planning.md`).
+- **Work autonomously.** Ask only when the user explicitly wants feedback or leaves a point open for them;
+  otherwise decide, record the reasoning (issue, PR, `design.md`) and carry on (`docs/agents/planning.md`).
 
 ## Agent skills
 

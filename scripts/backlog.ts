@@ -60,7 +60,7 @@ export const LABELS: { name: string; color: string; description: string }[] = [
   { name: "wayfinder:prototype", color: "c5def5", description: "Wayfinder: Prototyp (HITL)" },
   { name: "wayfinder:grilling", color: "c5def5", description: "Wayfinder: Klärungsgespräch (HITL)" },
   { name: "wayfinder:task", color: "c5def5", description: "Wayfinder: Vorarbeit für eine Entscheidung" },
-  { name: "needs-user", color: "d93f0b", description: "Wartet auf eine Entscheidung von dir – Antwort als Kommentar" },
+  { name: "needs-user", color: "d93f0b", description: "Blockiert, bis du etwas tust (Key, Konto, Zugang) – Checkliste im Issue" },
 ];
 
 const ARCHIVE_DATE = /^\d{4}-\d{2}-\d{2}-/;
@@ -249,8 +249,11 @@ async function fetchIssues(token: string, repo: string, changes: Change[]): Prom
 }
 
 async function ensureLabels(token: string, repo: string): Promise<void> {
-  const have = new Set((await api<{ name: string }[]>(token, "GET", `/repos/${repo}/labels?per_page=100`)).map((l) => l.name));
-  for (const l of LABELS) if (!have.has(l.name)) await api(token, "POST", `/repos/${repo}/labels`, l);
+  const have = new Map((await api<{ name: string; description: string | null }[]>(token, "GET", `/repos/${repo}/labels?per_page=100`)).map((l) => [l.name, l.description]));
+  for (const l of LABELS) {
+    if (!have.has(l.name)) await api(token, "POST", `/repos/${repo}/labels`, l);
+    else if (have.get(l.name) !== l.description) await api(token, "PATCH", `/repos/${repo}/labels/${encodeURIComponent(l.name)}`, { description: l.description });
+  }
 }
 
 async function run(actions: Action[], token: string, repo: string): Promise<void> {

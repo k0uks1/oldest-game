@@ -26,9 +26,9 @@ The backlog of this repo lives in **GitHub issues** of `k0uks1/oldest-game`. Rea
 - **PR body:** `Closes #<n>` for work that finishes a plain issue, `Refs #<n>` for an OpenSpec change's issue
   (that one closes itself when the change is archived).
 - **A user wish in chat that won't be done now** becomes an issue too, so it isn't lost in scrollback.
-- **A decision only the user can make** (taste, product direction, cost, irreversible): comment the question with
-  options and a recommendation on the issue, label it `needs-user`, and carry on with other work – don't stop the
-  session to ask. Whoever sees the answer later removes the label and continues.
+- **Decisions are made, not parked:** record them with reasoning in the issue; the user objects there if they
+  disagree. **`needs-user`** only when blocked on something only the user can *do* (key, account, payment,
+  access) – comment the exact checklist, label, move on. Whoever sees it done removes the label and continues.
 
 ## Conventions
 

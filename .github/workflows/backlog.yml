@@ -4,10 +4,10 @@ name: Backlog
 # a new change opens its issue, progress and PRs are written into it, archiving on main closes it.
 on:
   pull_request:
-    paths: ["openspec/**"]
+    paths: ["openspec/**", "scripts/backlog.ts", ".github/workflows/backlog.yml"]
   push:
     branches: [main]
-    paths: ["openspec/**"]
+    paths: ["openspec/**", "scripts/backlog.ts", ".github/workflows/backlog.yml"]
   workflow_dispatch:
 
 concurrency:

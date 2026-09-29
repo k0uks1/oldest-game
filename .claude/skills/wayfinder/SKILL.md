@@ -10,26 +10,25 @@ The destination varies per effort, and naming it is the first act of charting: i
 
 ## This repo: autonomous by default (overrides the rest of this file)
 
-Here wayfinder is first of all **tracking**: several sessions work a map in parallel and must not stall waiting for
+Here wayfinder is first of all **tracking**: several sessions work a map in parallel and never stall waiting for
 the human. Where this section and the text below disagree, this section wins.
 
-- **Decide what you can.** A question whose answer follows from the code, `AGENTS.md` and the folders' `CONTEXT.md`, `openspec/specs/`, the
-  docs or earlier decisions on the map is **AFK**, whatever its label: decide it, record it as the resolution
-  comment with its reasoning, end the comment with „Einspruch? Einfach hier kommentieren – dann wird neu
-  entschieden.“, close the ticket. Reversible choices are yours too; say so in the comment.
-- **Only the human's own decisions wait** – product direction and taste, anything costly (money, API budgets) or
-  hard to reverse, contradicting a core invariant (`AGENTS.md`). For those: write the question with numbered options
-  and your recommendation as a comment on the ticket, add the label `needs-user`, leave it open and unassigned,
-  and **move on** to the next frontier ticket. Never wait in chat for an answer. A human answers in the issue; the
-  next session that sees the answer removes `needs-user` and resolves the ticket.
+- **Ask only when the user asked for it.** If the user's request explicitly wants their feedback or leaves a point
+  open for them, ask – once, compactly, with your recommendation. Everything else you decide.
+- **Decide every ticket yourself**, whatever its label (grilling, prototype, research, task): use the code,
+  `AGENTS.md` and the folders' `CONTEXT.md`, `openspec/specs/`, the docs and earlier decisions on the map; where they
+  don't settle it, use your best judgement (prefer the reversible, the simpler, the one that keeps the invariants).
+  Record the decision and its reasoning as the resolution comment, end it with „Einspruch? Einfach hier
+  kommentieren – dann wird neu entschieden.“, close the ticket. A later objection in the issue reopens it.
+- **`needs-user` is not for questions.** Use it only when a ticket is blocked on something only the user can *do*
+  (a key, an account, a payment, access): comment the exact checklist, label it, leave it unassigned and move on.
 - **grilling / domain-modeling / prototype** are not interviews here. Use grilling's design tree as your own
-  checklist, write glossary terms and ADRs directly (`domain-modeling` formats), and treat a prototype ticket as
-  AFK if a throwaway prototype on a branch answers it without the human; otherwise `needs-user`.
-- **Charting** needs no interview: derive destination, notes and tickets from the user's request plus the repo.
-  Ask in chat only when the destination itself is ambiguous – then at most one short round, recommendations
-  included – and write every assumption into the map's Notes.
-- **More than one ticket per session is fine** – keep taking AFK frontier tickets until only `needs-user` or
-  blocked ones are left or the context gets heavy. Claim each first (assign it), so parallel sessions skip it.
+  checklist, write glossary terms and ADRs directly (`domain-modeling` formats), build a prototype on a throwaway
+  branch when it helps you decide.
+- **Charting** needs no interview: derive destination, notes and tickets from the user's request plus the repo and
+  write every assumption into the map's Notes.
+- **Several tickets per session** – keep taking frontier tickets until only blocked ones are left or the context
+  gets heavy. Claim each first (assign it), so parallel sessions skip it.
 - **Tracking comes first.** Every resolution, new ticket, graduated fog and out-of-scope ruling goes to the map
   immediately, not at the end of the session – another session may read it any minute.
 - When a stretch of the way is clear and buildable, hand it to OpenSpec (`/opsx:propose` with `Issue: #<ticket>`);
