@@ -53,7 +53,8 @@ This file only routes. Content lives in the `CONTEXT.md` of the folder it is abo
   Imports with explicit `.ts`; `import type` for types (`verbatimModuleSyntax`).
 - UI text is German; code, identifiers and comments are English.
 - `npm run check` before every PR (typecheck, lint, tests, build, secret scan, OpenSpec validation).
-- **Versions:** every PR bumps `package.json` `version` (minor for features/content, patch for fixes); the build injects it
+- **Versions:** every PR that changes code or content bumps `package.json` `version` (minor for features/content,
+  patch for fixes; planning- or docs-only PRs don't); the build injects it
   (`src/version.ts`), shown on the start screen and in the menu (previews add „· PR n“).
 - Workflow: feature branch → PR (CI green) → squash merge. CI comments a playable build; `pages.yml` deploys `main`
   and every PR to `pr-preview/pr-<n>/`

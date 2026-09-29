@@ -11,6 +11,8 @@ context: |
   opponent, rules reference tags not forms, pure engine, learning only through learn(), scale budgets).
   Domain words (Gestalt, Mechanismus, Affordanz, Closure, Wille, Eleganz, Schiedsrichter, Urteil …) follow
   GLOSSARY.md when it exists, otherwise the folders' CONTEXT.md.
+  Work autonomously: where a workflow step says to ask the user (unclear request, design choice), decide with
+  best judgement and record it in proposal.md / design.md – ask only if the user explicitly wanted feedback.
   Backlog: GitHub issues. Every change here gets its issue automatically (scripts/backlog.ts via
   .github/workflows/backlog.yml) – never create or update that issue by hand.
 

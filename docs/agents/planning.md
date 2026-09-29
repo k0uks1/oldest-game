@@ -9,13 +9,18 @@ Four places, each with one job – don't duplicate between them:
 | Work in flight: why, design, tasks | `openspec/changes/<name>/` | `/opsx:propose` → `/opsx:apply` → `/opsx:archive` |
 | Backlog: everything not started, and the state of what is | GitHub issues | **automatic** for OpenSpec changes, see below |
 
+- **Note it or plan it?** „Backlog:“, „Idee:“, „notieren“, a wish in passing → **one issue**
+  (`docs/agents/issue-tracker.md`). „Planen“, a feature to be built (by this or another session) → **an OpenSpec
+  change** (`/opsx:propose`) on its own branch with a PR – the PR is what makes the backlog sync open its issue.
+  Planning-only PRs (only `openspec/changes/`, docs) need no version bump; the bump comes with the code.
 - **Specs describe today's behaviour.** A wish that changes it is normal: its OpenSpec change carries a delta
   (`## MODIFIED` / `## REMOVED Requirements`) for that spec, and the backlog issue names the spec it would change.
 - **Non-trivial feature or rule change** → `/opsx:propose` first (from an issue: `Issue: #<n>` under "## Why"),
   then `/opsx:apply`, and archive in the same PR that finishes it. Small fixes need no change folder.
 - **The backlog keeps itself.** `.github/workflows/backlog.yml` runs `scripts/backlog.ts` on every PR and push to
   `main` touching `openspec/`: one issue per change (label `openspec`), progress from `tasks.md`, the PRs that
-  touch it; archiving on `main` closes it. Never edit the block between the `openspec:begin/end` markers by hand.
+  touch it; archiving on `main` closes it. Never edit the block between the `openspec:begin/end` markers by hand;
+  the issue title is set once from the change name and may be improved by hand – the sync never touches it.
 - **Found something out of scope while working** (bug, idea, debt, a user wish that won't be done now): search
   the issues, then open one short issue instead of fixing it on the side or leaving it in chat.
   How to reach GitHub (gh locally, MCP tools in the cloud): `docs/agents/issue-tracker.md`.
