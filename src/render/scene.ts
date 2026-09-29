@@ -27,9 +27,11 @@ export abstract class ArenaScene extends ArenaSim {
     this.drawFieldFloor(base);
     this.drawEyes(base, glow);
     this.drawTorchFlames(base, glow);
-    this.stage.drawProps?.((x, y, w, h, color) => {
-      base.rect(x, y, w, h, color);
-    }, this.reducedMotion ? 0 : this.time);
+    const banners = this.bannersAlpha();
+    if (banners > 0)
+      this.stage.drawProps?.((x, y, w, h, color) => {
+        base.rect(x, y, w, h, color, banners);
+      }, this.reducedMotion ? 0 : this.time);
     this.drawCritters(base, glow);
     this.drawMotes(base);
     this.drawDrops(base, glow);

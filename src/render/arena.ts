@@ -7,10 +7,12 @@ import { alphaBox, artFor, artGlow, crop, resample, unionBox, type Box } from ".
 import { EMPTY_MASK, fitMask, maskOf, type Mask } from "./morph.ts";
 import { EFFECTS, type EffectKind } from "./effects.ts";
 import { EFFECT_SHEETS } from "./effects/index.ts";
-import { carriesField, chooseRoom, ROOM_MIN_SCALE } from "./rooms.ts";
+import { carriesField, chooseRoom, ROOM_MIN_SCALE, ROOMS } from "./rooms.ts";
 import { ROOM_PICTURES } from "./rooms/index.ts";
+import { FORM_ANIMS } from "./form-anims/index.ts";
 import { displaySize, renderGlow, renderSprite, type PixelImage } from "./sprite.ts";
 import { ISO } from "./stage-iso.ts";
+import { acornImage, signatureFor, tattooImage, type Signature } from "./eichel.ts";
 import { FLOOR_Y, GROUND_Y, HEIGHT, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
 
 export { FLOOR_Y, GROUND_Y, HEIGHT, TORCH_X, WIDTH } from "./stage.ts";
@@ -29,9 +31,12 @@ export type Side = 0 | 1;
 export type ArenaCue = "summon" | "reveal" | "strike" | "impact" | "fizzle" | "discovery" | "boom";
 
 /** Special spectacles for a few forms – pure show, no rules involved. */
-export type EasterEgg = "nuke" | "meteor" | "rainbow" | "confetti" | "vortex";
+export type EasterEgg = "nuke" | "meteor" | "rainbow" | "confetti" | "vortex" | "tattoo" | "eicheln";
 
 const EGG_PATTERNS: readonly (readonly [RegExp, EasterEgg])[] = [
+  // the Eichel figures: the gang shows its tattoo, the Eichelober arrives in a shower of acorns
+  [/eichel\s*-?\s*(ober\s*-?\s*)?(gang|bande)/i, "tattoo"],
+  [/eichel\s*-?\s*ober/i, "eicheln"],
   [/atom|nuklear|kernwaffe|a-bombe|wasserstoffbombe|nuke/i, "nuke"],
   [/meteor|asteroid|komet|sternschnuppe/i, "meteor"],
   [/regenbogen|rainbow/i, "rainbow"],
@@ -196,6 +201,27 @@ export interface Particle {
   glow: boolean;
 }
 
+/** A little picture flying through the arena (an acorn, the gang tattoo). */
+export interface Prop {
+  readonly image: HTMLCanvasElement;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  readonly max: number;
+  readonly gravity: number;
+  /** Size in arena pixels (centered on x, y). */
+  readonly w: number;
+  readonly h: number;
+  readonly flip: boolean;
+  /** Seconds of fade-in and fade-out at the ends of its life. */
+  readonly fade: number;
+  readonly glow: number;
+  /** Bursts into shards where its flight ends (an acorn hitting home). */
+  readonly shatter?: boolean;
+}
+
 /** How an attack looks – chosen from the mechanism, see {@link attackStyle}. */
 export type AttackStyle =
   | "slash" | "fire" | "water" | "earth" | "ice" | "bolt" | "wind" | "light"
@@ -330,6 +356,11 @@ export abstract class ArenaSim {
   protected readonly background: HTMLCanvasElement;
   protected readonly fighters: [Fighter | null, Fighter | null] = [null, null];
   protected readonly particles: Particle[] = [];
+  /** Flying pictures (acorns, the gang tattoo). */
+  protected readonly props: Prop[] = [];
+  private eichelArt: { acorn: HTMLCanvasElement } | null = null;
+  /** Standard animations that come with the game (`render/form-anims/`): strip name → frames. */
+  private readonly formAnims = new Map<string, readonly PixelImage[]>();
   protected readonly projectiles: Projectile[] = [];
   protected readonly rings: Ring[] = [];
   protected readonly bolts: Bolt[] = [];
@@ -420,6 +451,7 @@ export abstract class ArenaSim {
     void this.loadScenery();
     void this.loadEffects();
     void this.loadRooms();
+    void this.loadFormAnims();
     const r = rng(4242);
     for (let i = 0; i < 38; i++) this.motes.push({ x: r() * WIDTH, y: 20 + r() * (GROUND_Y - 20), vx: (r() - 0.5) * 3, vy: (r() - 0.5) * 2, phase: r() * 10 });
     for (let i = 0; i < 12; i++) {
@@ -522,6 +554,30 @@ export abstract class ArenaSim {
         this.vortex = { x, y: this.gy(side) - 40, life: 0 };
         await wait(rm ? 100 : 900);
         return;
+      case "eicheln": {
+        // the Eichelober arrives: acorns rain around him, clouds puff up where he lands
+        const { acorn } = this.eichelProps();
+        for (let i = 0; i < 16; i++) {
+          this.props.push({ image: acorn, x: x + (r() - 0.5) * 120, y: -10 - r() * 50, vx: (r() - 0.5) * 20, vy: 40 + r() * 40, life: -r() * 0.6, max: 1.6, gravity: 180, w: 10, h: 13, flip: r() < 0.5, fade: 0.15, glow: 0 });
+        }
+        this.clouds(x, this.gy(side) - 2, 26);
+        this.rings.push({ x, y: this.gy(side), r: 4, life: 0, max: 0.9, color: "#e8c040" });
+        await wait(rm ? 100 : 900);
+        return;
+      }
+      case "tattoo": {
+        // the gang shows its colours: the Eichelober tattoo flares up in ink and light above them
+        const tattoo = this.tattoo();
+        if (tattoo === null) return;
+        const top = this.gy(side) - (f?.sprite.height ?? 60) - 30;
+        const h = 54;
+        const w = Math.round((h * tattoo.width) / tattoo.height);
+        this.props.push({ image: tattoo, x, y: top, vx: 0, vy: -6, life: 0, max: rm ? 0.6 : 2.2, gravity: 0, w, h, flip: side === 1, fade: 0.45, glow: 0.8 });
+        this.rings.push({ x, y: top, r: 6, life: 0, max: 1, color: "#9ae8ff" });
+        this.onCue?.("discovery");
+        await wait(rm ? 150 : 1300);
+        return;
+      }
     }
   }
 
@@ -586,6 +642,7 @@ export abstract class ArenaSim {
     this.projectiles.length = 0;
     this.bolts.length = 0;
     this.rings.length = 0;
+    this.props.length = 0;
   }
 
   /** Swap in a grown ontology (live learning). Cached sprites stay valid – they depend on form ids. */
@@ -820,28 +877,62 @@ export abstract class ArenaSim {
    */
   animate(formId: string, frames: readonly PixelImage[], fps = 8): boolean {
     let any = false;
+    // one crop for all frames: the figure moves inside it instead of the frame jumping
+    const box = unionBox(frames.map((img) => alphaBox(img)));
     for (const side of [0, 1] as const) {
-      const f = this.fighters[side];
-      if (f?.form.id !== formId || frames.length < 2) continue;
-      const palette = f.sprite.palette;
-      // one crop for all frames: the figure moves inside it instead of the frame jumping
-      const box = unionBox(frames.map((img) => alphaBox(img)));
-      const entries = frames.map((img) => this.pictureEntry(f.form, img, palette, box));
-      const first = entries[0];
-      if (first === undefined) continue;
-      // the fighter's own canvases, repainted frame by frame
-      const own = (c: HTMLCanvasElement): HTMLCanvasElement => {
-        const copy = canvas(c.width, c.height);
-        ctx2d(copy).drawImage(c, 0, 0);
-        return copy;
-      };
-      const live: SpriteEntry = { ...first, image: own(first.image), glow: own(first.glow), silhouette: own(first.silhouette), rim: own(first.rim), stone: own(first.stone) };
-      this.fighters[side] = { ...f, sprite: live, anim: { frames: entries, fps, t: 0, shown: 0 }, flash: 0.6 };
-      this.rings.push({ x: SIDE_X[side], y: this.gy(side), r: 4, life: 0, max: 0.8, color: palette.glow });
+      if (this.fighters[side]?.form.id !== formId) continue;
+      const f = this.runFrames(side, frames, fps, box);
+      if (f === null) continue;
+      f.flash = 0.6;
+      this.rings.push({ x: SIDE_X[side], y: this.gy(side), r: 4, life: 0, max: 0.8, color: f.sprite.palette.glow });
       this.onCue?.("reveal");
       any = true;
     }
     return any;
+  }
+
+  /** Loop these frames on the fighter on `side` – in its own canvases, the cached sprite stays still. */
+  private runFrames(side: Side, frames: readonly PixelImage[], fps: number, box: Box | undefined): Fighter | null {
+    const f = this.fighters[side];
+    if (f === null || frames.length < 2) return null;
+    const entries = frames.map((img) => this.pictureEntry(f.form, img, f.sprite.palette, box));
+    const first = entries[0];
+    if (first === undefined) return null;
+    // the fighter's own canvases, repainted frame by frame
+    const own = (c: HTMLCanvasElement): HTMLCanvasElement => {
+      const copy = canvas(c.width, c.height);
+      ctx2d(copy).drawImage(c, 0, 0);
+      return copy;
+    };
+    const live: SpriteEntry = { ...first, image: own(first.image), glow: own(first.glow), silhouette: own(first.silhouette), rim: own(first.rim), stone: own(first.stone) };
+    const next: Fighter = { ...f, sprite: live, anim: { frames: entries, fps, t: 0, shown: 0 } };
+    this.fighters[side] = next;
+    return next;
+  }
+
+  /** One crop for a form's standard picture and all its animations, so switching between them never jumps. */
+  private animBox(form: Form): Box | undefined {
+    const art = artFor(form);
+    const strips = [this.formAnims.get(form.id), this.formAnims.get(`${form.id}-attack`)].flatMap((x) => x ?? []);
+    return unionBox([art, ...strips].map((img) => (img === undefined ? undefined : alphaBox(img))));
+  }
+
+  /**
+   * A signature move with its own strip: its `-attack` strip loops (in the canvases its idle loop already owns)
+   * while `run` plays, then the idle loop comes back. Just `run` when there is no strip.
+   */
+  private async withSignatureMove(side: Side, run: () => Promise<void>): Promise<void> {
+    const f = this.fighters[side];
+    const idle = f?.anim;
+    const strip = f === null ? undefined : this.formAnims.get(`${f.form.id}-attack`);
+    if (f === null || idle === undefined || strip === undefined || this.reducedMotion) {
+      await run();
+      return;
+    }
+    const box = this.animBox(f.form);
+    f.anim = { frames: strip.map((img) => this.pictureEntry(f.form, img, f.sprite.palette, box)), fps: 12, t: 0, shown: -1 };
+    await run();
+    if (this.fighters[side] === f) f.anim = { ...idle, t: 0, shown: -1 };
   }
 
   /** Advance animations; repaint a fighter's canvases when its frame changes. */
@@ -902,6 +993,9 @@ export abstract class ArenaSim {
       aura: this.auraFor(form),
       flying: this.onto.formHas(form, "fliegt") || ["star", "orb", "ghost", "eye"].includes(form.archetype),
     };
+    // a form with a standard animation comes alive at once (its bundled loop)
+    const idle = this.formAnims.get(form.id);
+    if (idle !== undefined && !this.reducedMotion) this.runFrames(side, idle, 8, this.animBox(form));
     const color = sprite.palette.glow;
     this.onCue?.("summon");
     this.rings.push({ x: SIDE_X[side], y: this.gy(side), r: 4, life: 0, max: 0.8, color });
@@ -939,12 +1033,15 @@ export abstract class ArenaSim {
 
   /** Attacker on `side` strikes the other side, which is destroyed. */
   /** `effect`: a painted attack animation (see `chooseEffect`) instead of the drawn one, if it is loaded. */
-  async attack(side: Side, style: AttackStyle, weaknessHit: boolean, outcome: AttackOutcome = "destroy", effect?: string): Promise<void> {
+  /** `signature`: the Eichel figures' own attack instead of any other. */
+  async attack(side: Side, style: AttackStyle, weaknessHit: boolean, outcome: AttackOutcome = "destroy", effect?: string, signature?: Signature): Promise<void> {
     const other: Side = side === 0 ? 1 : 0;
     const attacker = this.fighters[side];
     const target = this.fighters[other];
     if (attacker === null) return;
-    await this.strike(side, style, false, effect);
+    if (signature === "eichelkaese") await this.withSignatureMove(side, () => this.eichelkaese(side));
+    else if (signature === "eichelhagel") await this.withSignatureMove(side, () => this.eichelhagel(side));
+    else await this.strike(side, style, false, effect);
     if (target === null) return;
     await this.suspense(other);
     this.onCue?.("impact");
@@ -1371,6 +1468,8 @@ export abstract class ArenaSim {
     this.emitSummoningFlames(dt);
     this.stepAnimations(dt);
     this.stepEffects(dt);
+    this.stepProps(dt);
+    this.emitEichelRain(dt);
     this.stepRoom(dt);
     this.updateCosmos(dt);
     for (const fx of this.fieldFx.values()) fx.level += (fx.target - fx.level) * Math.min(1, dt * 1.5);
@@ -1669,6 +1768,22 @@ export abstract class ArenaSim {
     );
   }
 
+  /** Decode the standard animation strips (square frames side by side) into pictures. */
+  private async loadFormAnims(): Promise<void> {
+    await Promise.all(
+      Object.entries(FORM_ANIMS).map(async ([id, url]) => {
+        const img = await loadImage(url);
+        if (img === undefined || img.height === 0) return;
+        const size = img.height;
+        const c = canvas(img.width, size);
+        const g = ctx2d(c);
+        g.drawImage(img, 0, 0);
+        const frames = Array.from({ length: Math.floor(img.width / size) }, (_, k): PixelImage => ({ width: size, height: size, data: g.getImageData(k * size, 0, size, size).data }));
+        if (frames.length >= 2) this.formAnims.set(id, frames);
+      }),
+    );
+  }
+
   /** Decode the painted room states (the plain room shows until then; only the default iso room has them). */
   private async loadRooms(): Promise<void> {
     if (this.stage !== ISO) return;
@@ -1707,12 +1822,207 @@ export abstract class ArenaSim {
       for (const id of fields) if (forms.some((f) => f.scale >= ROOM_MIN_SCALE && carriesField(this.onto, f, id))) this.latched.add(id);
       this.room = chooseRoom(this.onto, fields, forms, (id) => this.rooms.has(id), this.latched)?.id ?? null;
     }
-    const speed = this.reducedMotion ? 10 : 0.7;
+    // the Eichel-Arena rolls in at once, the other moods take their time
+    const speed = this.reducedMotion ? 10 : this.room === "eichel" ? 3 : 0.7;
     for (const id of this.rooms.keys()) {
       const now = this.roomFade.get(id) ?? 0;
       const want = id === this.room ? 1 : 0;
       if (now !== want) this.roomFade.set(id, want > now ? Math.min(1, now + dt * speed) : Math.max(0, now - dt * speed));
     }
+  }
+
+  /** Move the flying pictures; the spent ones go. */
+  private stepProps(dt: number): void {
+    for (let i = this.props.length - 1; i >= 0; i--) {
+      const p = this.props[i];
+      if (p === undefined) continue;
+      p.life += dt;
+      if (p.life >= p.max) {
+        this.props.splice(i, 1);
+        if (p.shatter === true) {
+          for (let k = 0; k < 6; k++) this.particles.push({ x: p.x, y: p.y, vx: (this.rand() - 0.5) * 110, vy: -20 - this.rand() * 70, life: 0, max: 0.3 + this.rand() * 0.3, color: k % 3 === 0 ? "#78a834" : "#e2b834", size: 1, gravity: 260, glow: false });
+        }
+        continue;
+      }
+      if (p.life < 0) continue;
+      // a fired acorn draws a glowing tracer behind it
+      if (p.shatter === true) this.particles.push({ x: p.x, y: p.y, vx: -p.vx * 0.05, vy: -p.vy * 0.05, life: 0, max: 0.14, color: this.rand() < 0.5 ? "#fff0a0" : "#ffb838", size: 2, gravity: 0, glow: true });
+      p.vy += p.gravity * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+    }
+  }
+
+  /**
+   * Eichel-Arena: while the Eichelober or his gang stands in the arena – at any tier – acorns and oak
+   * leaves keep falling from the vault (the room itself turns into the acorn hall, see rooms.json).
+   */
+  private emitEichelRain(dt: number): void {
+    if (this.reducedMotion || !this.fighters.some((f) => f !== null && f.alpha > 0 && signatureFor(f.form.name) !== null)) return;
+    const r = this.rand;
+    if (r() < dt * 2.2) {
+      const { acorn } = this.eichelProps();
+      const land = GROUND_Y + r() * 20;
+      const vy = 20 + r() * 30;
+      const g = 140;
+      // falls until it reaches the floor, then bounces off as a few crumbs
+      const t = (-vy + Math.sqrt(vy * vy + 2 * g * (land + 12))) / g;
+      this.props.push({ image: acorn, x: 20 + r() * (WIDTH - 40), y: -12, vx: (r() - 0.5) * 12, vy, life: 0, max: t, gravity: g, w: 10, h: 13, flip: r() < 0.5, fade: 0.1, glow: 0 });
+    }
+    if (r() < dt * 9) {
+      const c = ["#c86a20", "#e0a030", "#8a4a1a", "#6e7828"][Math.floor(r() * 4)] ?? "#c86a20";
+      this.particles.push({ x: r() * WIDTH, y: -4, vx: (r() - 0.5) * 24, vy: 14 + r() * 12, life: 0, max: 5 + r() * 3, color: c, size: 2, gravity: 2, glow: false });
+    }
+  }
+
+  private eichelProps(): { acorn: HTMLCanvasElement } {
+    this.eichelArt ??= { acorn: toCanvas(acornImage()) };
+    return this.eichelArt;
+  }
+
+  /** The gang tattoo, made from the Eichelober's own picture (none without it). */
+  private tattoo(): HTMLCanvasElement | null {
+    const rider = this.onto.formById("eichelober");
+    const art = rider === undefined ? undefined : artFor(rider);
+    return art === undefined ? null : toCanvas(tattooImage(art));
+  }
+
+  /** Puffy white clouds with a grey rim – what the flying acorn leaves behind. */
+  private clouds(x: number, y: number, n: number, drift = 0): void {
+    for (let i = 0; i < n; i++) {
+      const rim = this.rand() < 0.3;
+      this.particles.push({ x: x + (this.rand() - 0.5) * 30, y: y + (this.rand() - 0.5) * 8, vx: drift + (this.rand() - 0.5) * 16, vy: -4 - this.rand() * 8, life: -this.rand() * 0.2, max: 0.7 + this.rand() * 0.6, color: rim ? "#b8ae9c" : "#f6f0e0", size: rim ? 2 : 3, gravity: -4, glow: false });
+    }
+  }
+
+  /**
+   * "Eichelkäseattacke": the Eichelober rises on his acorn and opens fire – an acorn gun rattles
+   * from the tip of his acorn, a stream of acorns hammers the opponent (muzzle flashes, spent caps
+   * flying back, shards on every hit), and a last, giant acorn ends it with a blast.
+   */
+  private async eichelkaese(side: Side): Promise<void> {
+    const attacker = this.fighters[side];
+    if (attacker === null) return;
+    const other: Side = side === 0 ? 1 : 0;
+    const target = this.fighters[other];
+    const dir = side === 0 ? 1 : -1;
+    const rm = this.reducedMotion;
+    const r = this.rand;
+    const tx = SIDE_X[other];
+    const tw = target?.sprite.width ?? 30;
+    const th = target?.sprite.height ?? 40;
+    const ty = this.gy(other) - th / 2;
+    const { acorn } = this.eichelProps();
+    // wind-up: he rises, the gun spins up with a golden glint
+    await this.tween(rm ? 40 : 320, (t) => {
+      attacker.offsetX = -dir * 6 * t;
+      attacker.offsetY = -8 * t;
+    });
+    const muzzle = (): [number, number] => [SIDE_X[side] + attacker.offsetX + dir * attacker.sprite.width * 0.48, this.gy(side) + attacker.offsetY - attacker.sprite.height * 0.28];
+    const [mx0, my0] = muzzle();
+    this.rings.push({ x: mx0, y: my0, r: 2, life: 0, max: 0.4, color: "#ffe680" });
+    await wait(rm ? 30 : 200);
+    // the barrage
+    const shots = rm ? 6 : 34;
+    const flight = rm ? 0.12 : 0.24;
+    for (let i = 0; i < shots; i++) {
+      if (i % 3 === 0) this.onCue?.("strike");
+      const [mx, my] = muzzle();
+      const hx = tx + (r() - 0.5) * tw * 0.7;
+      const hy = ty + (r() - 0.5) * th * 0.7;
+      this.props.push({ image: acorn, x: mx, y: my, vx: (hx - mx) / flight, vy: (hy - my) / flight, life: 0, max: flight, gravity: 0, w: 12, h: 16, flip: false, fade: 0, glow: 0.6, shatter: true });
+      // muzzle flash and a spent green cap flying back
+      for (let k = 0; k < 5; k++) this.particles.push({ x: mx, y: my, vx: dir * (40 + r() * 90), vy: (r() - 0.5) * 60, life: 0, max: 0.08 + r() * 0.08, color: k < 2 ? "#ffffff" : "#ffd84a", size: k === 0 ? 4 : 2, gravity: 0, glow: true });
+      this.rings.push({ x: mx, y: my, r: 2, life: 0, max: 0.1, color: "#fff0a0", grow: 60 });
+      this.particles.push({ x: mx - dir * 6, y: my, vx: -dir * (30 + r() * 40), vy: -50 - r() * 40, life: 0, max: 0.6, color: r() < 0.5 ? "#78a834" : "#487420", size: 2, gravity: 260, glow: false });
+      // recoil
+      attacker.offsetX = -dir * (6 + (i % 2) * 2);
+      this.shake = Math.max(this.shake, rm ? 0 : 1.5);
+      if (target !== null && i % 4 === 3) target.flash = 0.5;
+      await wait(rm ? 40 : 42);
+    }
+    await wait(flight * 1000);
+    // the finale: one giant acorn
+    const [mx, my] = muzzle();
+    const big = rm ? 0.15 : 0.4;
+    this.props.push({ image: acorn, x: mx, y: my, vx: (tx - mx) / big, vy: (ty - my) / big, life: 0, max: big, gravity: 0, w: 30, h: 39, flip: false, fade: 0, glow: 0.3 });
+    for (let k = 0; k < 20; k++) this.particles.push({ x: mx, y: my, vx: dir * (60 + r() * 140), vy: (r() - 0.5) * 90, life: 0, max: 0.15 + r() * 0.1, color: k % 2 === 0 ? "#ffffff" : "#ffd84a", size: 3, gravity: 0, glow: true });
+    this.shake = rm ? 0 : 5;
+    await wait(big * 1000);
+    this.onCue?.("boom");
+    this.flash = 0.6;
+    this.flashColor = "#ffe680";
+    this.shake = rm ? 0 : 12;
+    for (let k = 0; k < 3; k++) this.rings.push({ x: tx, y: ty, r: 4, life: -k * 0.1, max: 0.9, color: k === 1 ? "#fff4c0" : "#e2b834", grow: 160 });
+    const bits = ["#e2b834", "#fae478", "#b88220", "#78a834", "#487420"];
+    for (let i = 0; i < 120; i++) {
+      const a = r() * Math.PI * 2;
+      const sp = 40 + r() * 180;
+      this.particles.push({ x: tx, y: ty, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, life: 0, max: 0.6 + r() * 0.8, color: bits[i % bits.length] ?? "#e2b834", size: r() < 0.4 ? 2 : 1, gravity: 240, glow: i % 4 === 0 });
+    }
+    // whole acorns bounce out of the blast
+    for (let i = 0; i < 8; i++) this.props.push({ image: acorn, x: tx, y: ty, vx: (r() - 0.5) * 200, vy: -100 - r() * 120, life: 0, max: 1.3, gravity: 320, w: 10, h: 13, flip: r() < 0.5, fade: 0.2, glow: 0 });
+    await wait(rm ? 60 : 300);
+    const ox = attacker.offsetX;
+    const oy = attacker.offsetY;
+    void this.tween(rm ? 40 : 420, (t) => {
+      attacker.offsetX = ox * (1 - t);
+      attacker.offsetY = oy * (1 - t);
+    });
+  }
+  /**
+   * "Eichelhagel": the gang fires acorns with slingshots – from their own side and from the dark
+   * corners where more of them hide – in three volleys that rattle down on the opponent.
+   */
+  private async eichelhagel(side: Side): Promise<void> {
+    const attacker = this.fighters[side];
+    if (attacker === null) return;
+    const other: Side = side === 0 ? 1 : 0;
+    const target = this.fighters[other];
+    const dir = side === 0 ? 1 : -1;
+    const rm = this.reducedMotion;
+    const r = this.rand;
+    const { acorn } = this.eichelProps();
+    const tx = SIDE_X[other];
+    const th = target?.sprite.height ?? 40;
+    const g = 320;
+    const flight = rm ? 0.2 : 0.62;
+    const ax = SIDE_X[side] + dir * attacker.sprite.width * 0.4;
+    const ay = this.gy(side) - attacker.sprite.height * 0.6;
+    // the hidden members shoot from the far corners of the room
+    const corners: readonly (readonly [number, number])[] = [
+      [side === 0 ? 8 : WIDTH - 8, 60],
+      [SIDE_X[side], 20],
+    ];
+    await this.tween(rm ? 30 : 220, (t) => (attacker.offsetX = -dir * 5 * t));
+    for (let wave = 0; wave < 3; wave++) {
+      this.onCue?.("strike");
+      const hits: [number, number][] = [];
+      const shooters: readonly (readonly [number, number])[] = [[ax, ay], [ax - dir * 10, ay + 10], ...(wave > 0 ? corners : [])];
+      for (const [sx, sy] of shooters) {
+        const hx = tx + (r() - 0.5) * (target?.sprite.width ?? 30) * 0.8;
+        const hy = this.gy(other) - th * (0.2 + r() * 0.7);
+        const vx = (hx - sx) / flight;
+        const vy = (hy - sy - 0.5 * g * flight * flight) / flight;
+        this.props.push({ image: acorn, x: sx, y: sy, vx, vy, life: 0, max: flight, gravity: g, w: 10, h: 13, flip: dir < 0, fade: 0, glow: 0 });
+        // the slingshot's snap
+        this.rings.push({ x: sx, y: sy, r: 1, life: 0, max: 0.25, color: "#c83a28", grow: 40 });
+        hits.push([hx, hy]);
+      }
+      attacker.offsetX = -dir * 5;
+      void this.tween(120, (t) => (attacker.offsetX = -dir * 5 + dir * 8 * Math.sin(t * Math.PI)));
+      await wait(flight * 1000);
+      this.shake = Math.max(this.shake, rm ? 0 : 3 + wave * 2);
+      for (const [hx, hy] of hits) {
+        // shards of shell and cap, and a little dust
+        for (let k = 0; k < 10; k++) this.particles.push({ x: hx, y: hy, vx: (r() - 0.5) * 120, vy: -20 - r() * 80, life: 0, max: 0.4 + r() * 0.4, color: k % 3 === 0 ? "#c8a040" : "#8a4a1a", size: k % 4 === 0 ? 2 : 1, gravity: 260, glow: false });
+        this.rings.push({ x: hx, y: hy, r: 2, life: 0, max: 0.3, color: "#ffe0b0" });
+      }
+      if (target !== null) target.flash = 0.6;
+      this.onCue?.("impact");
+      await wait(rm ? 30 : 140);
+    }
+    void this.tween(200, (t) => (attacker.offsetX = attacker.offsetX * (1 - t)));
   }
 
   /** Is this painted effect ready to play? */
@@ -1740,6 +2050,13 @@ export abstract class ArenaSim {
     return wait(dur * 1000);
   }
 
+  /** How much of the drawn wall banners shows: a room with banners of its own fades them out. */
+  protected bannersAlpha(): number {
+    let hidden = 0;
+    for (const [id, level] of this.roomFade) if (level > 0 && ROOMS.some((r) => r.id === id && r.hideBanners === true)) hidden = Math.max(hidden, easeOut(level));
+    return 1 - hidden;
+  }
+
   /** Everything painted this frame: room states behind, effects in front of the fighters. */
   protected imageDraws(): ImageDraw[] {
     const out: ImageDraw[] = [];
@@ -1762,6 +2079,11 @@ export abstract class ArenaSim {
       // the last frames of a one-shot fade out
       const fade = p.loop ? 1 : Math.min(1, (n - p.t * p.fps) / 2);
       out.push({ image, x: Math.round(x - p.size / 2), y: Math.round(y - p.size / 2), w: p.size, h: p.size, flip: p.flip, alpha: p.alpha * Math.max(0, fade), glow: 0.55, layer: "front" });
+    }
+    for (const p of this.props) {
+      if (p.life < 0) continue;
+      const alpha = p.fade <= 0 ? 1 : Math.max(0, Math.min(1, p.life / p.fade, (p.max - p.life) / p.fade));
+      out.push({ image: p.image, x: Math.round(p.x - p.w / 2), y: Math.round(p.y - p.h / 2), w: p.w, h: p.h, flip: p.flip, alpha, glow: p.glow, layer: "front" });
     }
     return out;
   }

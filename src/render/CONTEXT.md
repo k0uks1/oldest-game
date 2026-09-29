@@ -70,3 +70,25 @@ Animations use `animate-pixminimax` (short queue, 1 generation at 64 px); Tier 2
 symbols `m`/`n`), `emblem` + `badge` (library symbols composed into one sketch – concepts get icons, not
 freehand drawings), `main`/`second` colours. Claude picks ids from closed enums (`aussehen` in the parser);
 a freehand `skizze` only when no part fits. Unknown ids are dropped (`knownLook`).
+
+## Standard pictures and animations (`render/eichel.ts`, `render/form-anims/`)
+
+Some forms bring a standard picture made once and bundled (`content/core/form-art.json`, id → art string): the
+Eichel figures (`content/core/forms/spielkarten.json`) – PixelLab `generate-image-v2` from a design with reference images
+– the Eichelober from `docs/art/eichelober-vorlage.png`
+mirrored plus a Bavarian acorn, the gang from text + the Eichelober as coat of arms, then an `edit-images-v2` pass for
+the acorn sack; single members – slingshot shooter, sack carrier, banner bearer, 96 px = scale 2 – lie in
+`docs/art/eichelober-gang/` as a base for a lone member or later animations). Stored **untrimmed** at the art size (160 / 128 px) so still and animation frames share one scale.
+**Their own animations** (`render/form-anims/<id>.png` loop, `<id>-attack.png` with the signature; square frames side by
+side, `FORM_ANIMS`; PixelLab animate-with-text-v3 / pixminimax on the picture): the loop starts at `summon`, the attack
+strip loops while the signature plays (`withSignatureMove`), one crop for still and strips (`animBox`). The **Eichelober**
+arrives in a shower of acorns and attacks with the
+*Eichelkäseattacke* (an acorn machine gun: a stream of acorns with tracers, then one giant acorn) while he thrusts his
+rapier; every acorn is drawn after the Eichel of the Bavarian cards (yellow nut up, green hatched cup and stalk); the
+**Eichelober-Gang** flashes its tattoo (the Eichelober picture as ink) and fires three volleys of acorns with slingshots
+(*Eichelhagel*) while the front one draws and shoots. Chosen by name (`signatureFor`, like the easter eggs) – pure show,
+the engine decides as for every form. **Eichel-Arena:** the room `eichel` (`rooms.json`, `anyScale`: any form with
+`kaesig`, whatever its scale, before any field) rolls in at once, and acorns and oak leaves fall while one of them stands
+in the arena. Painted by `npm run rooms` from a **guide** (`guide`: the iso room with banners and the statue pasted in,
+`docs/art/eichel-raum-vorlage.png`; `seed`, `animSeed` pin the chosen result); `hideBanners` fades the drawn wall banners
+out so the room's yellow Eichelober banners show.

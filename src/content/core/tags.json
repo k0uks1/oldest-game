@@ -154,6 +154,7 @@
   {"id": "vielarmig", "label": "vielarmig (greift, hält und haut mit vielen Armen)", "group": "faehigkeit", "parents": ["wuchtig", "bindend"]},
   {"id": "klebrig", "label": "klebrig", "group": "faehigkeit", "parents": ["bindend"]},
   {"id": "stinkend", "label": "stinkend (Gestank, der Augen tränen lässt)", "group": "faehigkeit", "parents": ["reizend"]},
+  {"id": "kaesig", "label": "käsig (Eichelkäse – macht aus allem Käse)", "group": "faehigkeit", "grants": ["verkaest"]},
   {"id": "betrunken", "label": "betrunken", "group": "merkmal", "parents": ["chaotisch"]},
   {"id": "laecherlich", "label": "lächerlich (niemand nimmt es ernst)", "group": "merkmal"}
 ]
