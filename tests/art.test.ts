@@ -134,3 +134,30 @@ describe("core art", () => {
     assert.equal(parsePack(pack(encodeArt(image(8, 8, 2)))).ok, true);
   });
 });
+
+describe("pictures fill their place", () => {
+  it("transparent margins are cut away; animation frames share one crop", async () => {
+    const { alphaBox, crop, trimmed, unionBox } = await import("../src/render/art.ts");
+    const img = { width: 8, height: 8, data: new Uint8ClampedArray(8 * 8 * 4) };
+    const dot = (x: number, y: number): void => {
+      img.data[(y * 8 + x) * 4 + 3] = 255;
+    };
+    dot(2, 3);
+    dot(5, 6);
+    assert.deepEqual(alphaBox(img), { x: 2, y: 3, w: 4, h: 4 });
+    assert.deepEqual([trimmed(img).width, trimmed(img).height], [4, 4]);
+    assert.equal(crop(img, { x: 0, y: 0, w: 8, h: 8 }), img, "nothing to cut: same image");
+    assert.deepEqual(unionBox([{ x: 2, y: 3, w: 4, h: 4 }, undefined, { x: 1, y: 5, w: 2, h: 3 }]), { x: 1, y: 3, w: 5, h: 5 });
+    assert.equal(alphaBox({ width: 2, height: 2, data: new Uint8ClampedArray(16) }), undefined);
+  });
+
+  it("a finer size ladder: a cat is not a flea, a dragon not a knight – pictures made at exactly twice that", async () => {
+    const { displaySize } = await import("../src/render/sprite.ts");
+    const { artSize } = await import("../server/art-prompts.ts");
+    const ladder = [1, 2, 3, 4, 5, 6, 7, 8].map(displaySize);
+    for (let i = 1; i < ladder.length; i++) assert.ok((ladder[i] ?? 0) >= (ladder[i - 1] ?? 0));
+    assert.ok(displaySize(2) > displaySize(1) && displaySize(5) > displaySize(3));
+    assert.equal(displaySize(3), 64, "people keep their size (and their stored pictures)");
+    for (let s = 1; s <= 8; s++) assert.ok(artSize(s) === displaySize(s) * 2 && artSize(s) <= 256);
+  });
+});

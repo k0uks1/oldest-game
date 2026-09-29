@@ -72,6 +72,8 @@ export interface AbsurdReport {
   /** Form ids (newer clients) – lets the server have the pair judged again. */
   readonly attackerId?: string;
   readonly targetId?: string;
+  /** The other way round: a failure that should have worked ("Hätte klappen müssen"). */
+  readonly failed?: boolean;
 }
 
 /** Validate a report from an untrusted client: three short printable strings. */
@@ -88,7 +90,14 @@ export function parseReport(o: Record<string, unknown>): AbsurdReport | undefine
   if (attacker === undefined || target === undefined || verb === undefined) return undefined;
   const attackerId = field("attackerId");
   const targetId = field("targetId");
-  return { attacker, target, verb, ...(attackerId === undefined ? {} : { attackerId }), ...(targetId === undefined ? {} : { targetId }) };
+  return {
+    attacker,
+    target,
+    verb,
+    ...(attackerId === undefined ? {} : { attackerId }),
+    ...(targetId === undefined ? {} : { targetId }),
+    ...(o["failed"] === true ? { failed: true } : {}),
+  };
 }
 
 // ── server → client ───────────────────────────────────────────────────────

@@ -10,7 +10,10 @@ import { loreOf } from "./parser.ts";
  * comes back is cut to the first sentence(s) that fit – a phone screen full of prose helps nobody.
  */
 export function brief(raw: string, maxChars: number): string {
-  const text = raw.replace(/\s+/g, " ").replace(/^["„»«]+|["“»«]+$/g, "").trim();
+  const flat = raw.replace(/\s+/g, " ").trim();
+  // only a reply wrapped in quotes as a whole loses them – "„Ich bin Katze“, spricht …" keeps its own
+  const wrapped = /^["„»«][^"„“»«]*["“»«]$/.test(flat);
+  const text = wrapped ? flat.slice(1, -1).trim() : flat;
   if (text.length <= maxChars) return text;
   const first = (/^[^.!?…]+[.!?…]+/.exec(text) ?? [""])[0].trim();
   if (first !== "" && first.length <= maxChars) return first;

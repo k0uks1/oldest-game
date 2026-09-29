@@ -32,7 +32,7 @@ import { addReport, clearReports, loadReports, reportsText } from "./reports.ts"
 import { ArtClient, httpTransport, socketTransport } from "./art-client.ts";
 import { formCard, SCALE_NAMES } from "../game/card.ts";
 import { describeInsight } from "../game/insight.ts";
-import { artFor, hasArt } from "../render/art.ts";
+import { artFor, hasArt, trimmed } from "../render/art.ts";
 import { renderSprite, type PixelImage } from "../render/sprite.ts";
 import { cardView } from "./card-view.ts";
 import { LoreClient } from "./lore-client.ts";
@@ -279,7 +279,10 @@ export class App {
         h("div", { class: "hud left", role: "button", title: "Was bedeutet das?", onclick: () => { this.showInfo("wille"); } }),
         h("div", { class: "hud right", role: "button", title: "Was bedeutet das?", onclick: () => { this.showInfo("wille"); } }),
       ] as [HTMLElement, HTMLElement],
-      plates: [h("div", { class: "plate left" }), h("div", { class: "plate right" })] as [HTMLElement, HTMLElement],
+      plates: [
+        h("div", { class: "plate left", role: "button", title: "Eigenschaften ansehen", onclick: () => { this.showFighter(0); } }),
+        h("div", { class: "plate right", role: "button", title: "Eigenschaften ansehen", onclick: () => { this.showFighter(1); } }),
+      ] as [HTMLElement, HTMLElement],
       caption: h("div", { class: "caption", role: "status" }),
       why: h("div", { class: "why-line" }),
       peek: h("details", { class: "peek" }),
@@ -708,12 +711,21 @@ export class App {
       }
     } else {
       el.append(h("span", { class: "w-verb" }, `${form.name} ${label}`), " · ", h("span", { class: "w-fail" }, brief(reason ?? check.steps.at(-1)?.text ?? "", 90)));
+      if (target !== undefined && check.verb !== ESCAPE) {
+        // the other way round: this should have worked
+        const btn = h("button", { class: "w-quatsch", title: "Das hätte klappen müssen? Melden – Claude prüft das Paar nach." }, "Hätte klappen müssen?");
+        btn.addEventListener("click", () => {
+          this.reportAbsurd({ attacker: form.name, target: target.name, verb: label, attackerId: form.id, targetId: target.id, failed: true });
+          btn.replaceWith(h("span", { class: "w-badge quiet" }, "gemeldet"));
+        });
+        el.append(" ", btn);
+      }
     }
     el.className = "why-line show"; // stays until the next move, like the narration
   }
 
   /** "Das war Quatsch!" – remember the absurd win here and tell the server, if there is one. */
-  private reportAbsurd(r: { attacker: string; target: string; verb: string; attackerId: string; targetId: string }): void {
+  private reportAbsurd(r: { attacker: string; target: string; verb: string; attackerId: string; targetId: string; failed?: boolean }): void {
     addReport({ attacker: r.attacker, target: r.target, verb: r.verb }, new Date().toISOString());
     if (this.online?.send({ t: "report", ...r }) === true) {
       this.flashBanner("Gemeldet – danke!", "info");
@@ -722,7 +734,7 @@ export class App {
     void fetch("/api/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(r) }).catch(() => undefined);
     this.flashBanner("Gemeldet – danke!", "info");
     // an invented form involved: the judge looks again (counts from the next time)
-    void this.resolver.reconsider(r.attackerId, r.targetId, r.verb).then((reason) => {
+    void this.resolver.reconsider(r.attackerId, r.targetId, r.verb, r.failed === true).then((reason) => {
       if (reason === undefined) return;
       this.setOntology(this.resolver.onto);
       this.flashBanner(`⚖ Nachgeprüft: ${brief(reason, 140)}`, "info");
@@ -909,10 +921,11 @@ export class App {
 
   // ── Beleben ─────────────────────────────────────────────────────────────
 
-  /** The form of player `p` standing in the arena right now (their latest, if still on stage). */
+  /** The form of player `p` standing in the arena right now, if any. */
   private stageFormOf(p: PlayerId): Form | undefined {
-    const recent = this.state.history.slice(-2);
-    return [...recent].reverse().find((m) => m.player === p)?.form;
+    // only the latest form stands: a success sweeps the one before it away, a failure never arrived
+    const last = this.state.history.at(-1);
+    return last?.player === p ? last.form : undefined;
   }
 
   /**
@@ -966,9 +979,17 @@ export class App {
 
   // ── Form cards ──────────────────────────────────────────────────────────
 
+  /** A click on the name under a fighter: its card – for players and spectators alike. */
+  private showFighter(p: PlayerId): void {
+    const form = this.stageFormOf(p);
+    if (form === undefined) return;
+    this.modal(form.name, this.cardFor(form, { lore: true, spritePx: 112 }));
+  }
+
   /** Generated picture if there is one, else the drawn sprite. */
   private spriteOf(form: Form): PixelImage {
-    return artFor(form) ?? renderSprite(this.onto, form);
+    const art = artFor(form);
+    return art === undefined ? renderSprite(this.onto, form) : trimmed(art);
   }
 
   /** A card for this form; the picture is swapped in when a generated one arrives. */

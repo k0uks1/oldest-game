@@ -443,3 +443,11 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Auch das Dahinter** | Die Leere hinter den Mauern, die bei kosmischen Gestalten aufbrechen, ist jetzt ein gemalter Sternenhimmel mit Nebelband und fernen Galaxien. | `scenery/void.png` |
 | **Bewegtes bleibt lebendig** | Fackelflammen, Banner, Runenkreis, Augen im Dunkel und aufbrechende Steine werden weiter darüber gezeichnet. Bis die Bilder dekodiert sind, steht der gezeichnete Raum; `?drawn` behält ihn. | `ArenaSim.loadScenery` |
 
+## Testrunden-Feedback (Kiki, 29.9.)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **„Hätte klappen müssen?“** | Der Quatsch-Knopf stand nur bei Siegen. Jetzt gibt es auch bei Niederlagen einen Einspruch – Claude prüft das Paar dann in die andere Richtung nach, für jedes Paar (bekannte Gestalten lernen nichts, bekommen höchstens einen Präzedenzfall). | `showWhy`, `Resolver.reconsider` |
+| **Jede Gestalt ansehen** | Ein Klick auf den Namen unter einer Gestalt öffnet ihre Karte – für Spieler und Zuschauer, egal wer am Zug ist. | `showFighter` |
+| **Keine Winzlinge** | Bilder werden auf die Figur zugeschnitten (kein leerer Rand, sie stehen auf dem Boden) und folgen einer feineren Größenleiter: eine Katze ist größer als ein Floh, ein Drache größer als ein Ritter. Gemalt wird in genau der doppelten Größe. | `trimmed`, `displaySize` |
+

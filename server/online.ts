@@ -272,7 +272,7 @@ export class OnlineHub {
         return;
       case "report":
         if (c.room !== null) this.opts.report?.({ attacker: msg.attacker, target: msg.target, verb: msg.verb, room: c.room.code });
-        if (c.room !== null && msg.attackerId !== undefined && msg.targetId !== undefined) void this.reconsider(c, msg.attackerId, msg.targetId, msg.verb);
+        if (c.room !== null && msg.attackerId !== undefined && msg.targetId !== undefined) void this.reconsider(c, msg.attackerId, msg.targetId, msg.verb, msg.failed === true);
         return;
       case "art":
         this.artRequest(c, msg.ids);
@@ -577,11 +577,11 @@ export class OnlineHub {
 
   /** A reported win with an invented form is judged again; the reporter hears the outcome. */
   private reconsidering = 0;
-  private async reconsider(c: Conn, attackerId: string, targetId: string, verb: string): Promise<void> {
+  private async reconsider(c: Conn, attackerId: string, targetId: string, verb: string, failed: boolean): Promise<void> {
     if (!this.opts.claude() || this.reconsidering >= 2) return;
     this.reconsidering++;
     try {
-      const reason = await this.resolver.reconsider(attackerId, targetId, verb);
+      const reason = await this.resolver.reconsider(attackerId, targetId, verb, failed);
       if (reason === undefined) return;
       this.learnedChanged();
       if (this.conns.has(c)) c.peer.send({ t: "reconsidered", text: reason });

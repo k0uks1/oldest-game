@@ -142,3 +142,11 @@ describe("narration stays short", () => {
     assert.ok(brief("x ".repeat(200), 150).length <= 152);
   });
 });
+
+describe("brief", () => {
+  it("unwraps a reply in quotes, keeps a sentence that only starts with one", async () => {
+    const { brief } = await import("../src/llm/narrator.ts");
+    assert.equal(brief("„Der Wolf heult.“", 100), "Der Wolf heult.");
+    assert.equal(brief("„Ich bin Katze“, spricht Ana, und die Katze erhebt sich.", 200), "„Ich bin Katze“, spricht Ana, und die Katze erhebt sich.");
+  });
+});
