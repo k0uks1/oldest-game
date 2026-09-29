@@ -1049,17 +1049,19 @@ export abstract class ArenaSim {
     const f = this.fighters[side];
     if (f === null) return;
     const { width, height, data } = f.sprite.pixels;
-    const x0 = SIDE_X[side] - width / 2;
-    const y0 = this.gy(side) - height;
-    const step = width > 64 ? 3 : 2;
+    // sample the (density-scaled) pixels, place the dust in arena pixels
+    const d = width / f.sprite.width;
+    const x0 = SIDE_X[side] - f.sprite.width / 2;
+    const y0 = this.gy(side) - f.sprite.height;
+    const step = Math.max(1, Math.round((f.sprite.width > 64 ? 3 : 2) * d));
     for (let y = 0; y < height; y += step) {
       for (let x = 0; x < width; x += step) {
         const sx = side === 1 ? width - 1 - x : x;
         const i = (y * width + sx) * 4;
         if ((data[i + 3] ?? 0) === 0) continue;
         this.particles.push({
-          x: x0 + x,
-          y: y0 + y,
+          x: x0 + x / d,
+          y: y0 + y / d,
           vx: (this.rand() - 0.5) * 50 + (side === 0 ? -20 : 20),
           vy: -this.rand() * 50,
           life: 0,
@@ -1343,7 +1345,8 @@ export abstract class ArenaSim {
   }
 
   protected fighterRect(side: Side, f: Fighter): { x: number; y: number; w: number; h: number } {
-    const { width, height } = f.sprite.pixels;
+    // layout in arena pixels – `pixels` carry the renderer's density (2× in Pixi)
+    const { width, height } = f.sprite;
     const bob = this.reducedMotion ? 0 : Math.round(Math.sin(this.time * (f.flying ? 2.2 : 1.6) + (f.seed % 7)) * (f.flying ? 3 : 1));
     const lift = f.flying ? 10 : 0;
     return { x: Math.round(SIDE_X[side] - width / 2 + f.offsetX), y: Math.round(this.gy(side) - height - lift + bob + f.offsetY), w: width, h: height };

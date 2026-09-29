@@ -301,11 +301,10 @@ export class App {
           h("div", { class: "crown" }, sigilBtn, els.round, els.fields, els.watchers),
           els.plates[0],
           els.plates[1],
-          els.revealName,
-          els.revealSub,
+          h("div", { class: "reveal" }, els.revealName, els.revealSub),
         ),
         // Outcome line and narration: over the arena on wide screens, below it on phones – never on top of each other.
-        h("div", { class: "tale" }, els.banner, els.caption, els.why),
+        h("div", { class: "tale" }, els.banner, h("div", { class: "story" }, els.caption, els.why)),
       ),
       h("section", { class: "command" }, h("div", { class: "line" }, input, enterHint), els.peek),
       els.menu,
@@ -613,18 +612,14 @@ export class App {
     const egg = easterEggFor(form.name);
     if (egg !== null) await this.arena.easterEgg(egg, actor);
     if (discovery) {
-      this.els.revealSub.textContent =
-        novelty.extra.length > 0 ? `✦ zum ersten Mal beschworen · ${novelty.extra.join(" · ")}` : "✦ zum ersten Mal beschworen";
-      this.els.revealSub.className = "reveal-sub show";
+      this.showSub(novelty.extra.length > 0 ? `✦ zum ersten Mal beschworen · ${novelty.extra.join(" · ")}` : "✦ zum ersten Mal beschworen", false);
       await this.arena.discover(actor);
     } else if (novelty?.kind === "remembered" && novelty.by !== null) {
-      this.els.revealSub.textContent = `aus dem Grimoire · entdeckt von ${novelty.by}`;
-      this.els.revealSub.className = "reveal-sub show quiet";
+      this.showSub(`aus dem Grimoire · entdeckt von ${novelty.by}`, true);
       await sleep(500);
     }
     if (verdict !== null) {
-      this.els.revealSub.textContent = verdict;
-      this.els.revealSub.className = "reveal-sub show quiet";
+      this.showSub(verdict, true);
       await sleep(1400);
     }
     this.els.plates[actor].textContent = form.name;
@@ -769,9 +764,36 @@ export class App {
     return attackStyle(verb, this.onto.verbs.get(verb)?.spec.family ?? "gewalt");
   }
 
+  /**
+   * One line, always readable: the text keeps its natural size if it fits, otherwise the font
+   * shrinks (down to `min` px) until it does; only then does it end in an ellipsis. The full
+   * text stays in the tooltip.
+   */
+  private fitLine(el: HTMLElement, text: string, min: number): void {
+    el.textContent = text;
+    el.title = text;
+    el.style.removeProperty("--fit");
+    const box = el.parentElement?.clientWidth ?? 0;
+    if (box === 0) return;
+    const natural = parseFloat(getComputedStyle(el).fontSize);
+    // measure the natural width at the natural size (no ellipsis while measuring)
+    const width = el.scrollWidth;
+    if (width <= box) return;
+    el.style.setProperty("--fit", `${String(Math.max(min, Math.floor((natural * box) / width) - 1))}px`);
+  }
+
+  /** The line under the name (discovery, remembered, verdict). */
+  private showSub(text: string, quiet: boolean): void {
+    const el = this.els.revealSub;
+    el.className = `reveal-sub show${quiet ? " quiet" : ""}`;
+    this.fitLine(el, text, 12);
+  }
+
   /** Spell the name letter by letter over the arena. */
   private async spellName(name: string, discovery: boolean): Promise<void> {
     const el = this.els.revealName;
+    this.els.revealSub.textContent = "";
+    this.fitLine(el, name, 20);
     el.textContent = "";
     el.className = `reveal-name show${discovery ? " discovery" : ""}`;
     this.els.revealSub.className = "reveal-sub";
@@ -892,6 +914,7 @@ export class App {
 
   private setupPeek(): void {
     const peek = this.els.peek;
+    peek.hidden = this.peekForm === null;
     try {
       peek.open = localStorage.getItem("oldest-game:peek") === "1";
     } catch {
