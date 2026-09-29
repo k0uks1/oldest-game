@@ -13,7 +13,7 @@
  */
 import { autoDetectRenderer, BlurFilter, Container, Graphics, Rectangle, RenderTexture, Sprite, Texture, type Renderer } from "pixi.js";
 import type { Ontology } from "../engine/ontology/ontology.ts";
-import { easeOut, HEIGHT, UPSCALE, WIDTH, type Fighter, type Side } from "./arena.ts";
+import { easeOut, HEIGHT, UPSCALE, WIDTH, type Fighter, type Side, type SpriteEntry } from "./arena.ts";
 import { colorNum, PixiPen, radialTexture } from "./pixi-pen.ts";
 import { ArenaScene } from "./scene.ts";
 import type { StageLayout } from "./stage.ts";
@@ -140,6 +140,10 @@ export class PixiArena extends ArenaScene {
       this.sources.set(c, t);
     }
     return t;
+  }
+
+  protected spriteRepainted(sprite: SpriteEntry): void {
+    for (const c of [sprite.image, sprite.glow, sprite.silhouette, sprite.rim, sprite.stone]) this.sources.get(c)?.source.update();
   }
 
   private layer(c: HTMLCanvasElement): Layer {

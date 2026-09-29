@@ -33,6 +33,11 @@ export class CanvasArena extends ArenaScene {
     this.pens = { base: new CanvasPen(this.base), glow: new CanvasPen(this.glow) };
   }
 
+  /** The 2D renderer blits the canvases every frame – repainted ones show up by themselves. */
+  protected spriteRepainted(): void {
+    // nothing to refresh
+  }
+
   protected render(): void {
     const b = this.base;
     const g = this.glow;

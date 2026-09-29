@@ -1389,3 +1389,79 @@ input,
   background: rgba(12, 8, 22, 0.95);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
 }
+
+/* ── Beleben: under each player's name, only while their form stands ─────── */
+.anim-slot {
+  position: absolute;
+  top: calc(4% + 74px);
+  /* .screen sets line-height 0 for the canvas */
+  line-height: 1.25;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 4;
+}
+.anim-slot.left {
+  left: 8%;
+  align-items: flex-start;
+}
+.anim-slot.right {
+  right: 8%;
+  align-items: flex-end;
+}
+.anim-btn {
+  font: inherit;
+  font-size: 15px;
+  padding: 1px 8px;
+  color: var(--gold);
+  background: rgba(10, 6, 18, 0.7);
+  border: 1px solid rgba(240, 200, 80, 0.35);
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.2s;
+}
+.anim-btn:hover,
+.anim-btn:focus-visible {
+  opacity: 1;
+}
+.anim-btn.busy {
+  cursor: default;
+  color: var(--rune);
+  border-color: rgba(200, 160, 255, 0.35);
+  animation: breathe 1.3s ease-in-out infinite;
+}
+.anim-menu {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.anim-choice {
+  font: inherit;
+  font-size: 15px;
+  padding: 1px 8px;
+  color: var(--text);
+  background: rgba(20, 12, 34, 0.9);
+  border: 1px solid var(--line-hi);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.anim-choice:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+@media (max-width: 700px) {
+  .anim-slot {
+    top: calc(2% + 52px);
+  }
+  .anim-slot.left {
+    left: 3%;
+  }
+  .anim-slot.right {
+    right: 3%;
+  }
+  .anim-btn,
+  .anim-choice {
+    font-size: 13px;
+  }
+}

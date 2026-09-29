@@ -94,6 +94,16 @@ export interface Fighter {
   readonly seed: number;
   readonly aura: Aura;
   readonly flying: boolean;
+  /** "Belebt": frames of a generated animation, played in a loop into the fighter's own canvases. */
+  anim?: FighterAnim;
+}
+
+export interface FighterAnim {
+  readonly frames: readonly SpriteEntry[];
+  readonly fps: number;
+  /** Seconds since it started. */
+  t: number;
+  shown: number;
 }
 
 export interface Aura {
@@ -593,28 +603,86 @@ export abstract class ArenaSim {
         art: false,
       };
     } else {
-      // generated picture: fills the form's sprite slot, keeping all the detail the density allows
-      const side = spriteSize(form.scale);
-      const w = Math.max(1, Math.round((art.width / Math.max(art.width, art.height)) * side));
-      const h = Math.max(1, Math.round((art.height / Math.max(art.width, art.height)) * side));
-      const pixels = resample(art, w * d, h * d);
-      entry = {
-        image: toCanvas(pixels),
-        glow: toCanvas(artGlow(pixels, palette.emissive)),
-        silhouette: toCanvas(silhouetteOf(pixels, "#07050c")),
-        rim: toCanvas(rimOf(pixels, palette.glow)),
-        stone: toCanvas(stoneOf(pixels)),
-        pixels,
-        width: w,
-        height: h,
-        palette,
-        art: true,
-      };
+      entry = this.pictureEntry(form, art, palette);
     }
     if (this.spriteCache.size > 200) this.spriteCache.clear();
     this.spriteCache.set(key, entry);
     return entry;
   }
+
+  /** A generated picture (or animation frame) filling the form's sprite slot at the renderer's density. */
+  private pictureEntry(form: Form, art: PixelImage, palette: SpritePalette): SpriteEntry {
+    const d = this.density;
+    const side = spriteSize(form.scale);
+    const w = Math.max(1, Math.round((art.width / Math.max(art.width, art.height)) * side));
+    const h = Math.max(1, Math.round((art.height / Math.max(art.width, art.height)) * side));
+    const pixels = resample(art, w * d, h * d);
+    return {
+      image: toCanvas(pixels),
+      glow: toCanvas(artGlow(pixels, palette.emissive)),
+      silhouette: toCanvas(silhouetteOf(pixels, "#07050c")),
+      rim: toCanvas(rimOf(pixels, palette.glow)),
+      stone: toCanvas(stoneOf(pixels)),
+      pixels,
+      width: w,
+      height: h,
+      palette,
+      art: true,
+    };
+  }
+
+  /**
+   * "Beleben": play these frames (a generated animation of the form's picture) in a loop on every
+   * fighter showing this form. The fighter gets its own canvases – the cached sprite stays still.
+   * False when the form is not on stage.
+   */
+  animate(formId: string, frames: readonly PixelImage[], fps = 8): boolean {
+    let any = false;
+    for (const side of [0, 1] as const) {
+      const f = this.fighters[side];
+      if (f?.form.id !== formId || frames.length < 2) continue;
+      const palette = f.sprite.palette;
+      const entries = frames.map((img) => this.pictureEntry(f.form, img, palette));
+      const first = entries[0];
+      if (first === undefined) continue;
+      // the fighter's own canvases, repainted frame by frame
+      const own = (c: HTMLCanvasElement): HTMLCanvasElement => {
+        const copy = canvas(c.width, c.height);
+        ctx2d(copy).drawImage(c, 0, 0);
+        return copy;
+      };
+      const live: SpriteEntry = { ...first, image: own(first.image), glow: own(first.glow), silhouette: own(first.silhouette), rim: own(first.rim), stone: own(first.stone) };
+      this.fighters[side] = { ...f, sprite: live, anim: { frames: entries, fps, t: 0, shown: 0 }, flash: 0.6 };
+      this.rings.push({ x: SIDE_X[side], y: this.gy(side), r: 4, life: 0, max: 0.8, color: palette.glow });
+      this.onCue?.("reveal");
+      any = true;
+    }
+    return any;
+  }
+
+  /** Advance animations; repaint a fighter's canvases when its frame changes. */
+  private stepAnimations(dt: number): void {
+    for (const f of this.fighters) {
+      const a = f?.anim;
+      if (f === null || a === undefined) continue;
+      a.t += this.reducedMotion ? 0 : dt;
+      const i = Math.floor(a.t * a.fps) % a.frames.length;
+      if (i === a.shown) continue;
+      a.shown = i;
+      const frame = a.frames[i];
+      if (frame === undefined) continue;
+      for (const k of ["image", "glow", "silhouette", "rim", "stone"] as const) {
+        const target = f.sprite[k];
+        const g = ctx2d(target);
+        g.clearRect(0, 0, target.width, target.height);
+        g.drawImage(frame[k], 0, 0, target.width, target.height);
+      }
+      this.spriteRepainted(f.sprite);
+    }
+  }
+
+  /** A fighter's canvases changed in place (animation) – renderers with textures refresh them. */
+  protected abstract spriteRepainted(sprite: SpriteEntry): void;
 
   private auraFor(form: Form): Aura {
     const has = (t: string): boolean => this.onto.formHas(form, t);
@@ -1108,6 +1176,7 @@ export abstract class ArenaSim {
     this.conjureAge = this.conjureTarget > 0 ? this.conjureAge + dt : 0;
     this.conjureBurst = Math.max(0, this.conjureBurst - dt * 1.6);
     this.emitConjureSparks(dt);
+    this.stepAnimations(dt);
     this.updateCosmos(dt);
     for (const fx of this.fieldFx.values()) fx.level += (fx.target - fx.level) * Math.min(1, dt * 1.5);
     this.emitFieldParticles(dt);

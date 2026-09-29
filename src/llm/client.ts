@@ -146,6 +146,8 @@ export interface ServerInfo {
   readonly online: boolean;
   /** Generated pictures on demand (`/api/art`, `art` messages). */
   readonly art: boolean;
+  /** Forms can be brought to life ("Beleben", `/api/animate`). */
+  readonly anim: boolean;
 }
 
 /** Ask the game server what it offers; null when the page was opened from disk or has no server. */
@@ -162,6 +164,7 @@ export async function fetchHealth(fetchImpl: typeof fetch = fetch): Promise<Serv
       accessCode: j.accessCode === true,
       online: j.online === true,
       art: j.art === true,
+      anim: j.anim === true,
     };
   } catch {
     return null;

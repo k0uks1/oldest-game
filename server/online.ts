@@ -17,12 +17,15 @@ import type { ContentPack } from "../src/engine/ontology/pack.ts";
 import type { Form, GameState, PlayerId } from "../src/engine/types.ts";
 import type { Resolver, Turn } from "../src/game/resolver.ts";
 import {
+  ANIMS_PER_PLAYER,
   isEmptyDelta,
   packDelta,
   parseClientMsg,
   ROOM_ALPHABET,
   ROOM_CODE_LENGTH,
   type AbsurdReport,
+  type AnimAction,
+  type AnimItem,
   type ArtItem,
   type ChronicleEntry,
   type ClientMsg,
@@ -86,10 +89,20 @@ export interface HubOptions {
   readonly log?: (line: string) => void;
   /** Generated pictures (optional): look one up for a form, starting generation if needed. */
   readonly art?: HubArt;
+  /** Animations of generated pictures (optional, needs `art`). */
+  readonly anim?: HubAnim;
   /** A form's legend (stored or freshly written by Claude); undefined = none. */
   readonly lore?: (form: Form) => Promise<string | undefined>;
   /** Store a reported absurd win (room code added). */
   readonly report?: (r: AbsurdReport & { readonly room: string }) => void;
+}
+
+/** What the hub needs from the animation store. */
+export interface HubAnim {
+  /** State of this form's animation (undefined: no picture to animate yet); `key` identifies the job. */
+  lookup(form: Form, action: AnimAction): { readonly key: string; readonly item: AnimItem } | undefined;
+  /** Every finished job (frames undefined = it failed). */
+  onDone(listener: (key: string, frames: readonly string[] | undefined) => void): () => void;
 }
 
 /** What the hub needs from the picture store. */
@@ -123,6 +136,9 @@ interface Room {
   lastMove: number;
   /** Set when the last connection left. */
   emptySince: number | null;
+  /** "Beleben": animations left per seat in this duel, and the ones made so far. */
+  animLeft: [number, number];
+  anims: AnimItem[];
 }
 
 export class Conn {
@@ -174,6 +190,9 @@ export class OnlineHub {
     this.limits = { ...DEFAULT_LIMITS, ...opts.limits };
     this.now = opts.now ?? Date.now;
     this.published = resolver.learned;
+    opts.anim?.onDone((key, frames) => {
+      this.animDone(key, frames);
+    });
     opts.art?.onDone((key, art) => {
       this.artDone(key, art);
     });
@@ -261,6 +280,9 @@ export class OnlineHub {
       case "lore":
         void this.loreRequest(c, msg.id);
         return;
+      case "animate":
+        this.animateRequest(c, msg.action, msg.seat);
+        return;
     }
   }
 
@@ -326,6 +348,8 @@ export class OnlineHub {
       lastActive: now,
       lastMove: 0,
       emptySince: null,
+      animLeft: [ANIMS_PER_PLAYER, ANIMS_PER_PLAYER],
+      anims: [],
     };
     this.rooms.set(code, room);
     this.enter(c, room, token);
@@ -350,6 +374,8 @@ export class OnlineHub {
     const name = msg.name === host ? `${msg.name} II` : msg.name;
     room.seats[1] = { name, token };
     room.state = createGame([host, name]);
+    room.animLeft = [ANIMS_PER_PLAYER, ANIMS_PER_PLAYER];
+    room.anims = [];
     this.enter(c, room, token);
     this.broadcast(room, { t: "start", state: room.state }, c);
   }
@@ -521,6 +547,8 @@ export class OnlineHub {
     room.state = createGame([room.seats[0]?.name ?? a.name, room.seats[1]?.name ?? b.name]);
     room.chronicle = [];
     room.epilogue = null;
+    room.animLeft = [ANIMS_PER_PLAYER, ANIMS_PER_PLAYER];
+    room.anims = [];
     room.lastActive = this.now();
     // Seats may have swapped – every client gets a fresh welcome.
     for (const conn of room.conns) this.sendWelcome(conn, room);
@@ -537,6 +565,7 @@ export class OnlineHub {
       players: this.presence(room),
       watchers: this.watcherCount(room),
       art: this.opts.art !== undefined,
+      ...(this.opts.anim === undefined ? {} : { anim: { left: room.animLeft, items: room.anims } }),
       state: room.state,
       chronicle: room.chronicle,
       epilogue: room.epilogue,
@@ -546,7 +575,6 @@ export class OnlineHub {
 
   // ── generated pictures ──────────────────────────────────────────────────
 
-  /** Answer what is known now; remember who waits for pictures still being made. */
   /** A reported win with an invented form is judged again; the reporter hears the outcome. */
   private reconsidering = 0;
   private async reconsider(c: Conn, attackerId: string, targetId: string, verb: string): Promise<void> {
@@ -567,6 +595,56 @@ export class OnlineHub {
     const form = this.resolver.onto.formById(id);
     const text = form === undefined ? undefined : (form.lore ?? (await this.opts.lore?.(form).catch(() => undefined)));
     if (this.conns.has(c)) c.peer.send({ t: "lore", id, text: text ?? "" });
+  }
+
+  /**
+   * "Beleben": a player brings their current form to life – at most ANIMS_PER_PLAYER times per
+   * duel (counted when a new animation starts, refunded if it fails; a stored one is free).
+   * Everyone in the room sees it.
+   */
+  private animateRequest(c: Conn, action: AnimAction, wanted?: PlayerId): void {
+    const room = c.room;
+    const anim = this.opts.anim;
+    const seat = wanted !== undefined && c.seats.includes(wanted) ? wanted : c.seats[0];
+    const state = room?.state ?? null;
+    if (room === null || state === null || anim === undefined || seat === undefined) return;
+    const form = [...state.history].reverse().find((m) => m.player === seat)?.form;
+    if (form === undefined) {
+      this.error(c, "bad", "Erst beschwören, dann beleben.");
+      return;
+    }
+    if (room.animLeft[seat] <= 0) {
+      this.error(c, "limit", `Schon ${String(ANIMS_PER_PLAYER)}-mal belebt – mehr gibt dieses Duell nicht her.`);
+      return;
+    }
+    const found = anim.lookup(form, action);
+    if (found === undefined || found.item.state === "none") {
+      this.error(c, "bad", found === undefined ? "Diese Gestalt hat noch kein Bild, das sich bewegen könnte." : "Beleben geht gerade nicht (Kontingent des Servers oder Dienst weg).");
+      return;
+    }
+    if (found.item.state === "pending") {
+      room.animLeft[seat]--;
+      this.pendingAnims.set(found.key, [...(this.pendingAnims.get(found.key) ?? []), { room, seat, id: form.id, action }]);
+    }
+    this.publishAnim(room, found.item);
+  }
+
+  /** Who is waiting for which job (to deliver, or to refund when it fails). */
+  private readonly pendingAnims = new Map<string, { room: Room; seat: PlayerId; id: string; action: AnimAction }[]>();
+
+  private animDone(key: string, frames: readonly string[] | undefined): void {
+    const waiting = this.pendingAnims.get(key) ?? [];
+    this.pendingAnims.delete(key);
+    for (const w of waiting) {
+      if (!this.rooms.has(w.room.code)) continue;
+      if (frames === undefined) w.room.animLeft[w.seat]++;
+      this.publishAnim(w.room, frames === undefined ? { id: w.id, action: w.action, state: "none" } : { id: w.id, action: w.action, state: "ready", frames });
+    }
+  }
+
+  private publishAnim(room: Room, item: AnimItem): void {
+    room.anims = [...room.anims.filter((a) => a.id !== item.id), item].slice(-8);
+    this.broadcast(room, { t: "anim", item, left: room.animLeft });
   }
 
   private artRequest(c: Conn, ids: readonly string[]): void {

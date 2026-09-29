@@ -32,10 +32,12 @@ import { addReport, clearReports, loadReports, reportsText } from "./reports.ts"
 import { ArtClient, httpTransport, socketTransport } from "./art-client.ts";
 import { formCard, SCALE_NAMES } from "../game/card.ts";
 import { describeInsight } from "../game/insight.ts";
-import { artFor } from "../render/art.ts";
+import { artFor, hasArt } from "../render/art.ts";
 import { renderSprite, type PixelImage } from "../render/sprite.ts";
 import { cardView } from "./card-view.ts";
 import { LoreClient } from "./lore-client.ts";
+import { AnimClient, httpAnimTransport, socketAnimTransport } from "./anim-client.ts";
+import { ANIM_ACTION_IDS, ANIM_ACTIONS } from "../online/protocol.ts";
 import { Sound } from "./sound.ts";
 
 function sleep(ms: number): Promise<void> {
@@ -171,6 +173,7 @@ export class App {
     caption: HTMLElement;
     why: HTMLElement;
     peek: HTMLDetailsElement;
+    animBtn: [HTMLElement, HTMLElement];
     round: HTMLElement;
     fields: HTMLElement;
     watchers: HTMLElement;
@@ -188,6 +191,8 @@ export class App {
   private readonly art = new ArtClient();
   /** Legends for form cards (Claude directly in hot-seat, the server online). */
   private readonly lore = new LoreClient();
+  /** "Beleben": animations of the players' own forms (three per player and duel). */
+  private readonly anim = new AnimClient();
   /** Set while playing online – the server resolves turns, this client only shows them. */
   private online: OnlineLink | null = null;
   /** Seats this client plays online (both on one device). */
@@ -278,6 +283,7 @@ export class App {
       caption: h("div", { class: "caption", role: "status" }),
       why: h("div", { class: "why-line" }),
       peek: h("details", { class: "peek" }),
+      animBtn: [h("div", { class: "anim-slot left" }), h("div", { class: "anim-slot right" })] as [HTMLElement, HTMLElement],
       round: h("div", { class: "round", role: "button", onclick: () => { this.showInfo("runde"); } }),
       fields: h("div", { class: "fields", role: "button", onclick: () => { this.showInfo("arena"); } }),
       watchers: h("div", { class: "watchers", title: "Zuschauer" }),
@@ -298,6 +304,8 @@ export class App {
           canvas,
           els.hud[0],
           els.hud[1],
+          els.animBtn[0],
+          els.animBtn[1],
           h("div", { class: "crown" }, sigilBtn, els.round, els.fields, els.watchers),
           els.plates[0],
           els.plates[1],
@@ -453,6 +461,13 @@ export class App {
     this.setupPeek();
     this.art.onArrive = () => {
       this.arena.refreshArt();
+      this.renderAnim();
+    };
+    if (this.server?.anim === true) this.anim.setTransport(httpAnimTransport());
+    this.anim.onUpdate = (id, frames) => {
+      if (frames !== undefined) this.arena.animate(id, frames);
+      else this.flashBanner("Beleben hat diesmal nicht geklappt – die Ladung bleibt dir.", "info");
+      this.renderAnim();
     };
     // The server's pack is shared by everyone who plays there (hot-seat and rooms).
     if ((!this.debug && proxy !== null) || this.server?.online === true) this.store = serverStore();
@@ -501,6 +516,7 @@ export class App {
 
   private newGame(names: [string, string]): void {
     this.state = createGame(names);
+    this.anim.reset();
     this.arena.clear();
     this.retry = false;
     this.discoveries = [];
@@ -867,6 +883,7 @@ export class App {
     for (const f of fields) this.els.fields.append(h("span", { title: f.spec.hint }, f.spec.label));
     this.music.setTier(s.phase === "finished" ? 1 : arenaMinScale(s));
     this.renderPeek(s.phase === "finished" ? null : target);
+    this.renderAnim();
     this.arena.setWitnesses(Math.floor(s.history.length / 2) + this.discoveries.length);
     const line = this.els.input.parentElement;
     line?.classList.toggle("p0", s.active === 0);
@@ -887,6 +904,63 @@ export class App {
           : full.length <= 34
             ? full
             : short;
+    }
+  }
+
+  // ── Beleben ─────────────────────────────────────────────────────────────
+
+  /** The form of player `p` standing in the arena right now (their latest, if still on stage). */
+  private stageFormOf(p: PlayerId): Form | undefined {
+    const recent = this.state.history.slice(-2);
+    return [...recent].reverse().find((m) => m.player === p)?.form;
+  }
+
+  /**
+   * Under each player's name: "✦ beleben · 3" while their form stands, has its picture and the
+   * allowance lasts (online only for one's own seats). A click offers what the form should do.
+   */
+  private renderAnim(): void {
+    for (const p of [0, 1] as const) {
+      const slot = this.els.animBtn[p];
+      clear(slot);
+      const form = this.stageFormOf(p);
+      const mine = this.online === null || this.seats.includes(p);
+      if (!this.anim.enabled || !mine || form === undefined || !hasArt(form)) continue;
+      if (this.anim.pending.has(form.id)) {
+        slot.append(h("span", { class: "anim-btn busy", title: "PixelLab bewegt das Bild – 1 bis 3 Minuten" }, "✦ wird belebt …"));
+        continue;
+      }
+      const left = this.anim.left[p];
+      if (left <= 0) continue;
+      const btn = h("button", { class: "anim-btn", title: `${form.name} zum Leben erwecken (noch ${String(left)}× in diesem Duell)` }, `✦ beleben · ${String(left)}`);
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (slot.querySelector(".anim-menu") !== null) {
+          this.renderAnim();
+          return;
+        }
+        const menu = h(
+          "div",
+          { class: "anim-menu" },
+          ...ANIM_ACTION_IDS.map((a) =>
+            h(
+              "button",
+              {
+                class: "anim-choice",
+                onclick: (ev) => {
+                  ev.stopPropagation();
+                  this.anim.request(form, a, p);
+                  this.flashBanner(`✦ ${form.name} ${ANIM_ACTIONS[a].label} gleich – PixelLab braucht 1–3 Minuten.`, "info");
+                  this.renderAnim();
+                },
+              },
+              ANIM_ACTIONS[a].label,
+            ),
+          ),
+        );
+        slot.append(menu);
+      });
+      slot.append(btn);
     }
   }
 
@@ -1083,6 +1157,8 @@ export class App {
     this.online = null;
     this.art.setTransport(this.server?.art === true ? httpTransport() : null);
     this.lore.direct((f) => this.resolver.legend(f));
+    this.anim.setTransport(this.server?.anim === true ? httpAnimTransport() : null);
+    this.anim.reset();
     this.seats = [];
     this.joined = false;
     this.showWatchers(0);
@@ -1163,6 +1239,8 @@ export class App {
       await this.arena.endConjuring(pictured);
     }
     await this.arena.summon(side, form);
+    const frames = this.anim.framesOf(form.id);
+    if (frames !== undefined) this.arena.animate(form.id, frames);
   }
 
   private onServer(m: ServerMsg): void {
@@ -1175,6 +1253,12 @@ export class App {
         const link = this.online;
         this.art.setTransport(m.art && link !== null ? socketTransport((ids) => link.send({ t: "art", ids })) : null);
         this.lore.socket((id) => link?.send({ t: "lore", id }) ?? false);
+        this.anim.setTransport(m.anim !== undefined && link !== null ? socketAnimTransport((action, seat) => link.send({ t: "animate", action, seat })) : null);
+        if (m.anim !== undefined) {
+          this.anim.reset();
+          this.anim.left = [m.anim.left[0], m.anim.left[1]];
+          for (const item of m.anim.items) this.anim.receive(item);
+        }
         if (m.state !== null) this.art.want(m.state.history.map((mv) => mv.form));
         this.showWatchers(m.watchers);
         this.adoptLearned(m.learned);
@@ -1270,6 +1354,10 @@ export class App {
         return;
       case "lore":
         this.lore.receive(m.id, m.text);
+        return;
+      case "anim":
+        this.anim.receive(m.item, m.left);
+        this.renderAnim();
         return;
       case "reconsidered":
         this.flashBanner(`⚖ Nachgeprüft: ${brief(m.text, 140)}`, "info");

@@ -426,3 +426,12 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **„Besiegt nicht“ gilt fürs ganze Paar** | Ein verneinender Präzedenzfall sperrte bisher nur den einen Mechanismus – mit einem anderen gewann das Radio trotzdem. Jetzt hält er für jeden Angriff (Ausweichen bleibt möglich). | `engine/game.ts` |
 | **„Quatsch?“ repariert** | Meldet jemand einen Sieg mit einer erfundenen Gestalt als Quatsch, prüft Claude das Paar sofort streng nach; das Urteil gilt ab dem nächsten Mal (online für alle, der Melder sieht „⚖ Nachgeprüft: …“). | `Resolver.reconsider`, `report` |
 
+## Beleben (Nutzerwunsch: „Spielern die Animation ihres aktuellen Charakters anbieten, maximal 3× pro Spiel“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Drei Ladungen pro Duell** | Unter dem eigenen Namen steht, solange die eigene Gestalt mit Bild in der Arena steht, „✦ beleben · 3“. Ein Klick bietet drei Dinge an: atmet, greift an, triumphiert. | `renderAnim` |
+| **Das Bild selbst bewegt sich** | PixelLab bekommt das generierte Bild als ersten Frame und eine Handlung; zurück kommen 9 Frames, die die Arena im Loop abspielt – mit Glanz, Silhouette und Leuchten aus jedem Frame. | `animatePixelArt`, `ArenaSim.animate` |
+| **Fair gezählt** | Online zählt der Server und alle im Raum sehen die Belebung; schlägt sie fehl, gibt es die Ladung zurück. Schon einmal Belebtes kommt aus dem Speicher und kostet nichts. | `server/online.ts`, `anim-service.ts` |
+| **Warten ohne Stillstand** | Während PixelLab arbeitet (1–3 Minuten), läuft das Duell normal weiter; der Knopf atmet „✦ wird belebt …“. | `AnimClient` |
+
