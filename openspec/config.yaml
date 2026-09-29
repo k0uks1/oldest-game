@@ -6,11 +6,11 @@ context: |
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
 
   Project: The Oldest Game – hot-seat and online duel of imagination. TypeScript (strict), Node ≥ 22, esbuild,
-  no UI framework, node:test. CLAUDE.md is the authority on architecture and the core invariants; read it first
-  and never write a spec that contradicts them (LLM never decides outcomes, classification independent of the
+  no UI framework, node:test. AGENTS.md routes to the authority: the CONTEXT.md of each folder (core invariants listed in AGENTS.md,
+  full text in src/engine/ and src/llm/). Read the ones the change touches and never write a spec that contradicts them (LLM never decides outcomes, classification independent of the
   opponent, rules reference tags not forms, pure engine, learning only through learn(), scale budgets).
   Domain words (Gestalt, Mechanismus, Affordanz, Closure, Wille, Eleganz, Schiedsrichter, Urteil …) follow
-  GLOSSARY.md when it exists, otherwise CLAUDE.md.
+  GLOSSARY.md when it exists, otherwise the folders' CONTEXT.md.
   Backlog: GitHub issues. Every change here gets its issue automatically (scripts/backlog.ts via
   .github/workflows/backlog.yml) – never create or update that issue by hand.
 
@@ -18,7 +18,7 @@ rules:
   proposal:
     - 'If the change comes from an existing GitHub issue, put `Issue: #<n>` on its own line directly under "## Why" – the backlog sync then attaches to that issue instead of opening a new one.'
     - 'The first paragraph under "## Why" becomes the issue summary – make it one or two plain sentences.'
-    - 'Name which core invariant (CLAUDE.md) the change touches, if any, and why it still holds.'
+    - 'Name which core invariant (AGENTS.md) the change touches, if any, and why it still holds.'
   tasks:
     - 'End with a task "npm run check grün" and a task "Version in package.json anheben (minor für Features/Content, patch für Fixes)".'
     - 'Balancing or content changes add a task "npm run simulate -- --games 2000 vorher/nachher, Diff in den PR".'

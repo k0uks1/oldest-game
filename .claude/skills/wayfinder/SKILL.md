@@ -13,12 +13,12 @@ The destination varies per effort, and naming it is the first act of charting: i
 Here wayfinder is first of all **tracking**: several sessions work a map in parallel and must not stall waiting for
 the human. Where this section and the text below disagree, this section wins.
 
-- **Decide what you can.** A question whose answer follows from the code, `CLAUDE.md`, `openspec/specs/`, the
+- **Decide what you can.** A question whose answer follows from the code, `AGENTS.md` and the folders' `CONTEXT.md`, `openspec/specs/`, the
   docs or earlier decisions on the map is **AFK**, whatever its label: decide it, record it as the resolution
   comment with its reasoning, end the comment with „Einspruch? Einfach hier kommentieren – dann wird neu
   entschieden.“, close the ticket. Reversible choices are yours too; say so in the comment.
 - **Only the human's own decisions wait** – product direction and taste, anything costly (money, API budgets) or
-  hard to reverse, contradicting an invariant in `CLAUDE.md`. For those: write the question with numbered options
+  hard to reverse, contradicting a core invariant (`AGENTS.md`). For those: write the question with numbered options
   and your recommendation as a comment on the ticket, add the label `needs-user`, leave it open and unassigned,
   and **move on** to the next frontier ticket. Never wait in chat for an answer. A human answers in the issue; the
   next session that sees the answer removes `needs-user` and resolves the ticket.
