@@ -38,7 +38,25 @@ export type ClientMsg =
   /** Ask for the generated pictures of these forms (answered with `art`, pending ones follow later). */
   | { readonly t: "art"; readonly ids: readonly string[] }
   /** Ask for a form's legend (answered with `lore`; empty text = none). */
-  | { readonly t: "lore"; readonly id: string };
+  | { readonly t: "lore"; readonly id: string }
+  /** Bring your current form to life (`seat` only matters when both seats are on this device). */
+  | { readonly t: "animate"; readonly action: AnimAction; readonly seat?: PlayerId };
+
+/** "Beleben": what a player can ask their form to do – and what the image service is told. */
+export const ANIM_ACTIONS = {
+  atmen: { label: "atmet", prompt: "idle breathing, subtle living movement" },
+  angriff: { label: "greift an", prompt: "attacking forward with its strongest move" },
+  triumph: { label: "triumphiert", prompt: "victory celebration, proud triumphant pose" },
+} as const;
+export type AnimAction = keyof typeof ANIM_ACTIONS;
+export const ANIM_ACTION_IDS = Object.keys(ANIM_ACTIONS) as AnimAction[];
+/** Animations per player per duel. */
+export const ANIMS_PER_PLAYER = 3;
+
+/** A form's animation: ready (frames in the art format), being made, or none to be had. */
+export type AnimItem =
+  | { readonly id: string; readonly action: AnimAction; readonly state: "ready"; readonly frames: readonly string[] }
+  | { readonly id: string; readonly action: AnimAction; readonly state: "pending" | "none" };
 
 /** One form's generated picture: ready (with the art string), still being made, or none to be had. */
 export type ArtItem = { readonly id: string; readonly state: "ready"; readonly art: string } | { readonly id: string; readonly state: "pending" | "none" };
@@ -116,6 +134,8 @@ export type ServerMsg =
       readonly watchers: number;
       /** The server delivers generated pictures (ask with `art`). */
       readonly art: boolean;
+      /** The server can bring forms to life (`animate`); how many each seat has left, and what is alive now. */
+      readonly anim?: { readonly left: readonly [number, number]; readonly items: readonly AnimItem[] };
       /** null while waiting for the second player. */
       readonly state: GameState | null;
       readonly chronicle: readonly ChronicleEntry[];
@@ -138,6 +158,7 @@ export type ServerMsg =
   | { readonly t: "lore"; readonly id: string; readonly text: string }
   /** The judge looked at a reported win again (counts from the next time). */
   | { readonly t: "reconsidered"; readonly text: string }
+  | { readonly t: "anim"; readonly item: AnimItem; readonly left: readonly [number, number] }
   | { readonly t: "error"; readonly code: ErrorCode; readonly message: string };
 
 // ── validation (the server never trusts a frame) ──────────────────────────
@@ -208,6 +229,11 @@ export function parseClientMsg(raw: string): ClientMsg | undefined {
       if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_ART_IDS) return undefined;
       const clean = ids.map((x) => str(x, 80)).filter((x): x is string => x !== undefined && x !== "");
       return clean.length === ids.length ? { t: "art", ids: [...new Set(clean)] } : undefined;
+    }
+    case "animate": {
+      const action = ANIM_ACTION_IDS.find((a) => a === m["action"]);
+      const seat = m["seat"] === 0 || m["seat"] === 1 ? m["seat"] : undefined;
+      return action === undefined ? undefined : { t: "animate", action, ...(seat === undefined ? {} : { seat }) };
     }
     case "lore": {
       const id = str(m["id"], 80);

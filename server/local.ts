@@ -23,13 +23,15 @@ import type { LlmSettings } from "../src/llm/client.ts";
 import { reconcileLearned } from "../src/llm/learning.ts";
 import { narrateEpilogueWithClaude } from "../src/llm/narrator.ts";
 import { narrateEnd } from "../src/narrate/offline.ts";
-import { applyPackDelta, packDelta, parseReport, WS_PATH, type AbsurdReport, type ArtItem, type ServerMsg } from "../src/online/protocol.ts";
+import { ANIM_ACTION_IDS, ANIM_ACTIONS, applyPackDelta, packDelta, parseReport, WS_PATH, type AbsurdReport, type AnimItem, type ArtItem, type ServerMsg } from "../src/online/protocol.ts";
+import { AnimService } from "./anim-service.ts";
 import { artRequest } from "./art-prompts.ts";
 import { LoreStore } from "./lore-store.ts";
 import { ArtService } from "./art-service.ts";
 import { handleLearned, readLearnedFile, writeLearnedFile } from "./learned.ts";
-import { OnlineHub, type HubArt, type HubLimits } from "./online.ts";
-import { generatePixelArt } from "./pixellab.ts";
+import { OnlineHub, type HubAnim, type HubArt, type HubLimits } from "./online.ts";
+import { animatePixelArt, generatePixelArt } from "./pixellab.ts";
+import type { Rgba } from "./png.ts";
 import { DEFAULT_PROXY_MODEL, handleProxy, type ProxyEnv } from "./proxy.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -89,12 +91,18 @@ export const LEARNED_FILE = join(root, "learned/pack.json");
 export interface ArtEnv {
   readonly key: string;
   readonly monthlyLimit: number;
+  /** Animations ("Beleben") per month – each one is a larger job than a picture. */
+  readonly animMonthlyLimit: number;
 }
 
 export function artEnvFrom(vars: Record<string, string | undefined>): ArtEnv | undefined {
   const key = vars["PIXELLAB_API_KEY"] ?? "";
   if (key === "") return undefined;
-  return { key, monthlyLimit: Math.max(0, Number(vars["ART_MONTHLY_LIMIT"] ?? 1500) || 0) };
+  return {
+    key,
+    monthlyLimit: Math.max(0, Number(vars["ART_MONTHLY_LIMIT"] ?? 1500) || 0),
+    animMonthlyLimit: Math.max(0, Number(vars["ANIM_MONTHLY_LIMIT"] ?? 150) || 0),
+  };
 }
 
 export interface ServerOptions {
@@ -200,9 +208,30 @@ export function startServer(opts: ServerOptions): RunningServer {
   // Legends for form cards: written once per form by Claude, kept next to the learned pack.
   const legends = new LoreStore({ write: (form) => resolver.legend(form), file: join(dirname(file), "lore.json"), perHour: LORE_PER_HOUR });
 
+  // "Beleben": animations of generated pictures, made on request and kept like pictures
+  const animations = new AnimService({
+    ...(artEnv === undefined ? {} : { animate: (first: Rgba, action: string) => animatePixelArt(artEnv.key, first, action) }),
+    monthlyLimit: artEnv?.animMonthlyLimit ?? 0,
+    dir: join(dirname(file), "anim"),
+    usageFile: join(dirname(file), "anim-usage.json"),
+    log,
+  });
+  const hubAnim: HubAnim = {
+    lookup: (form, action) => {
+      const req = artRequest(form);
+      const pic = req === undefined ? undefined : pictures.lookup(req.prompt, req.size);
+      if (pic?.state !== "ready") return undefined;
+      const found = animations.lookup(pic.art, ANIM_ACTIONS[action].prompt);
+      const item: AnimItem = found.state === "ready" ? { id: form.id, action, state: "ready", frames: found.frames } : { id: form.id, action, state: found.state };
+      return { key: found.key, item };
+    },
+    onDone: (listener) => animations.onDone(listener),
+  };
+
   const theHub = new OnlineHub(resolver, {
     report: storeReport,
     art: hubArt,
+    anim: hubAnim,
     lore: (form) => legends.get(form),
     ...(opts.env.accessCode === undefined ? {} : { accessCode: opts.env.accessCode }),
     ...(opts.limits === undefined ? {} : { limits: opts.limits }),
@@ -252,6 +281,7 @@ export function startServer(opts: ServerOptions): RunningServer {
               accessCode: opts.env.accessCode !== undefined,
               online: true,
               art: true,
+              anim: artEnv !== undefined,
             }),
           );
           return;
@@ -267,6 +297,20 @@ export function startServer(opts: ServerOptions): RunningServer {
           const found = known !== undefined ? hubArt.lookup(known) : prompt === undefined || prompt.trim() === "" ? undefined : hubArt.lookup({ ...FORM_STUB, id, scale: scale as Scale, artPrompt: prompt });
           res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
           res.end(JSON.stringify(found?.item ?? { id, state: "none" }));
+          return;
+        }
+        if (url.startsWith("/api/animate") && !isPublic && req.method === "GET") {
+          // hot-seat "Beleben": the page counts the three per player; the server keeps its monthly budget
+          const q = new URL(url, "http://local").searchParams;
+          const id = (q.get("id") ?? "").slice(0, 80);
+          const action = ANIM_ACTION_IDS.find((a) => a === q.get("action"));
+          const known = resolver.onto.formById(id);
+          const prompt = q.get("prompt")?.replace(/[\p{C}]/gu, " ").slice(0, 200);
+          const scale = Math.max(1, Math.min(8, Number(q.get("scale") ?? 3) || 3));
+          const form = known ?? (prompt === undefined || prompt.trim() === "" ? undefined : { ...FORM_STUB, id, scale: scale as Scale, artPrompt: prompt });
+          const found = form === undefined || action === undefined ? undefined : hubAnim.lookup(form, action);
+          res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+          res.end(JSON.stringify(found?.item ?? { id, action: action ?? "atmen", state: "none" }));
           return;
         }
         if (url.startsWith("/api/report") && !isPublic && req.method === "POST") {

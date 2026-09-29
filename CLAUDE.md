@@ -138,6 +138,13 @@ conjures (pentagram of runes), then flares and the form appears; after a reconne
 No server, no key or budget spent (`ART_MONTHLY_LIMIT`, persisted) → the drawn sprites below. The PixelLab key
 lives only in the server environment (`PIXELLAB_API_KEY`) – never in a build, the repo or the browser.
 `npm run art -- status | ingest <png-dir> | warm` inspects or pre-fills the store.
+**Beleben** (`server/anim-service.ts`, `ui/anim-client.ts`): a player may bring their current form to life,
+`ANIMS_PER_PLAYER` (3) times per duel – PixelLab `animate-with-text-v3` with the form's picture as first frame and
+one of three actions (`ANIM_ACTIONS`: atmet / greift an / triumphiert), 30–180 s. Stored like pictures (key =
+picture + action, `learned/anim/`, budget `ANIM_MONTHLY_LIMIT`, default 150); a stored one costs no charge, a failed
+one is refunded. Online the server counts (`animate` → `anim` to the whole room, `welcome.anim`); the local hot-seat
+polls `GET /api/animate` and counts in the page. The arena plays the frames in a loop into the fighter's own canvases
+(`ArenaSim.animate`, `spriteRepainted` refreshes Pixi textures).
 
 ### Sprites from parts ("Bauplan", `render/look.ts`)
 
