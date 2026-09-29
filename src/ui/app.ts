@@ -16,7 +16,7 @@ import {
   type ServerInfo,
 } from "../llm/client.ts";
 import { browserStore, serverStore, type LearnedStore } from "../llm/learned-store.ts";
-import { emptyLearnedPack, reconcileLearned } from "../llm/learning.ts";
+import { emptyLearnedPack, NOTE_MAX_CHARS, reconcileLearned } from "../llm/learning.ts";
 import { brief, narrateEpilogueWithClaude } from "../llm/narrator.ts";
 import type { Ontology } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
@@ -702,31 +702,72 @@ export class App {
       if (this.state.config.mercyOutcomes.includes(check.outcome)) badges.push("Gnade");
       for (const b of badges) el.append(" ", h("span", { class: "w-badge" }, b));
       if (target !== undefined && check.verb !== ESCAPE) {
-        const btn = h("button", { class: "w-quatsch", title: "Dieser Sieg ergibt keinen Sinn? Melden – das hilft der Engine." }, "Quatsch?");
-        btn.addEventListener("click", () => {
-          this.reportAbsurd({ attacker: form.name, target: target.name, verb: label, attackerId: form.id, targetId: target.id });
-          btn.replaceWith(h("span", { class: "w-badge quiet" }, "gemeldet"));
-        });
-        el.append(" ", btn);
+        el.append(
+          " ",
+          this.objection("Quatsch?", "Dieser Sieg ergibt keinen Sinn? Melden – mit Begründung hört Claude sie beim nächsten Urteil.", (why) => {
+            this.reportAbsurd({ attacker: form.name, target: target.name, verb: label, attackerId: form.id, targetId: target.id, reason: why });
+          }),
+        );
       }
     } else {
       el.append(h("span", { class: "w-verb" }, `${form.name} ${label}`), " · ", h("span", { class: "w-fail" }, brief(reason ?? check.steps.at(-1)?.text ?? "", 90)));
       if (target !== undefined && check.verb !== ESCAPE) {
         // the other way round: this should have worked
-        const btn = h("button", { class: "w-quatsch", title: "Das hätte klappen müssen? Melden – Claude prüft das Paar nach." }, "Hätte klappen müssen?");
-        btn.addEventListener("click", () => {
-          this.reportAbsurd({ attacker: form.name, target: target.name, verb: label, attackerId: form.id, targetId: target.id, failed: true });
-          btn.replaceWith(h("span", { class: "w-badge quiet" }, "gemeldet"));
-        });
-        el.append(" ", btn);
+        el.append(
+          " ",
+          this.objection("Hätte klappen müssen?", "Das hätte klappen müssen? Melden – Claude prüft das Paar nach und hört deine Begründung.", (why) => {
+            this.reportAbsurd({ attacker: form.name, target: target.name, verb: label, attackerId: form.id, targetId: target.id, failed: true, reason: why });
+          }),
+        );
       }
     }
     el.className = "why-line show"; // stays until the next move, like the narration
   }
 
-  /** "Das war Quatsch!" – remember the absurd win here and tell the server, if there is one. */
-  private reportAbsurd(r: { attacker: string; target: string; verb: string; attackerId: string; targetId: string; failed?: boolean }): void {
-    addReport({ attacker: r.attacker, target: r.target, verb: r.verb }, new Date().toISOString());
+  /**
+   * An objection button: a click opens one line for the reason („Ein Radio zersetzt doch nichts“) –
+   * optional; Enter or „Melden“ sends, Esc takes it back. Claude hears the reason now and at every
+   * later judgement involving either form.
+   */
+  private objection(label: string, title: string, send: (reason: string) => void): HTMLElement {
+    const wrap = h("span", { class: "w-objection" });
+    const btn = h("button", { class: "w-quatsch", title }, label);
+    wrap.append(btn);
+    btn.addEventListener("click", () => {
+      const input = h("input", {
+        class: "w-reason",
+        type: "text",
+        placeholder: "Warum? (optional)",
+        "aria-label": "Begründung",
+      });
+      input.maxLength = NOTE_MAX_CHARS;
+      const ok = h("button", { class: "w-quatsch send" }, "Melden");
+      const cancel = h("button", { class: "w-quatsch", title: "Doch nicht" }, "×");
+      const done = (): void => {
+        send(input.value.trim());
+        clear(wrap);
+        wrap.append(h("span", { class: "w-badge quiet" }, input.value.trim() === "" ? "gemeldet" : "gemeldet · Claude hört es"));
+      };
+      ok.addEventListener("click", done);
+      cancel.addEventListener("click", () => {
+        clear(wrap);
+        wrap.append(btn);
+      });
+      input.addEventListener("keydown", (e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") done();
+        else if (e.key === "Escape") cancel.click();
+      });
+      clear(wrap);
+      wrap.append(input, ok, cancel);
+      input.focus();
+    });
+    return wrap;
+  }
+
+  /** "Das war Quatsch!" – remember the objection here and tell the server, if there is one. */
+  private reportAbsurd(r: { attacker: string; target: string; verb: string; attackerId: string; targetId: string; failed?: boolean; reason?: string }): void {
+    addReport({ attacker: r.attacker, target: r.target, verb: r.verb, ...(r.failed === true ? { failed: true } : {}), ...(r.reason === undefined || r.reason === "" ? {} : { reason: r.reason }) }, new Date().toISOString());
     if (this.online?.send({ t: "report", ...r }) === true) {
       this.flashBanner("Gemeldet – danke!", "info");
       return;
@@ -734,7 +775,7 @@ export class App {
     void fetch("/api/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(r) }).catch(() => undefined);
     this.flashBanner("Gemeldet – danke!", "info");
     // an invented form involved: the judge looks again (counts from the next time)
-    void this.resolver.reconsider(r.attackerId, r.targetId, r.verb, r.failed === true).then((reason) => {
+    void this.resolver.reconsider(r.attackerId, r.targetId, r.verb, r.failed === true, r.reason ?? "").then((reason) => {
       if (reason === undefined) return;
       this.setOntology(this.resolver.onto);
       this.flashBanner(`⚖ Nachgeprüft: ${brief(reason, 140)}`, "info");

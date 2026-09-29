@@ -389,6 +389,31 @@ canvas.arena {
   color: var(--bad, #ff7a6a);
   border-color: currentColor;
 }
+.w-objection {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+}
+.w-reason {
+  width: min(22em, 70vw);
+  padding: 1px 6px;
+  border: 1px solid var(--muted, #8a7e9a);
+  border-radius: 3px;
+  background: rgba(10, 6, 16, 0.85);
+  color: var(--text, #efe6ff);
+  font: inherit;
+  font-size: 0.8em;
+}
+.w-reason:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+.w-quatsch.send {
+  color: var(--gold);
+  border-style: solid;
+}
 .w-badge.quiet {
   color: var(--muted, #8a7e9a);
 }

@@ -5,9 +5,10 @@
  * The server holds the game state and the API key and resolves every move with the same
  * `Resolver` the hot-seat UI uses; clients only send text and show what comes back.
  */
-import type { ContentPack, FormSpec, ModifierSpec, QualitySpec, RulingSpec, TagSpec, VerbExtensionSpec, VerbSpec } from "../engine/ontology/pack.ts";
+import type { ContentPack, FormSpec, ModifierSpec, NoteSpec, QualitySpec, RulingSpec, TagSpec, VerbExtensionSpec, VerbSpec } from "../engine/ontology/pack.ts";
 import type { GameState, PlayerId } from "../engine/types.ts";
 import type { Turn } from "../game/resolver.ts";
+import { NOTE_MAX_CHARS } from "../llm/learning.ts";
 
 export const WS_PATH = "/ws";
 export const MAX_TEXT = 80;
@@ -74,14 +75,16 @@ export interface AbsurdReport {
   readonly targetId?: string;
   /** The other way round: a failure that should have worked ("Hätte klappen müssen"). */
   readonly failed?: boolean;
+  /** Why, in the player's words – kept for the next judgement involving either form. */
+  readonly reason?: string;
 }
 
 /** Validate a report from an untrusted client: three short printable strings. */
 export function parseReport(o: Record<string, unknown>): AbsurdReport | undefined {
-  const field = (k: string): string | undefined => {
+  const field = (k: string, max = 80): string | undefined => {
     const v = o[k];
     if (typeof v !== "string") return undefined;
-    const clean = v.replace(/[\p{C}]/gu, "").trim().slice(0, 80);
+    const clean = v.replace(/[\p{C}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, max);
     return clean === "" ? undefined : clean;
   };
   const attacker = field("attacker");
@@ -90,6 +93,7 @@ export function parseReport(o: Record<string, unknown>): AbsurdReport | undefine
   if (attacker === undefined || target === undefined || verb === undefined) return undefined;
   const attackerId = field("attackerId");
   const targetId = field("targetId");
+  const reason = field("reason", NOTE_MAX_CHARS);
   return {
     attacker,
     target,
@@ -97,6 +101,7 @@ export function parseReport(o: Record<string, unknown>): AbsurdReport | undefine
     ...(attackerId === undefined ? {} : { attackerId }),
     ...(targetId === undefined ? {} : { targetId }),
     ...(o["failed"] === true ? { failed: true } : {}),
+    ...(reason === undefined ? {} : { reason }),
   };
 }
 
@@ -127,6 +132,8 @@ export interface PackDelta {
   readonly qualities?: readonly QualitySpec[];
   /** Learned mechanism widenings (optional: servers before v0.53 send none). */
   readonly extensions?: readonly VerbExtensionSpec[];
+  /** Players' objections (optional: servers before v0.61 send none). */
+  readonly notes?: readonly NoteSpec[];
 }
 
 export type ErrorCode = "access" | "noroom" | "full" | "limit" | "bad" | "turn" | "busy" | "claude";
@@ -256,6 +263,7 @@ export function parseClientMsg(raw: string): ClientMsg | undefined {
 // ── learned pack deltas ───────────────────────────────────────────────────
 
 const rulingKey = (r: RulingSpec): string => `${r.attacker}\u0000${r.target}`;
+const noteKey = (n: NoteSpec): string => `${n.form}\u0000${n.other}\u0000${n.text}`;
 
 function changed<T>(before: readonly T[], after: readonly T[], key: (x: T) => string): T[] {
   const old = new Map(before.map((x) => [key(x), JSON.stringify(x)]));
@@ -273,11 +281,12 @@ export function packDelta(before: ContentPack, after: ContentPack): PackDelta {
     rulings: changed(before.rulings ?? [], after.rulings ?? [], rulingKey),
     qualities: changed(before.qualities ?? [], after.qualities ?? [], id),
     extensions: changed(before.extensions ?? [], after.extensions ?? [], (x) => x.verb),
+    notes: changed(before.notes ?? [], after.notes ?? [], noteKey),
   };
 }
 
 export function isEmptyDelta(d: PackDelta): boolean {
-  return d.tags.length + d.verbs.length + d.modifiers.length + d.forms.length + d.rulings.length + (d.qualities ?? []).length + (d.extensions ?? []).length === 0;
+  return d.tags.length + d.verbs.length + d.modifiers.length + d.forms.length + d.rulings.length + (d.qualities ?? []).length + (d.extensions ?? []).length + (d.notes ?? []).length === 0;
 }
 
 function upsert<T>(list: readonly T[], add: readonly T[], key: (x: T) => string): T[] {
@@ -297,5 +306,6 @@ export function applyPackDelta(pack: ContentPack, d: PackDelta): ContentPack {
     rulings: upsert(pack.rulings ?? [], d.rulings, rulingKey),
     ...(d.qualities === undefined || d.qualities.length === 0 ? {} : { qualities: upsert(pack.qualities ?? [], d.qualities, id) }),
     ...(d.extensions === undefined || d.extensions.length === 0 ? {} : { extensions: upsert(pack.extensions ?? [], d.extensions, (x) => x.verb) }),
+    ...(d.notes === undefined || d.notes.length === 0 ? {} : { notes: upsert(pack.notes ?? [], d.notes, noteKey) }),
   };
 }

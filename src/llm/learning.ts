@@ -1,5 +1,5 @@
 import { Ontology, OntologyError, lookupKey } from "../engine/ontology/ontology.ts";
-import { parsePack, type ContentPack, type FormSpec, type QualitySpec, type RulingSpec, type TagSpec, type VerbSpec } from "../engine/ontology/pack.ts";
+import { parsePack, type ContentPack, type FormSpec, type NoteSpec, type QualitySpec, type RulingSpec, type TagSpec, type VerbSpec } from "../engine/ontology/pack.ts";
 import { findCounters } from "../engine/rules.ts";
 import { normalize } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
@@ -325,6 +325,35 @@ export function addRuling(base: readonly ContentPack[], learned: ContentPack, ru
   const pack: ContentPack = { ...learned, rulings };
   const onto = compile(base, pack);
   return onto === undefined ? undefined : { onto, pack };
+}
+
+/** Longest objection kept (characters). */
+export const NOTE_MAX_CHARS = 200;
+/** Objections kept per pair, and in all (the oldest go first). */
+const NOTES_PER_PAIR = 2;
+const NOTES_TOTAL = 2000;
+
+/** A player's words, made safe to keep: printable, one line, bounded. Empty = nothing to keep. */
+export function cleanNote(text: string): string {
+  return text.replace(/[\p{C}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, NOTE_MAX_CHARS);
+}
+
+/** Keep a player's objection to a pair (the engine never reads it; the next judgement does). */
+export function addNote(learned: ContentPack, note: NoteSpec): ContentPack {
+  const text = cleanNote(note.text);
+  if (text === "") return learned;
+  const clean: NoteSpec = { form: note.form, other: note.other, text, ...(note.failed === true ? { failed: true } : {}) };
+  const all = [...(learned.notes ?? []).filter((n) => n.text !== text || n.form !== note.form || n.other !== note.other), clean];
+  // per pair only the latest few, then the overall cap
+  const pair = all.filter((n) => n.form === note.form && n.other === note.other);
+  const drop = new Set(pair.slice(0, Math.max(0, pair.length - NOTES_PER_PAIR)));
+  const notes = all.filter((n) => !drop.has(n)).slice(-NOTES_TOTAL);
+  return { ...learned, notes };
+}
+
+/** The latest objections that involve any of these forms (either side of the pair), newest last. */
+export function notesAbout(learned: ContentPack, ids: readonly string[], limit = 4): NoteSpec[] {
+  return (learned.notes ?? []).filter((n) => ids.includes(n.form) || ids.includes(n.other)).slice(-limit);
 }
 
 /**

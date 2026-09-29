@@ -211,6 +211,20 @@ export interface RulingSpec {
 }
 
 /**
+ * A player's objection to a verdict, in their own words („Quatsch – ein Radio zersetzt nichts“). Kept
+ * for Claude: the next judgement involving either form hears it. The engine never reads notes.
+ */
+export interface NoteSpec {
+  /** The attacker of the objected pair … */
+  readonly form: string;
+  /** … and its target. */
+  readonly other: string;
+  readonly text: string;
+  /** The objection was "should have worked" (a failure), not "nonsense" (a win). */
+  readonly failed?: boolean;
+}
+
+/**
  * A learned widening of a mechanism ("Siegweg"): generalised from precedents, it lets a mechanism
  * reach more tags (`targets`) or be stopped by more (`blockedBy`). Only ever adds.
  */
@@ -235,6 +249,8 @@ export interface ContentPack {
   readonly extensions?: readonly VerbExtensionSpec[];
   readonly qualities?: readonly QualitySpec[];
   readonly combos?: readonly ComboSpec[];
+  /** Players' objections (learned pack only) – for Claude, never for the engine. */
+  readonly notes?: readonly NoteSpec[];
 }
 
 // ── Runtime shape validation (packs may come from untrusted JSON) ─────────
@@ -491,6 +507,19 @@ export function parsePack(input: unknown): PackResult {
               verb: c.str(o, "verb", w),
               reason: c.str(o, "reason", w),
               ...(o["by"] === "judge" || o["by"] === "referee" ? { by: o["by"] } : {}),
+            };
+          }),
+        }),
+    ...(input["notes"] === undefined
+      ? {}
+      : {
+          notes: c.array(input, "notes", id).map((o, i) => {
+            const w = `${id}.notes[${i}]`;
+            return {
+              form: c.str(o, "form", w),
+              other: c.str(o, "other", w),
+              text: c.str(o, "text", w),
+              ...(o["failed"] === true ? { failed: true } : {}),
             };
           }),
         }),

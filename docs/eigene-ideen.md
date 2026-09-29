@@ -477,3 +477,13 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Kein „full body“ für Dinge** | Unser Stil-Rezept hängte an jede Beschreibung „game sprite, full body“ – für PixelLab heißt das: eine Figur. Getestet: „a chainsaw“ ergab einen Mann mit Kettensäge. Dinge, Elemente und Ideen bekommen jetzt „a single object on its own / a symbolic object, no people, no hands“ und kein „full body“; dann kommt die Kettensäge allein, Gasmangel wird ein Gaskanister mit ersterbender blauer Flamme. | `framing`, `styleFor` |
 | **Wer Hände will, bekommt Hände** | Beschreibungen, die selbst Personen, Figuren oder Hände nennen („ein Stern in hohlen Händen“, „eine weinende Gestalt“), bleiben unverändert. Figuren behalten ihre gespeicherten Bilder; nur Dinge werden beim nächsten Auftritt einmal neu gemalt. | `WANTS_FIGURE` |
 | **Claude beschreibt die Gestalt selbst** | `bild` ist ausdrücklich Englisch (PixelLab versteht kein Deutsch – „eine Kettensäge“ ergab eine beliebige Frau) und zeigt das Ding, nicht jemanden, der es benutzt; Zustände und Ideen werden ein sprechendes Ding. `humanoid` nur für Personen. | Parser-Prompt |
+
+## Einspruch mit Begründung (Nutzerwunsch: „Beim Quatsch-Knopf direkt eine Begründung eingeben, die Claude beim nächsten Schiedsspruch berücksichtigt“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Eine Zeile, kein Formular** | „Quatsch?“ und „Hätte klappen müssen?“ öffnen eine Eingabezeile direkt in der Erklärung: „Warum? (optional)“. Enter oder „Melden“ schickt, Esc nimmt zurück. Ohne Begründung geht es wie bisher. | `objection` |
+| **Claude hört es sofort …** | Die Begründung steht wörtlich im Einspruch, mit dem Claude das Paar nachprüft. | `Resolver.reconsider` |
+| **… und bei jedem späteren Urteil** | Sie wird als Einwand gespeichert und bei jedem späteren Richter- oder Schiedsrichterspruch zitiert, an dem eine der beiden Gestalten beteiligt ist – als Meinung zum Abwägen, nicht als Anweisung. Auch ohne Claude (Debug, Budget) geht sie nicht verloren. | `notes`, `notesAbout` |
+| **Begrenzt** | Pro Paar die letzten zwei, insgesamt 2000, je höchstens 200 Zeichen, nur druckbare Zeichen. Die Quatsch-Liste im Menü zeigt die Begründungen mit. | `addNote`, `reportsText` |
+| **Gelerntes geht nicht mehr verloren** | Beim Speichern des gelernten Packs schrieb der Server nur Eigenschaften, Mechanismen, Gestalten und Urteile – gelernte Intensitäten und Siegwege fielen weg, und nach einem Neustart damit auch jede Gestalt, die sie brauchte. Jetzt wird jede Liste geschrieben. | `formatPack` |

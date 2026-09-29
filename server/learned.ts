@@ -15,10 +15,32 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-/** One entry per line, like the core content – reviewable diffs when committed. */
+/**
+ * One entry per line, like the core content – reviewable diffs when committed. Every list the pack
+ * has is written (learned qualities and Siegwege used to be dropped here, and with them every
+ * learned form that needed them after a restart).
+ */
 export function formatPack(p: ContentPack): string {
   const list = (xs: readonly unknown[]): string => (xs.length === 0 ? "[]" : `[\n${xs.map((x) => `    ${JSON.stringify(x)}`).join(",\n")}\n  ]`);
-  return `{\n  "id": ${JSON.stringify(p.id)},\n  "name": ${JSON.stringify(p.name)},\n  "version": ${JSON.stringify(p.version)},\n  "tags": ${list(p.tags)},\n  "verbs": ${list(p.verbs)},\n  "modifiers": ${list(p.modifiers)},\n  "forms": ${list(p.forms)},\n  "rulings": ${list(p.rulings ?? [])}\n}\n`;
+  const optional: [string, readonly unknown[] | undefined][] = [
+    ["rulings", p.rulings ?? []],
+    ["qualities", p.qualities],
+    ["combos", p.combos],
+    ["fields", p.fields],
+    ["extensions", p.extensions],
+    ["notes", p.notes],
+  ];
+  const lines = [
+    `  "id": ${JSON.stringify(p.id)}`,
+    `  "name": ${JSON.stringify(p.name)}`,
+    `  "version": ${JSON.stringify(p.version)}`,
+    `  "tags": ${list(p.tags)}`,
+    `  "verbs": ${list(p.verbs)}`,
+    `  "modifiers": ${list(p.modifiers)}`,
+    `  "forms": ${list(p.forms)}`,
+    ...optional.flatMap(([k, xs]) => (xs === undefined ? [] : [`  ${JSON.stringify(k)}: ${list(xs)}`])),
+  ];
+  return `{\n${lines.join(",\n")}\n}\n`;
 }
 
 /** Parse and validate an uploaded learned pack against the base packs. */
