@@ -1,6 +1,6 @@
 /**
- * The Eichelober and his gang – the secret characters' own show: little pixel props (acorn,
- * cheese wedge), the gang tattoo made from the Eichelober's picture, and which signature attack a
+ * The Eichelober and his gang – the secret characters' own show: the acorn they fire (drawn after
+ * the Eichel of the Bavarian cards), the gang tattoo made from the Eichelober's picture, and which signature attack a
  * name asks for. Presentation only – the engine decides the outcome as for every other form.
  */
 import type { PixelImage } from "./sprite.ts";
@@ -27,41 +27,31 @@ export const SIGNATURE_CRY: Readonly<Record<Signature, string>> = {
 
 type Grid = readonly string[];
 
+/** Shaped like the Eichel of the Bavarian cards: yellow nut pointing up, green hatched cup, green stalk. */
 const ACORN: Grid = [
-  "...w....",
-  ".cCCCCc.",
-  "cCcCcCcC",
-  "cCCCCCCc",
-  ".bbbbbb.",
-  ".bBbbbb.",
-  ".bBbbbb.",
-  "..bbbb..",
-  "...bb...",
-];
-
-const CHEESE: Grid = [
-  "...........YY",
-  "........YYYyy",
-  ".....YYYYyyyy",
-  "..YYYYYyyoyyy",
-  "YYYYYyyyyyyyy",
-  "yyyoyyyyyyoyy",
-  "yyyyyyyyyyyyy",
-  "yyoyyyyoyyyyy",
-  "yyyyyyyyyyyyy",
-  "ddddddddddddd",
+  "....kk....",
+  "...kYYk...",
+  "..kYYyyk..",
+  ".kYYyyyyk.",
+  ".kYyyyyok.",
+  ".kyyyyyok.",
+  ".kyyyyook.",
+  "kGgGgGgGgk",
+  "kgGgGgGgGk",
+  ".kgGgGgGk.",
+  "..kgggk...",
+  "....ks....",
+  "....sk....",
 ];
 
 const COLORS: Readonly<Record<string, readonly [number, number, number]>> = {
-  w: [0x5a, 0x34, 0x18],
-  c: [0x8a, 0x6a, 0x20],
-  C: [0xc8, 0xa0, 0x40],
-  b: [0x8a, 0x4a, 0x1a],
-  B: [0xc0, 0x7a, 0x3a],
-  Y: [0xff, 0xe6, 0x80],
-  y: [0xf0, 0xc0, 0x30],
-  o: [0xb8, 0x8a, 0x18],
-  d: [0xc8, 0x90, 0x20],
+  k: [0x34, 0x24, 0x0e],
+  Y: [0xfa, 0xe4, 0x78],
+  y: [0xe2, 0xb8, 0x34],
+  o: [0xb8, 0x82, 0x20],
+  G: [0x78, 0xa8, 0x34],
+  g: [0x48, 0x74, 0x20],
+  s: [0x40, 0x78, 0x24],
 };
 
 function gridImage(grid: Grid): PixelImage {
@@ -83,14 +73,9 @@ function gridImage(grid: Grid): PixelImage {
   return { width, height, data };
 }
 
-/** An acorn, 8×9 – what the gang's slingshots fire. */
+/** An acorn, 10×13 – what the Eichelober's acorn gun and the gang's slingshots fire. */
 export function acornImage(): PixelImage {
   return gridImage(ACORN);
-}
-
-/** A wedge of Eichelkäse, 13×10. */
-export function cheeseImage(): PixelImage {
-  return gridImage(CHEESE);
 }
 
 /**

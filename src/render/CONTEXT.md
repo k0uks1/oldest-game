@@ -76,7 +76,8 @@ a freehand `skizze` only when no part fits. Unknown ids are dropped (`knownLook`
 Forms with `secret: true` (`content/core/forms/geheim.json`) stay out of the grimoire until this browser has seen them
 summoned (`oldest-game:secrets`). Their pictures come with the game (`content/core/secret-art.json`, id → art string,
 drawn from a design, not PixelLab). The **Eichelober** arrives in a shower of acorns and attacks with the
-*Eichelkäseattacke* (acorn ride across the arena, cheese explosion); the **Eichelober-Gang** flashes its tattoo (the
+*Eichelkäseattacke* (an acorn machine gun: a stream of acorns with tracers, then one giant acorn); every acorn is drawn
+after the Eichel of the Bavarian cards (yellow nut up, green hatched cup and stalk); the **Eichelober-Gang** flashes its tattoo (the
 Eichelober picture as ink) and fires three volleys of acorns with slingshots (*Eichelhagel*). Chosen by name
 (`signatureFor`, like the easter eggs) – pure show, the engine decides as for every form. **Eichel-Arena:** the room
 `eichel` (`rooms.json`, `anyScale`: any form with `kaesig`, whatever its scale, before any field; picture drawn from the

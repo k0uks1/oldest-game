@@ -11,7 +11,7 @@ import { carriesField, chooseRoom, ROOM_MIN_SCALE } from "./rooms.ts";
 import { ROOM_PICTURES } from "./rooms/index.ts";
 import { displaySize, renderGlow, renderSprite, type PixelImage } from "./sprite.ts";
 import { ISO } from "./stage-iso.ts";
-import { acornImage, cheeseImage, signatureFor, tattooImage, type Signature } from "./eichel.ts";
+import { acornImage, signatureFor, tattooImage, type Signature } from "./eichel.ts";
 import { FLOOR_Y, GROUND_Y, HEIGHT, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
 
 export { FLOOR_Y, GROUND_Y, HEIGHT, TORCH_X, WIDTH } from "./stage.ts";
@@ -200,7 +200,7 @@ export interface Particle {
   glow: boolean;
 }
 
-/** A little picture flying through the arena (an acorn, a wedge of cheese, the gang tattoo). */
+/** A little picture flying through the arena (an acorn, the gang tattoo). */
 export interface Prop {
   readonly image: HTMLCanvasElement;
   x: number;
@@ -217,6 +217,8 @@ export interface Prop {
   /** Seconds of fade-in and fade-out at the ends of its life. */
   readonly fade: number;
   readonly glow: number;
+  /** Bursts into shards where its flight ends (an acorn hitting home). */
+  readonly shatter?: boolean;
 }
 
 /** How an attack looks – chosen from the mechanism, see {@link attackStyle}. */
@@ -353,9 +355,9 @@ export abstract class ArenaSim {
   protected readonly background: HTMLCanvasElement;
   protected readonly fighters: [Fighter | null, Fighter | null] = [null, null];
   protected readonly particles: Particle[] = [];
-  /** Flying pictures (acorns, cheese, the gang tattoo). */
+  /** Flying pictures (acorns, the gang tattoo). */
   protected readonly props: Prop[] = [];
-  private eichelArt: { acorn: HTMLCanvasElement; cheese: HTMLCanvasElement } | null = null;
+  private eichelArt: { acorn: HTMLCanvasElement } | null = null;
   protected readonly projectiles: Projectile[] = [];
   protected readonly rings: Ring[] = [];
   protected readonly bolts: Bolt[] = [];
@@ -552,7 +554,7 @@ export abstract class ArenaSim {
         // the Eichelober arrives: acorns rain around him, clouds puff up where he lands
         const { acorn } = this.eichelProps();
         for (let i = 0; i < 16; i++) {
-          this.props.push({ image: acorn, x: x + (r() - 0.5) * 120, y: -10 - r() * 50, vx: (r() - 0.5) * 20, vy: 40 + r() * 40, life: -r() * 0.6, max: 1.6, gravity: 180, w: 8, h: 9, flip: r() < 0.5, fade: 0.15, glow: 0 });
+          this.props.push({ image: acorn, x: x + (r() - 0.5) * 120, y: -10 - r() * 50, vx: (r() - 0.5) * 20, vy: 40 + r() * 40, life: -r() * 0.6, max: 1.6, gravity: 180, w: 10, h: 13, flip: r() < 0.5, fade: 0.15, glow: 0 });
         }
         this.clouds(x, this.gy(side) - 2, 26);
         this.rings.push({ x, y: this.gy(side), r: 4, life: 0, max: 0.9, color: "#e8c040" });
@@ -1780,9 +1782,14 @@ export abstract class ArenaSim {
       p.life += dt;
       if (p.life >= p.max) {
         this.props.splice(i, 1);
+        if (p.shatter === true) {
+          for (let k = 0; k < 6; k++) this.particles.push({ x: p.x, y: p.y, vx: (this.rand() - 0.5) * 110, vy: -20 - this.rand() * 70, life: 0, max: 0.3 + this.rand() * 0.3, color: k % 3 === 0 ? "#78a834" : "#e2b834", size: 1, gravity: 260, glow: false });
+        }
         continue;
       }
       if (p.life < 0) continue;
+      // a fired acorn draws a glowing tracer behind it
+      if (p.shatter === true) this.particles.push({ x: p.x, y: p.y, vx: -p.vx * 0.05, vy: -p.vy * 0.05, life: 0, max: 0.14, color: this.rand() < 0.5 ? "#fff0a0" : "#ffb838", size: 2, gravity: 0, glow: true });
       p.vy += p.gravity * dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
@@ -1803,7 +1810,7 @@ export abstract class ArenaSim {
       const g = 140;
       // falls until it reaches the floor, then bounces off as a few crumbs
       const t = (-vy + Math.sqrt(vy * vy + 2 * g * (land + 12))) / g;
-      this.props.push({ image: acorn, x: 20 + r() * (WIDTH - 40), y: -12, vx: (r() - 0.5) * 12, vy, life: 0, max: t, gravity: g, w: 8, h: 9, flip: r() < 0.5, fade: 0.1, glow: 0 });
+      this.props.push({ image: acorn, x: 20 + r() * (WIDTH - 40), y: -12, vx: (r() - 0.5) * 12, vy, life: 0, max: t, gravity: g, w: 10, h: 13, flip: r() < 0.5, fade: 0.1, glow: 0 });
     }
     if (r() < dt * 9) {
       const c = ["#c86a20", "#e0a030", "#8a4a1a", "#6e7828"][Math.floor(r() * 4)] ?? "#c86a20";
@@ -1811,8 +1818,8 @@ export abstract class ArenaSim {
     }
   }
 
-  private eichelProps(): { acorn: HTMLCanvasElement; cheese: HTMLCanvasElement } {
-    this.eichelArt ??= { acorn: toCanvas(acornImage()), cheese: toCanvas(cheeseImage()) };
+  private eichelProps(): { acorn: HTMLCanvasElement } {
+    this.eichelArt ??= { acorn: toCanvas(acornImage()) };
     return this.eichelArt;
   }
 
@@ -1832,9 +1839,9 @@ export abstract class ArenaSim {
   }
 
   /**
-   * "Eichelkäseattacke": the Eichelober rears up, rides his acorn across the arena on a trail of
-   * clouds and speed lines, rams the opponent – and the acorn bursts: molten Eichelkäse sprays,
-   * wedges of cheese fly, a green stink rises and cheese drips down the victim.
+   * "Eichelkäseattacke": the Eichelober rises on his acorn and opens fire – an acorn gun rattles
+   * from the tip of his acorn, a stream of acorns hammers the opponent (muzzle flashes, spent caps
+   * flying back, shards on every hit), and a last, giant acorn ends it with a blast.
    */
   private async eichelkaese(side: Side): Promise<void> {
     const attacker = this.fighters[side];
@@ -1845,58 +1852,67 @@ export abstract class ArenaSim {
     const rm = this.reducedMotion;
     const r = this.rand;
     const tx = SIDE_X[other];
+    const tw = target?.sprite.width ?? 30;
     const th = target?.sprite.height ?? 40;
     const ty = this.gy(other) - th / 2;
-    const { cheese } = this.eichelProps();
-    // wind-up: he rears back and lifts off, the shield glints gold
-    this.rings.push({ x: SIDE_X[side], y: this.gy(side) - attacker.sprite.height / 2, r: 4, life: 0, max: 0.6, color: "#e8c040" });
-    await this.tween(rm ? 40 : 380, (t) => {
-      attacker.offsetX = -dir * 12 * t;
-      attacker.offsetY = -10 * t;
-      if (r() < 0.6) this.particles.push({ x: SIDE_X[side] + (r() - 0.5) * attacker.sprite.width, y: this.gy(side) - r() * attacker.sprite.height, vx: 0, vy: -20, life: 0, max: 0.5, color: "#ffe680", size: 1, gravity: 0, glow: true });
+    const { acorn } = this.eichelProps();
+    // wind-up: he rises, the gun spins up with a golden glint
+    await this.tween(rm ? 40 : 320, (t) => {
+      attacker.offsetX = -dir * 6 * t;
+      attacker.offsetY = -8 * t;
     });
-    this.onCue?.("strike");
-    // the ride: an arc across the arena, clouds and brown speed lines behind
-    const gap = Math.abs(tx - SIDE_X[side]) - (attacker.sprite.width + (target?.sprite.width ?? 30)) / 2 + 10;
-    const dist = Math.max(20, gap);
-    await this.tween(rm ? 60 : 560, (t) => {
-      const e = t * t * (3 - 2 * t);
-      attacker.offsetX = dir * (-12 + (dist + 12) * e);
-      attacker.offsetY = -10 - 26 * Math.sin(t * Math.PI);
-      const bx = SIDE_X[side] + attacker.offsetX - dir * attacker.sprite.width * 0.45;
-      const by = this.gy(side) + attacker.offsetY - 4;
-      this.clouds(bx, by, 2, -dir * 20);
-      for (let k = 0; k < 2; k++) this.particles.push({ x: bx - dir * r() * 20, y: by - r() * attacker.sprite.height * 0.6, vx: -dir * (120 + r() * 80), vy: 0, life: 0, max: 0.25, color: r() < 0.5 ? "#8a5428" : "#c07a3a", size: 1, gravity: 0, glow: false });
-    });
-    // KÄSE!
+    const muzzle = (): [number, number] => [SIDE_X[side] + attacker.offsetX + dir * attacker.sprite.width * 0.48, this.gy(side) + attacker.offsetY - attacker.sprite.height * 0.28];
+    const [mx0, my0] = muzzle();
+    this.rings.push({ x: mx0, y: my0, r: 2, life: 0, max: 0.4, color: "#ffe680" });
+    await wait(rm ? 30 : 200);
+    // the barrage
+    const shots = rm ? 6 : 34;
+    const flight = rm ? 0.12 : 0.24;
+    for (let i = 0; i < shots; i++) {
+      if (i % 3 === 0) this.onCue?.("strike");
+      const [mx, my] = muzzle();
+      const hx = tx + (r() - 0.5) * tw * 0.7;
+      const hy = ty + (r() - 0.5) * th * 0.7;
+      this.props.push({ image: acorn, x: mx, y: my, vx: (hx - mx) / flight, vy: (hy - my) / flight, life: 0, max: flight, gravity: 0, w: 12, h: 16, flip: false, fade: 0, glow: 0.6, shatter: true });
+      // muzzle flash and a spent green cap flying back
+      for (let k = 0; k < 5; k++) this.particles.push({ x: mx, y: my, vx: dir * (40 + r() * 90), vy: (r() - 0.5) * 60, life: 0, max: 0.08 + r() * 0.08, color: k < 2 ? "#ffffff" : "#ffd84a", size: k === 0 ? 4 : 2, gravity: 0, glow: true });
+      this.rings.push({ x: mx, y: my, r: 2, life: 0, max: 0.1, color: "#fff0a0", grow: 60 });
+      this.particles.push({ x: mx - dir * 6, y: my, vx: -dir * (30 + r() * 40), vy: -50 - r() * 40, life: 0, max: 0.6, color: r() < 0.5 ? "#78a834" : "#487420", size: 2, gravity: 260, glow: false });
+      // recoil
+      attacker.offsetX = -dir * (6 + (i % 2) * 2);
+      this.shake = Math.max(this.shake, rm ? 0 : 1.5);
+      if (target !== null && i % 4 === 3) target.flash = 0.5;
+      await wait(rm ? 40 : 42);
+    }
+    await wait(flight * 1000);
+    // the finale: one giant acorn
+    const [mx, my] = muzzle();
+    const big = rm ? 0.15 : 0.4;
+    this.props.push({ image: acorn, x: mx, y: my, vx: (tx - mx) / big, vy: (ty - my) / big, life: 0, max: big, gravity: 0, w: 30, h: 39, flip: false, fade: 0, glow: 0.3 });
+    for (let k = 0; k < 20; k++) this.particles.push({ x: mx, y: my, vx: dir * (60 + r() * 140), vy: (r() - 0.5) * 90, life: 0, max: 0.15 + r() * 0.1, color: k % 2 === 0 ? "#ffffff" : "#ffd84a", size: 3, gravity: 0, glow: true });
+    this.shake = rm ? 0 : 5;
+    await wait(big * 1000);
     this.onCue?.("boom");
-    this.flash = 0.7;
+    this.flash = 0.6;
     this.flashColor = "#ffe680";
     this.shake = rm ? 0 : 12;
-    for (let k = 0; k < 3; k++) this.rings.push({ x: tx, y: ty, r: 4, life: -k * 0.1, max: 0.9, color: k === 1 ? "#fff4c0" : "#f0c030", grow: 160 });
-    const goo = ["#f0c030", "#ffe680", "#c89020", "#fff4c0"];
-    for (let i = 0; i < 140; i++) {
-      const a = -Math.PI * r();
-      const sp = 40 + r() * 190;
-      this.particles.push({ x: tx, y: ty, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: -r() * 0.1, max: 0.9 + r() * 0.9, color: goo[i % goo.length] ?? "#f0c030", size: r() < 0.4 ? 2 : 1, gravity: 220, glow: i % 3 === 0 });
+    for (let k = 0; k < 3; k++) this.rings.push({ x: tx, y: ty, r: 4, life: -k * 0.1, max: 0.9, color: k === 1 ? "#fff4c0" : "#e2b834", grow: 160 });
+    const bits = ["#e2b834", "#fae478", "#b88220", "#78a834", "#487420"];
+    for (let i = 0; i < 120; i++) {
+      const a = r() * Math.PI * 2;
+      const sp = 40 + r() * 180;
+      this.particles.push({ x: tx, y: ty, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, life: 0, max: 0.6 + r() * 0.8, color: bits[i % bits.length] ?? "#e2b834", size: r() < 0.4 ? 2 : 1, gravity: 240, glow: i % 4 === 0 });
     }
-    for (let i = 0; i < 9; i++) {
-      this.props.push({ image: cheese, x: tx + (r() - 0.5) * 16, y: ty, vx: (r() - 0.5) * 220, vy: -110 - r() * 120, life: -r() * 0.1, max: 1.6, gravity: 300, w: 13, h: 10, flip: r() < 0.5, fade: 0.2, glow: 0.2 });
-    }
-    // the stink: green wisps rising
-    for (let i = 0; i < 36; i++) this.particles.push({ x: tx + (r() - 0.5) * 50, y: ty + (r() - 0.5) * th, vx: (r() - 0.5) * 10, vy: -8 - r() * 14, life: -r() * 0.8, max: 1.6 + r(), color: r() < 0.5 ? "#9ac040" : "#c8e070", size: 2, gravity: -6, glow: false });
-    // melted cheese runs down the victim
-    for (let i = 0; i < 40; i++) this.particles.push({ x: tx + (r() - 0.5) * (target?.sprite.width ?? 30), y: this.gy(other) - th + r() * 6, vx: 0, vy: 4 + r() * 10, life: -r() * 1.2, max: 1.2 + r() * 0.6, color: r() < 0.6 ? "#f0c030" : "#ffe680", size: 1, gravity: 30, glow: false });
-    await wait(rm ? 60 : 380);
-    // and back onto his side
+    // whole acorns bounce out of the blast
+    for (let i = 0; i < 8; i++) this.props.push({ image: acorn, x: tx, y: ty, vx: (r() - 0.5) * 200, vy: -100 - r() * 120, life: 0, max: 1.3, gravity: 320, w: 10, h: 13, flip: r() < 0.5, fade: 0.2, glow: 0 });
+    await wait(rm ? 60 : 300);
     const ox = attacker.offsetX;
     const oy = attacker.offsetY;
-    void this.tween(rm ? 40 : 450, (t) => {
+    void this.tween(rm ? 40 : 420, (t) => {
       attacker.offsetX = ox * (1 - t);
       attacker.offsetY = oy * (1 - t);
     });
   }
-
   /**
    * "Eichelhagel": the gang fires acorns with slingshots – from their own side and from the dark
    * corners where more of them hide – in three volleys that rattle down on the opponent.
@@ -1931,7 +1947,7 @@ export abstract class ArenaSim {
         const hy = this.gy(other) - th * (0.2 + r() * 0.7);
         const vx = (hx - sx) / flight;
         const vy = (hy - sy - 0.5 * g * flight * flight) / flight;
-        this.props.push({ image: acorn, x: sx, y: sy, vx, vy, life: 0, max: flight, gravity: g, w: 8, h: 9, flip: dir < 0, fade: 0, glow: 0 });
+        this.props.push({ image: acorn, x: sx, y: sy, vx, vy, life: 0, max: flight, gravity: g, w: 10, h: 13, flip: dir < 0, fade: 0, glow: 0 });
         // the slingshot's snap
         this.rings.push({ x: sx, y: sy, r: 1, life: 0, max: 0.25, color: "#c83a28", grow: 40 });
         hits.push([hx, hy]);
