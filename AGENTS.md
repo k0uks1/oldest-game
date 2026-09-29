@@ -4,8 +4,7 @@ Hot-seat and online duel of imagination (after the "Oldest Game" in *Sandman*): 
 that defeats the opponent's last form. **Claude classifies and narrates; a deterministic rule engine decides.**
 Pixel-art dungeon arena in the browser.
 
-This file only routes. Content lives in the `CONTEXT.md` of the folder it is about – open it before working there
-(Claude Code also loads it on its own through that folder's `CLAUDE.md`).
+This file only routes. Content lives in the `CONTEXT.md` of the folder it is about – open it before working there.
 
 ## Where things live
 
