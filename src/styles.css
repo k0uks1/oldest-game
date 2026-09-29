@@ -397,6 +397,8 @@ canvas.arena {
   gap: 4px;
 }
 .w-reason {
+  /* the why-line lets clicks through to the arena – the reason field must take them itself */
+  pointer-events: auto;
   width: min(22em, 70vw);
   padding: 1px 6px;
   border: 1px solid var(--muted, #8a7e9a);
