@@ -65,14 +65,43 @@ describe("Eine Gestalt, ein Eintrag", () => {
     const asked = fakeClaude();
     const first = await r.resolve(createGame(["A", "B"]), "Bibel");
     assert.ok(first.kind === "turn");
-    const again = await r.resolve(createGame(["A", "B"]), "die heilige Bibel");
+    const again = await r.resolve(createGame(["A", "B"]), "die Bibel");
     assert.ok(again.kind === "turn");
     assert.equal(again.turn.form.id, first.turn.form.id);
     assert.equal(again.turn.novelty?.kind, "remembered");
     assert.equal(r.learned.forms.filter((f) => f.name === "Bibel").length, 1, "one grimoire entry");
     const parses = asked.filter((t) => t === "gestalt").length;
-    await r.resolve(createGame(["A", "B"]), "die heilige Bibel");
+    await r.resolve(createGame(["A", "B"]), "die Bibel");
     assert.equal(asked.filter((t) => t === "gestalt").length, parses, "the new wording is known now – no Claude call");
+  });
+
+  it("words beyond the name make another form: the ten-legged Gandalf stays ten-legged", async () => {
+    const gandalf = { name: "Gandalf", base: null, scale: 3, plane: "geist", archetype: "humanoid", properties: ["mensch", "magisch"], mechanisms: ["bannt"], weaknesses: ["mensch"], intended_mechanism: null };
+    const r = resolver();
+    fakeClaude(gandalf);
+    const plain = await r.resolve(createGame(["A", "B"]), "Gandalf");
+    assert.ok(plain.kind === "turn");
+    // Claude calls the joke form just „Gandalf“ again (with its extra legs in the properties)
+    fakeClaude({ ...gandalf, properties: ["mensch", "magisch", "schnell"] });
+    const ten = await r.resolve(createGame(["A", "B"]), "zehnbeiniger Gandalf");
+    assert.ok(ten.kind === "turn");
+    assert.notEqual(ten.turn.form.id, plain.turn.form.id);
+    assert.equal(ten.turn.form.name, "Zehnbeiniger Gandalf", "the player's words, since „Gandalf“ is taken");
+    // and it is recognised by its own words from now on – still ten-legged
+    const again = await r.resolve(createGame(["A", "B"]), "zehnbeiniger Gandalf");
+    assert.ok(again.kind === "turn");
+    assert.equal(again.turn.form.id, ten.turn.form.id);
+  });
+
+  it("repair: forms of the same name but another shape are not folded, and alien wordings come off", () => {
+    const g = (id: string, tags: string[], aliases: string[], scale = 3): FormSpec => ({ id, name: "Gandalf", archetype: "humanoid", scale, plane: "geist", tags, verbs: ["bannt"], aliases });
+    const two = mergeNamesakes({ ...emptyLearnedPack(), forms: [g("g:gandalf", ["mensch"], ["gandalf"]), g("g:zehnbeiniger_gandalf", ["mensch", "schnell"], ["zehnbeiniger gandalf"], 4)] });
+    assert.equal(two.forms.length, 2, "another shape is another form");
+    // what an earlier merge left behind: the joke's wording on the plain Gandalf
+    const fixed = mergeNamesakes({ ...emptyLearnedPack(), forms: [g("g:gandalf", ["mensch"], ["gandalf", "der gandalf", "zehnbeiniger gandalf"])] });
+    assert.deepEqual(fixed.forms[0]?.aliases, ["gandalf", "der gandalf"]);
+    const own = mergeNamesakes({ ...emptyLearnedPack(), forms: [{ ...g("g:alte_bibel", ["mensch"], ["alte bibel", "bibel"]), name: "Bibel" }] });
+    assert.deepEqual(own.forms[0]?.aliases, ["alte bibel", "bibel"], "the form's own first wording stays");
   });
 
   it("the player's own name stays: a lookalike of a lexicon form is not played as that form", async () => {

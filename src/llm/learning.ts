@@ -1,7 +1,8 @@
 import { Ontology, OntologyError, lookupKey } from "../engine/ontology/ontology.ts";
 import { parsePack, type ContentPack, type FormSpec, type NoteSpec, type QualitySpec, type RulingSpec, type TagSpec, type VerbSpec } from "../engine/ontology/pack.ts";
+import { STOPWORDS } from "../engine/parse.ts";
 import { findCounters } from "../engine/rules.ts";
-import { normalize } from "../engine/text.ts";
+import { normalize, tokenize } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 
 /**
@@ -360,18 +361,52 @@ export function notesAbout(learned: ContentPack, ids: readonly string[], limit =
 /** Wordings kept per learned form (its own name and first text included). */
 const MAX_ALIASES = 12;
 
+/** The meaningful words of a text (fillers like „die“, „ein“ dropped). */
+function words(text: string): Set<string> {
+  return new Set(tokenize(text).filter((w) => !STOPWORDS.has(w)));
+}
+
+/** Does the text say nothing beyond the name („die Bibel“ for Bibel – but not „zehnbeiniger Gandalf“ for Gandalf)? */
+export function saysOnlyName(text: string, name: string): boolean {
+  const n = words(name);
+  return [...words(text)].every((w) => n.has(w));
+}
+
 /** What makes two learned forms the same thing: name, the lexicon form they vary, and how. */
 function sameThingKey(f: { readonly name: string; readonly base?: string | undefined; readonly mods?: readonly string[] | undefined }): string {
   return `${normalize(f.name)}\u0000${f.base ?? ""}\u0000${(f.mods ?? []).map((m) => normalize(m)).join("|")}`;
 }
 
+/** …and exactly the same shape – only such twins are folded on load (a ten-legged Gandalf is another Gandalf). */
+function twinKey(f: FormSpec): string {
+  const set = (xs: readonly string[] | undefined): string => [...(xs ?? [])].sort().join(",");
+  const levels = JSON.stringify(Object.entries(f.qualities ?? {}).sort(([a], [b]) => a.localeCompare(b)));
+  return [sameThingKey(f), f.scale, f.plane, f.archetype, set(f.tags), set(f.not), set(f.verbs), set(f.weak), set(f.immune), levels].join("\u0001");
+}
+
 /**
- * A learned form that is this very thing already – same name, same base, same variations ("die
- * Bibel" after "Bibel"). Then the new wording is an alias, not a second grimoire entry.
+ * A learned form that is this very thing already: same name, base and variations, and the player
+ * said nothing beyond the name („die Bibel“ after „Bibel“). Then the new wording is an alias, not a
+ * second grimoire entry. Words beyond the name („zehnbeiniger“) make it another form.
  */
-export function namesakeOf(learned: ContentPack, form: Pick<Form, "name" | "base" | "mods">): FormSpec | undefined {
+export function namesakeOf(learned: ContentPack, form: Pick<Form, "name" | "base" | "mods">, text: string): FormSpec | undefined {
+  if (!saysOnlyName(text, form.name)) return undefined;
   const key = sameThingKey(form);
   return learned.forms.find((f) => sameThingKey(f) === key);
+}
+
+/**
+ * The player's words as a name – when Claude's name dropped what the player added („Gandalf“ for
+ * „zehnbeiniger Gandalf“) and that name is taken already.
+ */
+export function playerName(text: string): string {
+  const clean = text.replace(/[\p{C}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 40);
+  return clean.charAt(0).toLocaleUpperCase("de") + clean.slice(1);
+}
+
+/** Every word of `small` in `big`, and `big` has more. */
+function isSuperset(big: ReadonlySet<string>, small: ReadonlySet<string>): boolean {
+  return big.size > small.size && [...small].every((w) => big.has(w));
 }
 
 /** Remember another wording for a learned form – next time it is recognised without asking Claude. */
@@ -397,7 +432,7 @@ export function mergeNamesakes(pack: ContentPack): ContentPack {
   const moved = new Map<string, string>();
   const forms: FormSpec[] = [];
   for (const f of pack.forms) {
-    const key = sameThingKey(f);
+    const key = twinKey(f);
     const at = firstOf.get(key);
     const first = at === undefined ? undefined : forms[at];
     if (at === undefined || first === undefined) {
@@ -408,7 +443,17 @@ export function mergeNamesakes(pack: ContentPack): ContentPack {
     moved.set(f.id, first.id);
     forms[at] = { ...first, aliases: [...new Set([...(first.aliases ?? []), ...(f.aliases ?? []), normalize(f.name)])].slice(0, MAX_ALIASES) };
   }
-  if (moved.size === 0) return pack;
+  // repair: a wording that says more than the name („zehnbeiniger gandalf“ on Gandalf) belongs to another
+  // form – earlier merges hung such aliases on the plain one. Its own first wording (the id) stays.
+  const repaired = forms.map((f) => {
+    const own = f.id.startsWith("g:") ? f.id.slice(2) : f.id;
+    const keep = (f.aliases ?? []).filter((a) => slug(a) === own || saysOnlyName(a, f.name) || !isSuperset(words(a), words(f.name)));
+    return keep.length === (f.aliases ?? []).length ? f : { ...f, aliases: keep };
+  });
+  const aliasesFixed = repaired.some((f, i) => f !== forms[i]);
+  if (moved.size === 0 && !aliasesFixed) return pack;
+  forms.splice(0, forms.length, ...repaired);
+  if (moved.size === 0) return { ...pack, forms };
   const re = (id: string): string => moved.get(id) ?? id;
   const rulings = new Map<string, RulingSpec>();
   for (const r of pack.rulings ?? []) {

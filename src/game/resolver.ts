@@ -9,7 +9,7 @@
  */
 import { attempt, type AttemptOutcome } from "../engine/attempt.ts";
 import { currentTarget } from "../engine/game.ts";
-import { Ontology } from "../engine/ontology/ontology.ts";
+import { Ontology, lookupKey } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
 import { parseForm } from "../engine/parse.ts";
 import { validPixelArt } from "../engine/pixelart.ts";
@@ -17,7 +17,7 @@ import { reaches } from "../engine/rules.ts";
 import { describeInsight, learnInsights } from "./insight.ts";
 import type { AnimMove, Form, GameState, PlayerId } from "../engine/types.ts";
 import { isClaudeReady, type LlmSettings } from "../llm/client.ts";
-import { addAlias, addNote, addRuling, amend, cleanNote, findLearned, learn, namesakeOf, notesAbout, type Amendment } from "../llm/learning.ts";
+import { addAlias, addNote, addRuling, amend, cleanNote, findLearned, learn, namesakeOf, notesAbout, playerName, saysOnlyName, type Amendment } from "../llm/learning.ts";
 import { normalize } from "../engine/text.ts";
 import { judgeWithClaude } from "../llm/judge.ts";
 import { movesWithClaude } from "../llm/moves.ts";
@@ -118,7 +118,7 @@ export class Resolver {
       return { ok: true, form: r.base, verb: r.intendedVerb, novelty: null };
     }
     // The same thing in other words ("die Bibel" after "Bibel"): the known form, now also under this wording.
-    const twin = namesakeOf(this.learned, r.form);
+    const twin = namesakeOf(this.learned, r.form, text);
     if (twin !== undefined) {
       const aliased = addAlias(this.basePacks, this.learned, twin.id, text);
       if (aliased !== undefined && aliased.pack !== this.learned) {
@@ -131,7 +131,10 @@ export class Resolver {
     }
     // Claude's SVG sketch → 32×32 sprite (invalid or missing: the archetype stays the fallback).
     const rows = r.sketch === undefined ? undefined : validPixelArt(rasterizeSketch(r.sketch));
-    const drawn = rows === undefined || r.sketch === undefined ? r.form : { ...r.form, sprite: rows, sketch: r.sketch };
+    const sketched = rows === undefined || r.sketch === undefined ? r.form : { ...r.form, sprite: rows, sketch: r.sketch };
+    // the player's words stay: a name that dropped them („Gandalf“ for „zehnbeiniger Gandalf“) and is taken already gives way
+    const taken = namesakeOf(this.learned, sketched, sketched.name) !== undefined || this.onto.formByAlias(lookupKey(sketched.name))?.name === sketched.name;
+    const drawn = taken && !saysOnlyName(text, sketched.name) ? { ...sketched, name: playerName(text) } : sketched;
     const discoverer = state.players[state.active].name;
     const l = learn(this.basePacks, this.learned, text, drawn, r.delta, { by: discoverer, at: this.host.today() });
     if (!l.ok) return { ok: false, reason: l.reason };

@@ -91,8 +91,10 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
    ≤ 2 qualities (`q_…`, default 0), learned tags carry forces ≤ `LEARNED_TAG_FORCE` and grant only mechanisms with
    leverage ≤ 2 that a bare carrier can actually perform (probe form after compiling). Learned qualities travel in
    pack deltas (`PackDelta.qualities`). One thing, one entry: a learned form of the same name, base and variations is
-   reused when typed in other words (`namesakeOf` → `addAlias`), and twins older servers made are folded on load
-   (`mergeNamesakes`; precedents, notes and Siegweg evidence follow).
+   reused only when the player's words say nothing beyond its name („die Bibel“; `namesakeOf` → `addAlias`) – words
+   beyond it („zehnbeiniger Gandalf“) make another form, named in the player's words if Claude's name is taken
+   (`playerName`). On load only exact twins (same name *and* shape) are folded (`mergeNamesakes`), and wordings that say
+   more than a form's name come off it again (they belong to another form).
 6. **Scale:** content must work with tens of thousands of tags/forms. Avoid O(tags) or
    O(forms) work per check/lookup; use the ontology's indexes (`usersOf`, tries, trigram index).
    `tests/scale.test.ts` guards budgets.
