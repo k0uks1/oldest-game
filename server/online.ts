@@ -14,7 +14,7 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { createGame, pass } from "../src/engine/game.ts";
 import type { ContentPack } from "../src/engine/ontology/pack.ts";
-import type { Form, GameState, PlayerId } from "../src/engine/types.ts";
+import type { AnimMove, Form, GameState, PlayerId } from "../src/engine/types.ts";
 import type { Resolver, Turn } from "../src/game/resolver.ts";
 import {
   ANIMS_PER_PLAYER,
@@ -93,6 +93,8 @@ export interface HubOptions {
   readonly anim?: HubAnim;
   /** A form's legend (stored or freshly written by Claude); undefined = none. */
   readonly lore?: (form: Form) => Promise<string | undefined>;
+  /** A form's own moves for "Beleben" (stored or freshly written by Claude); undefined = none. */
+  readonly moves?: (form: Form) => Promise<readonly AnimMove[] | undefined>;
   /** Store a reported absurd win (room code added). */
   readonly report?: (r: AbsurdReport & { readonly room: string }) => void;
 }
@@ -279,6 +281,9 @@ export class OnlineHub {
         return;
       case "lore":
         void this.loreRequest(c, msg.id);
+        return;
+      case "moves":
+        void this.movesRequest(c, msg.id);
         return;
       case "animate":
         this.animateRequest(c, msg.action, msg.seat);
@@ -600,6 +605,13 @@ export class OnlineHub {
     const form = this.resolver.onto.formById(id);
     const text = form === undefined ? undefined : (form.lore ?? (await this.opts.lore?.(form).catch(() => undefined)));
     if (this.conns.has(c)) c.peer.send({ t: "lore", id, text: text ?? "" });
+  }
+
+  /** A form's own moves – stored, freshly written (the store keeps the budget) or none. */
+  private async movesRequest(c: Conn, id: string): Promise<void> {
+    const form = this.resolver.onto.formById(id);
+    const moves = form === undefined ? undefined : (form.moves ?? (await this.opts.moves?.(form).catch(() => undefined)));
+    if (this.conns.has(c)) c.peer.send({ t: "moves", id, moves: moves ?? [] });
   }
 
   /**

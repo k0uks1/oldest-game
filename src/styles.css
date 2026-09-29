@@ -1471,6 +1471,15 @@ input,
   gap: 4px;
   flex-wrap: wrap;
 }
+.anim-wait {
+  color: var(--muted);
+  animation: anim-wait 1.2s ease-in-out infinite;
+}
+@keyframes anim-wait {
+  50% {
+    opacity: 0.35;
+  }
+}
 .anim-choice {
   font: inherit;
   font-size: 15px;

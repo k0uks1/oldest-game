@@ -5,8 +5,8 @@ import { MAX_LEVEL, type Ontology } from "../engine/ontology/ontology.ts";
 import { parseForm, suggest } from "../engine/parse.ts";
 import { clampScale } from "../engine/rules.ts";
 import { hash32, normalize } from "../engine/text.ts";
-import { ARCHETYPES, PLANES, TONES, type Archetype, type Form, type FormLook, type Plane, type Tone } from "../engine/types.ts";
-import type { QualitySpec, RequiresSpec, TagSpec, VerbSpec } from "../engine/ontology/pack.ts";
+import { ARCHETYPES, PLANES, TONES, type AnimMove, type Archetype, type Form, type FormLook, type Plane, type Tone } from "../engine/types.ts";
+import { MAX_MOVES, type QualitySpec, type RequiresSpec, type TagSpec, type VerbSpec } from "../engine/ontology/pack.ts";
 import { callClaude, type LlmSettings, type ToolDef } from "./client.ts";
 import { EMPTY_DELTA, LEARNED_TAG_FORCE, MAX_NEW_QUALITIES, MAX_NEW_TAGS, slug, type LearningDelta } from "./learning.ts";
 
@@ -155,6 +155,19 @@ const TOOL: ToolDef = {
         description:
           "Kurze ENGLISCHE Bildbeschreibung für einen Pixel-Art-Generator (er versteht kein Deutsch): die Gestalt SELBST, max. 20 Wörter. Ein Ding bleibt ein Ding – niemand, der es hält. Keine Namen geschützter Figuren – beschreibe sie.",
       },
+      bewegungen: {
+        type: "array",
+        maxItems: MAX_MOVES,
+        description: "Genau 3 kurze Animationen, die zu DIESER Gestalt passen – was sie typischerweise tut (Wolf: heult den Mond an / schleicht geduckt / fletscht die Zähne).",
+        items: {
+          type: "object",
+          properties: {
+            label: { type: "string", description: "Deutsch, 2–4 Wörter, ohne Namen („heult den Mond an“)." },
+            action: { type: "string", description: "Englisch, nur die Bewegung am Platz, 5–12 Wörter („howling up at the moon, head raised“)." },
+          },
+          required: ["label", "action"],
+        },
+      },
       aussehen: {
         type: "object",
         description: "Bauplan fürs Bild aus fertigen Teilen – statt einer skizze. Nur IDs aus den Listen.",
@@ -257,6 +270,9 @@ REGELN FÜR DICH:
   ein Ding („Motorsäge“ = „a chainsaw“, nicht „a man with a saw“). Zustände, Mängel, Ideen werden ein sprechendes Ding
   („Gasmangel“ = „an empty gas canister with a dying blue flame“, „Korruption“ = „a fat money bag with a golden crown“).
   Filmfiguren, Marken, Spielfiguren nie beim Namen nennen, sondern beschreiben.
+- bewegungen: drei Dinge, die gerade DIESE Gestalt tut, wenn sie zum Leben erwacht – label deutsch und kurz, action
+  englisch, nur Bewegung am Platz (Motorsäge: „heult auf“ = „revving up, chain spinning, smoke puffing“ · „sägt in die
+  Luft“ · „tuckert im Leerlauf“). Keine Allerwelts-Bewegungen wie „atmet“, wenn es Besseres gibt.
 - Das Bild entsteht aus fertigen Teilen (aussehen). Begriffe, Gefühle, Ideen, Institutionen bekommen KEINE skizze,
   sondern ein emblem und oft ein abzeichen: Korruption = geldsack + krone, Verrat = theatermaske + dolch,
   Bürokratie = stempel + paragraf, Freundschaft = handschlag + herz, Zensur = verbotsschild + megafon.
@@ -433,6 +449,7 @@ function shapeFromLlm(onto: Ontology, input: unknown, text: string): Shaped {
   const iv = typeof o["intended_mechanism"] === "string" ? (resolveVerb(o["intended_mechanism"]) ?? null) : null;
   const look = lookOf(o["aussehen"]) ?? base?.look;
   const artPrompt = artPromptOf(o["bild"]);
+  const moves = movesOf(o["bewegungen"]);
   const mods = strings(o["zusaetze"]).map((m) => m.replace(/\s+/g, " ").trim().slice(0, 40)).filter((m) => m !== "").slice(0, 4);
   const tone = TONES.find((t): t is Tone => t === o["ton"]);
   const lore = loreOf(o["geschichte"]);
@@ -445,6 +462,7 @@ function shapeFromLlm(onto: Ontology, input: unknown, text: string): Shaped {
     ...(look === undefined ? {} : { look }),
     ...(qualities === undefined ? {} : { qualities }),
     ...(artPrompt === undefined ? {} : { artPrompt }),
+    ...(moves === undefined ? {} : { moves }),
   };
   // an emblem is the better picture – a freehand sketch only where no part fits
   const sketch = look?.emblem === undefined ? sketchOf(onto, base, looked, o["skizze"]) : undefined;
@@ -631,6 +649,23 @@ export function loreOf(raw: unknown): string | undefined {
   const cut = clean.slice(0, 480);
   const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
   return end > 120 ? cut.slice(0, end + 1) : `${cut.slice(0, cut.lastIndexOf(" "))} …`;
+}
+
+/**
+ * Claude's moves for "Beleben": up to three {label, action}, each one printable line (German label
+ * ≤ 32, English action ≤ 120 characters); undefined when none is usable.
+ */
+export function movesOf(raw: unknown): AnimMove[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const line = (x: unknown, max: number): string => (typeof x === "string" ? x.replace(/[\p{C}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, max) : "");
+  const moves = raw
+    .map((m): AnimMove => {
+      const o = typeof m === "object" && m !== null ? (m as Record<string, unknown>) : {};
+      return { label: line(o["label"] ?? o["name"], 32), action: line(o["action"] ?? o["aktion"], 120) };
+    })
+    .filter((m) => m.label !== "" && m.action !== "");
+  const unique = moves.filter((m, i) => moves.findIndex((n) => n.label.toLowerCase() === m.label.toLowerCase()) === i).slice(0, MAX_MOVES);
+  return unique.length === 0 ? undefined : unique;
 }
 
 /** Claude's picture description: one printable line, at most 200 characters. */

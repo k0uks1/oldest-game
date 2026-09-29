@@ -15,10 +15,11 @@ import { parseForm } from "../engine/parse.ts";
 import { validPixelArt } from "../engine/pixelart.ts";
 import { reaches } from "../engine/rules.ts";
 import { describeInsight, learnInsights } from "./insight.ts";
-import type { Form, GameState, PlayerId } from "../engine/types.ts";
+import type { AnimMove, Form, GameState, PlayerId } from "../engine/types.ts";
 import { isClaudeReady, type LlmSettings } from "../llm/client.ts";
 import { addNote, addRuling, amend, cleanNote, findLearned, learn, notesAbout, type Amendment } from "../llm/learning.ts";
 import { judgeWithClaude } from "../llm/judge.ts";
+import { movesWithClaude } from "../llm/moves.ts";
 import { loreWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
 import { parseWithClaude } from "../llm/parser.ts";
 import { refereeWithClaude } from "../llm/referee.ts";
@@ -286,6 +287,12 @@ export class Resolver {
     const ways = this.generalize();
     this.host.saveLearned(this.learned);
     return `${j.reason}${ways}`;
+  }
+
+  /** "Beleben": the form's own moves, or three fresh ones from Claude (undefined offline). */
+  moves(form: Form): Promise<readonly AnimMove[] | undefined> {
+    if (form.moves !== undefined) return Promise.resolve(form.moves);
+    return this.useClaude() ? movesWithClaude(this.onto, this.host.llm(), form) : Promise.resolve(undefined);
   }
 
   /** The form's legend for its card: its own, or a fresh one from Claude (undefined offline). */

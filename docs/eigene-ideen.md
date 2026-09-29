@@ -487,3 +487,11 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **… und bei jedem späteren Urteil** | Sie wird als Einwand gespeichert und bei jedem späteren Richter- oder Schiedsrichterspruch zitiert, an dem eine der beiden Gestalten beteiligt ist – als Meinung zum Abwägen, nicht als Anweisung. Auch ohne Claude (Debug, Budget) geht sie nicht verloren. | `notes`, `notesAbout` |
 | **Begrenzt** | Pro Paar die letzten zwei, insgesamt 2000, je höchstens 200 Zeichen, nur druckbare Zeichen. Die Quatsch-Liste im Menü zeigt die Begründungen mit. | `addNote`, `reportsText` |
 | **Gelerntes geht nicht mehr verloren** | Beim Speichern des gelernten Packs schrieb der Server nur Eigenschaften, Mechanismen, Gestalten und Urteile – gelernte Intensitäten und Siegwege fielen weg, und nach einem Neustart damit auch jede Gestalt, die sie brauchte. Jetzt wird jede Liste geschrieben. | `formatPack` |
+
+## Eigene Bewegungen (Nutzerwunsch: „für jeden Charakter immer 3 kontextabhängige Animationsvorschläge“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Was die Gestalt ausmacht** | Statt „atmet / greift an / triumphiert“ bietet „✦ beleben“ drei Bewegungen, die zu genau dieser Gestalt passen: der Wolf heult den Mond an, schleicht geduckt, fletscht die Zähne; die Motorsäge heult auf, sägt in die Luft, tuckert im Leerlauf. PixelLab nimmt freien Text – die drei waren nur unsere Vorgabe. | `Form.moves` |
+| **Ohne Extra-Aufruf für Neues** | Erfundene Gestalten bekommen ihre Bewegungen gleich bei der Klassifizierung (`bewegungen`). Kerngestalten fragt der Server beim ersten Beleben einmal bei Claude an und merkt sie sich für alle. Ohne Claude bleiben die drei allgemeinen. | `movesWithClaude`, `MoveStore` |
+| **Nur der Server spricht mit dem Animator** | Der Browser nennt nur eine Position (m0–m2); was PixelLab gesagt bekommt, weiß allein der Server. So landet nie fremder Text in einem bezahlten Auftrag. | `animPrompt` |

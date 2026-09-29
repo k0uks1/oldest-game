@@ -19,6 +19,14 @@ export const ARCHETYPES = [
   "weapon", "tower", "book", "heart", "hourglass", "mask", "key", "fish", "spider", "dragon", "giant",
   "cloth", "box", "bottle", "vehicle", "house", "cup",
 ] as const;
+/** One way to bring a form's picture to life: a short German label, an English action for the animator. */
+export interface AnimMove {
+  /** Shown on the button („heult den Mond an“). */
+  readonly label: string;
+  /** Told to the image service („howling up at the moon, head raised“). */
+  readonly action: string;
+}
+
 /** Visual archetype – selects the sprite silhouette. */
 export type Archetype = (typeof ARCHETYPES)[number];
 
@@ -62,6 +70,8 @@ export interface Form {
   readonly art?: string;
   /** English picture description for the image service (a server generates `art` from it later). */
   readonly artPrompt?: string;
+  /** "Beleben": three things this form typically does, to bring its picture to life. Presentation only. */
+  readonly moves?: readonly AnimMove[];
   /** The lexicon form this one varies ("Gast mit Zwiebel-Atem" → gast). Presentation and grimoire only. */
   readonly base?: string;
   /** Modifications as the player meant them ("mit Zwiebel-Atem", "ungeladen") – shown on the form card. */
