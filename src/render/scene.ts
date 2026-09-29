@@ -71,7 +71,7 @@ export abstract class ArenaScene extends ArenaSim {
     if (this.stage.fog) this.drawFog(base);
     for (const [side, f] of this.fighters.entries()) {
       if (f === null || f.alpha <= 0) continue;
-      const w = f.sprite.pixels.width;
+      const w = f.sprite.width;
       const x = SIDE_X[side as Side] + f.offsetX;
       const gy = this.gy(side as Side);
       base.light(x, gy, w * 0.9, w * 0.9 * 0.35, f.sprite.palette.glow, (f.sprite.palette.emissive ? 0.35 : 0.12) * f.appear);
@@ -219,7 +219,7 @@ export abstract class ArenaScene extends ArenaSim {
   private drawMotes(base: Pen): void {
     const lights: { x: number; y: number; r: number }[] = TORCH_X.map((x) => ({ x, y: TORCH_Y, r: 70 }));
     for (const [side, f] of this.fighters.entries()) {
-      if (f !== null && f.sprite.palette.emissive && f.reveal > 0.5) lights.push({ x: SIDE_X[side as Side], y: this.gy(side as Side) - f.sprite.pixels.height / 2, r: 60 });
+      if (f !== null && f.sprite.palette.emissive && f.reveal > 0.5) lights.push({ x: SIDE_X[side as Side], y: this.gy(side as Side) - f.sprite.height / 2, r: 60 });
     }
     for (const m of this.motes) {
       let lit = 0;
