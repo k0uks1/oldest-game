@@ -40,10 +40,22 @@ export class Sound {
     return this.ctx;
   }
 
+  /**
+   * Back to sound after the page was in the background: mobile browsers suspend the context when
+   * another app comes up (iOS even calls it "interrupted") and never resume it on their own.
+   */
+  wake(): void {
+    const ctx = this.ctx;
+    if (ctx === null || ctx.state === "running" || ctx.state === "closed") return;
+    ctx.resume().catch(() => {
+      /* not allowed yet – the next touch tries again */
+    });
+  }
+
   /** Must be called from a user gesture at least once. */
   unlock(): void {
     if (this.ctx !== null) {
-      if (this.ctx.state === "suspended") void this.ctx.resume();
+      this.wake();
       return;
     }
     const Ctor = (globalThis as { AudioContext?: typeof AudioContext }).AudioContext;

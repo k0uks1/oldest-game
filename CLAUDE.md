@@ -43,7 +43,7 @@ src/
                      → PixiArena (WebGL, pixi-arena.ts + pixi-pen.ts) or CanvasArena (2D fallback, canvas-arena.ts);
                      createArena() picks (hardware WebGL → Pixi; ?pixi / ?canvas force);
                      stage.ts = scenery types; stage-iso.ts (default) / stage-flat.ts (?flat)
-  ui/                hot-seat UI, no framework; sound.ts = WebAudio synth (no audio files)
+  ui/                hot-seat UI, no framework; sound.ts = WebAudio synth (no audio files; `wake()` resumes a context the OS suspended, music `catchUp` rejoins the beat after a stall)
   game/resolver.ts   one turn, text → classification/learning → engine → referee → narration (DOM-free)
   game/card.ts       the form card as data (is / has / can + via, intensities, weakness, base + modifications, legend)
   online/            WebSocket protocol (shared) + browser link with reconnect
