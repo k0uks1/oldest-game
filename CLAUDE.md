@@ -19,6 +19,8 @@ npm run audit            # Prüfstand: suspicious wins in the lexicon (the engin
 npm run judge-eval       # judge bias check on labelled pairs (needs ANTHROPIC_API_KEY or --proxy)
 npm run art -- status    # picture store: status | ingest <png-dir> | warm [--limit N] (needs PIXELLAB_API_KEY)
 npm run scenery          # repaint the arena rooms + void with PixelLab from our procedural render (needs the key + Playwright)
+npm run effects          # paint the attack animations (content/core/effects.json) – resumable, needs PIXELLAB_API_KEY
+npm run rooms            # paint + animate the room states (content/core/rooms.json) – resumable; a repaint costs ~30–40 generations
 ```
 
 ## Architecture
@@ -88,7 +90,9 @@ tests/               node:test suites incl. tests/scale.test.ts (30k tags / 50k 
    kraft/schutz; `new_mechanism` with `braucht`, `kraft`/`gegen`): `sanitizeDelta()` is the authority – ≤ 3 tags,
    ≤ 2 qualities (`q_…`, default 0), learned tags carry forces ≤ `LEARNED_TAG_FORCE` and grant only mechanisms with
    leverage ≤ 2 that a bare carrier can actually perform (probe form after compiling). Learned qualities travel in
-   pack deltas (`PackDelta.qualities`).
+   pack deltas (`PackDelta.qualities`). One thing, one entry: a learned form of the same name, base and variations is
+   reused when typed in other words (`namesakeOf` → `addAlias`), and twins older servers made are folded on load
+   (`mergeNamesakes`; precedents, notes and Siegweg evidence follow).
 6. **Scale:** content must work with tens of thousands of tags/forms. Avoid O(tags) or
    O(forms) work per check/lookup; use the ontology's indexes (`usersOf`, tries, trigram index).
    `tests/scale.test.ts` guards budgets.
@@ -173,6 +177,18 @@ The rooms (iso, flat) and the void behind the crumbling wall are PixelLab repain
 Bundled as PNG data URLs (esbuild `dataurl` loader, `src/assets.d.ts`); the arena paints the procedural scene first and
 swaps in the pictures once decoded (`loadScenery`); `?drawn` keeps the procedural one. Animated things (torch flames,
 banners, rune circle, eyes, crumbling bricks) stay drawn on top. Change the stage geometry → rerun `npm run scenery`.
+
+### Painted attacks and the living room (`render/effects.ts`, `render/rooms.ts`)
+
+A fixed library, made once and bundled (no waiting, no cost in play). **Attacks** (`content/core/effects.json`, strips in
+`render/effects/`): projectile (flies from the winner, then `<id>-impact`), strike (at the loser) or drain (back to the
+winner). `chooseEffect` picks for the *winner*: mechanism 4, held item (`look.holds`) 3, property 2 – the hunter's rifle
+fires a bullet. **Rooms** (`content/core/rooms.json`, `render/rooms/<id>.png` + `<id>-anim.png`): our iso room repainted
+(edit_with_text, full size) and animated at half size (animate-with-text-v3 is capped at 256 px). Only forms of scale ≥
+`ROOM_MIN_SCALE` (4) change the room – a match lights nothing, a dragon sets it on fire; an arena field a big form brought
+keeps its room while it lasts (`latched`), otherwise the newest big form's properties set the mood. Both go through
+`ImageDraw` (backdrop / front layer, both renderers). Missing pictures fall back to the drawn particles / the plain room.
+Animations use `animate-pixminimax` (short queue, 1 generation at 64 px); Tier 2 allows 11 PixelLab jobs at once.
 
 ### Sprites from parts ("Bauplan", `render/look.ts`)
 

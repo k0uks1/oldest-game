@@ -17,7 +17,7 @@ import { reaches } from "../engine/rules.ts";
 import { describeInsight, learnInsights } from "./insight.ts";
 import type { AnimMove, Form, GameState, PlayerId } from "../engine/types.ts";
 import { isClaudeReady, type LlmSettings } from "../llm/client.ts";
-import { addNote, addRuling, amend, cleanNote, findLearned, learn, notesAbout, type Amendment } from "../llm/learning.ts";
+import { addAlias, addNote, addRuling, amend, cleanNote, findLearned, learn, namesakeOf, notesAbout, type Amendment } from "../llm/learning.ts";
 import { judgeWithClaude } from "../llm/judge.ts";
 import { movesWithClaude } from "../llm/moves.ts";
 import { loreWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
@@ -113,6 +113,18 @@ export class Resolver {
     // A plain lexicon entry (no changes, nothing new) is not worth remembering – play the original.
     if (r.base !== null && r.delta.tags.length === 0 && r.delta.verbs.length === 0 && (r.delta.qualities ?? []).length === 0 && sameShape(r.form, r.base)) {
       return { ok: true, form: r.base, verb: r.intendedVerb, novelty: null };
+    }
+    // The same thing in other words ("die Bibel" after "Bibel"): the known form, now also under this wording.
+    const twin = namesakeOf(this.learned, r.form);
+    if (twin !== undefined) {
+      const aliased = addAlias(this.basePacks, this.learned, twin.id, text);
+      if (aliased !== undefined && aliased.pack !== this.learned) {
+        this.onto = aliased.onto;
+        this.learned = aliased.pack;
+        this.host.saveLearned(this.learned);
+      }
+      const known = this.onto.formById(twin.id);
+      if (known !== undefined) return { ok: true, form: known, verb: r.intendedVerb, novelty: { kind: "remembered", by: twin.discoveredBy ?? null } };
     }
     // Claude's SVG sketch → 32×32 sprite (invalid or missing: the archetype stays the fallback).
     const rows = r.sketch === undefined ? undefined : validPixelArt(rasterizeSketch(r.sketch));
