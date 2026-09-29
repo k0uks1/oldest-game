@@ -90,6 +90,6 @@ Gespeichert wird lokal mit `npm start` in `learned/pack.json` – reviewbar und 
 
 ## Architektur
 
-Siehe [`CLAUDE.md`](CLAUDE.md) und [`docs/architektur.md`](docs/architektur.md). Kurz: Inhalte sind
+Siehe [`AGENTS.md`](AGENTS.md) (von dort geht es in die `CONTEXT.md` der Ordner) und [`docs/architektur.md`](docs/architektur.md). Kurz: Inhalte sind
 JSON-Packs mit einer Taxonomie (Vererbung + Implikationen), die zu einer indizierten Ontologie kompiliert
 werden. Das skaliert auf zehntausende Eigenschaften und Gestalten (siehe `tests/scale.test.ts`).

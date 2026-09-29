@@ -1,6 +1,6 @@
 {
   "name": "oldest-game",
-  "version": "0.64.0",
+  "version": "0.65.0",
   "private": true,
   "description": "The Oldest Game – ein Duell der Vorstellungskraft für zwei Spieler. Deterministische Regel-Engine, Pixel-Arena, Claude Haiku als Erzähler und Klassifikator.",
   "type": "module",
@@ -22,7 +22,9 @@
     "audit": "tsx scripts/audit.ts",
     "sheet": "tsx scripts/sheet.ts",
     "simulate": "tsx scripts/simulate.ts",
-    "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run secret-scan",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run secret-scan && npm run spec",
+    "spec": "openspec validate --all --strict --no-interactive",
+    "backlog": "tsx scripts/backlog.ts",
     "preview": "tsx scripts/build.ts --artifact",
     "secret-scan": "tsx scripts/secret-scan.ts",
     "duel": "tsx scripts/duel.ts",
@@ -30,6 +32,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.30.0",
+    "@fission-ai/openspec": "^1.13.2",
     "@types/node": "^22.15.0",
     "@types/ws": "^8.18.1",
     "esbuild": "^0.27.0",

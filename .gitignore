@@ -14,3 +14,6 @@ sheet.png
 
 # server data: learned pack, picture store, reports
 learned/
+
+# agent worktrees
+.claude/worktrees/

@@ -1,0 +1,50 @@
+name: Backlog
+
+# Keeps the GitHub issues in step with openspec/changes/ (scripts/backlog.ts):
+# a new change opens its issue, progress and PRs are written into it, archiving on main closes it.
+on:
+  pull_request:
+    paths: ["openspec/**", "scripts/backlog.ts", ".github/workflows/backlog.yml"]
+  push:
+    branches: [main]
+    paths: ["openspec/**", "scripts/backlog.ts", ".github/workflows/backlog.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: backlog
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    name: OpenSpec → Issues
+    # PRs from forks get a read-only token – their changes are synced once merged
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Sync
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ -n "$PR" ]; then
+            npm run backlog -- --apply --pr "$PR" --ref "$HEAD_REF"
+          else
+            npm run backlog -- --apply --main --ref main
+          fi

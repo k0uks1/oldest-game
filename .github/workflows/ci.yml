@@ -60,6 +60,9 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: OpenSpec validieren
+        run: npm run spec
+
       - name: Build
         run: npm run build
 

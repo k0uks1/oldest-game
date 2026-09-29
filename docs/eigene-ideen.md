@@ -540,3 +540,12 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 |---|---|---|
 | **Alle Angriffe gemalt** | 40 Streifen (27 Angriffe plus Einschläge), alle über PixMiniMax (Minuten statt einer Viertelstunde). Vier misslungene wurden mit schärferen Beschreibungen neu gemalt: Wucht war ein Lagerfeuer, Schall goldene Äste, Klinge ein Verbotsschild. | `effects.json`, `render/effects/` |
 | **Alle Räume belebt** | 14 Raumzustände, jeder als Standbild und als Schleife. | `rooms.json`, `render/rooms/` |
+
+## Backlog, der sich selbst pflegt (Nutzerwunsch: „OpenSpec, Wayfinder, Backlog über GitHub-Issues – automatisch, nicht händisch“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Eine Änderung, ein Issue** | Jede OpenSpec-Änderung bekommt beim ersten PR ihr Issue; Kurzfassung aus dem „Why“, Fortschritt aus `tasks.md`, die PRs dazu. Archivieren auf `main` schließt es. Nur der Block zwischen zwei Markern wird geschrieben – was Menschen dazuschreiben, bleibt. | `scripts/backlog.ts`, `.github/workflows/backlog.yml` |
+| **Aus einem Issue wird eine Änderung** | Steht `Issue: #12` im Proposal, hängt sich die Änderung an dieses Issue statt ein neues zu öffnen – Ideen aus dem Backlog laufen ohne Doppelung weiter. | `openspec/config.yaml` (Regel für Proposals) |
+| **Labels legt der Sync an** | `openspec` und die `wayfinder:*`-Labels entstehen beim ersten Lauf – Wayfinder selbst legt keine an. | `LABELS` in `scripts/backlog.ts` |
+| **Kontext dort, wo er gebraucht wird** | `CLAUDE.md` ist nur noch `@AGENTS.md`; `AGENTS.md` ist ein Katalog nach ICM (wo liegt was, wohin bei welcher Aufgabe, die sechs Invarianten als Einzeiler). Der Inhalt steht in der `CONTEXT.md` jedes Ordners; der Katalog sagt, welche man bei welcher Aufgabe öffnet. | `AGENTS.md`, `src/*/CONTEXT.md`, `server/`, `scripts/` |
