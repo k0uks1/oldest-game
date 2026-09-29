@@ -616,11 +616,11 @@ export class App {
     if (this.art.coming(form)) {
       // "Beschwörung": the picture is being painted – the rune circle conjures instead of showing
       // a stand-in; the name spells itself meanwhile, and the form appears with the picture.
-      this.arena.startConjuring();
+      this.arena.startConjuring(actor, form);
       const spelled = this.spellName(form.name, discovery);
       const pictured = await this.art.whenReady(form, ART_WAIT_MS);
       await spelled;
-      await this.arena.endConjuring(pictured);
+      await this.arena.endConjuring(pictured, form);
       await this.arena.summon(actor, form, !pictured);
       if (!pictured) await this.arena.reveal(actor);
     } else {
@@ -1255,9 +1255,9 @@ export class App {
   /** The form still standing after a (re)connect – with its picture if the server has or makes one. */
   private async resummon(side: PlayerId, form: Form): Promise<void> {
     if (this.art.coming(form)) {
-      this.arena.startConjuring();
+      this.arena.startConjuring(side, form);
       const pictured = await this.art.whenReady(form, ART_WAIT_MS);
-      await this.arena.endConjuring(pictured);
+      await this.arena.endConjuring(pictured, form);
     }
     await this.arena.summon(side, form);
     const frames = this.anim.framesOf(form.id);

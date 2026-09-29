@@ -8,6 +8,7 @@
  *   renderers              pens, fighters and compositing (canvas-arena.ts, pixi-arena.ts)
  */
 import { ArenaSim, GROUND_Y, SIDE_X, type Side } from "./arena.ts";
+import { morphCell } from "./morph.ts";
 import type { Pen, Pt } from "./pen.ts";
 import { HEIGHT, TORCH_X, TORCH_Y, WIDTH } from "./stage.ts";
 
@@ -34,11 +35,13 @@ export abstract class ArenaScene extends ArenaSim {
     this.drawDrops(base, glow);
     this.drawRainbow(base, glow);
     this.drawRune(base, glow);
+    this.drawMatrix(base, glow);
   }
 
   /** Everything in front of the fighters. */
   protected drawFront(base: Pen, glow: Pen): void {
     this.drawDiscoveryStar(base, glow);
+    this.drawSummoning(base, glow);
     for (const bolt of this.bolts) {
       const a = Math.max(0, 1 - bolt.life / bolt.max) * (Math.floor(bolt.life * 30) % 2 === 0 ? 1 : 0.6);
       const pts = bolt.points.map(([x, y]) => [Math.round(x) + 0.5, Math.round(y) + 0.5] as const);
@@ -302,6 +305,110 @@ export abstract class ArenaScene extends ArenaSim {
           base.rect(gx + i, gy + j, 1, 1, burst > 0.05 ? "#fff4dc" : "#f0dcff", a);
           glow.rect(gx + i, gy + j, 1, 1, "#d8a8ff", a);
         }
+      }
+    }
+  }
+
+  /**
+   * "Beschwörungsmatrix": an upright circle of runes behind the spot where the form will stand –
+   * two rings, runes circling between them, a hexagram tracing itself in, a pillar of light.
+   */
+  private drawMatrix(base: Pen, glow: Pen): void {
+    const s = this.summoning;
+    const strength = Math.max(this.conjure, this.conjureBurst);
+    if (s === null || strength < 0.02) return;
+    const tall = Math.max(s.from.h, s.to.h, 10) * s.cell;
+    const wide = Math.max(s.from.w, s.to.w, 8) * s.cell;
+    const cx = SIDE_X[s.side];
+    const cy = Math.round(this.gy(s.side) - tall / 2 - 2);
+    const r = Math.round(Math.max(tall, wide) / 2 + 14);
+    const spin = this.reducedMotion ? 0 : this.time * 0.6;
+    const traced = this.reducedMotion ? 1 : Math.min(1, this.conjureAge / 1.2);
+    const a = strength * (0.75 + Math.sin(this.time * 4) * 0.1);
+    glow.light(cx, cy, r * 1.1, r * 1.1, "#9a50ff", 0.16 * strength);
+    base.light(cx, this.gy(s.side) - tall / 2, wide * 0.6 + 6, tall / 2 + r * 0.4, "#b070ff", 0.1 * strength);
+    for (const [pen, k] of [[base, 0.7], [glow, 0.9]] as const) {
+      pen.ring(cx, cy, r, r, "#d8b0ff", a * k);
+      pen.ring(cx, cy, r - 7, r - 7, "#c890ff", a * k * 0.8);
+      for (let i = 0; i < 24; i++) {
+        const ang = -spin * 0.5 + (i / 24) * Math.PI * 2;
+        pen.rect(Math.round(cx + Math.cos(ang) * (r + 3)), Math.round(cy + Math.sin(ang) * (r + 3)), 1, 1, "#e8d0ff", a * k * (i % 3 === 0 ? 1 : 0.5));
+      }
+    }
+    // hexagram: two triangles turning against each other, traced in
+    const tri = (off: number, dir: number): Pt[] =>
+      [0, 1, 2, 0].map((k): Pt => {
+        const ang = dir * spin * 0.4 + off + (k / 3) * Math.PI * 2 - Math.PI / 2;
+        return [Math.round(cx + Math.cos(ang) * (r - 8)) + 0.5, Math.round(cy + Math.sin(ang) * (r - 8)) + 0.5];
+      });
+    for (const [pts, delay] of [[tri(0, 1), 0], [tri(Math.PI, -1), 0.5]] as const) {
+      const part = partialPath(pts, Math.max(0, Math.min(1, (traced - delay) * 2)));
+      base.line(part, "#e0c0ff", a * 0.55);
+      glow.line(part, "#b070ff", a * 0.7);
+    }
+    // runes circling in the band between the rings, each flickering on its own
+    for (let k = 0; k < 8; k++) {
+      if (traced < (k + 1) / 8) continue;
+      const ang = spin + (k / 8) * Math.PI * 2;
+      const glyph = RUNES[k % RUNES.length] ?? [];
+      const gx = Math.round(cx + Math.cos(ang) * (r - 3.5)) - 2;
+      const gy = Math.round(cy + Math.sin(ang) * (r - 3.5)) - 2;
+      const flicker = 0.5 + 0.5 * Math.abs(Math.sin(this.time * 2.7 + k * 1.3));
+      for (const [j, row] of glyph.entries()) {
+        for (const [i, ch] of Array.from(row).entries()) {
+          if (ch !== "#") continue;
+          base.rect(gx + i, gy + j, 1, 1, "#f4e4ff", a * flicker);
+          glow.rect(gx + i, gy + j, 1, 1, "#c080ff", a * flicker);
+        }
+      }
+    }
+  }
+
+  /** The shape forming in the flames, and the flame tongues licking up around its feet. */
+  private drawSummoning(base: Pen, glow: Pen): void {
+    const s = this.summoning;
+    if (s === null || this.conjure < 0.02) return;
+    const c = s.cell;
+    const cx = SIDE_X[s.side];
+    const gy = this.gy(s.side);
+    const w = Math.max(s.from.w, s.to.w);
+    const h = Math.max(s.from.h, s.to.h);
+    const a = Math.min(1, this.conjure * 1.3);
+    const scan = this.reducedMotion ? -99 : (this.time * 9) % (h + 8);
+    for (let y = 0; y < h; y++) {
+      for (let x = -Math.floor(w / 2) - 1; x <= Math.ceil(w / 2) + 1; x++) {
+        const cell = morphCell(s.from, s.to, x, y, s.t, s.seed);
+        if (cell === "off") continue;
+        const px = cx + x * c - Math.floor(c / 2);
+        const py = gy - (y + 1) * c;
+        if (cell === "edge") {
+          // a wave of heat climbs the outline
+          const hot = this.reducedMotion ? false : Math.sin(this.time * 6 - y * 0.55) > 0.55;
+          base.rect(px, py, c, c, hot ? "#f0d0ff" : "#a060ff", a);
+          glow.rect(px, py, c, c, "#9a50ff", a * (hot ? 0.45 : 0.22));
+        } else {
+          const lit = Math.abs(y - scan) < 1;
+          base.rect(px, py, c, c, lit ? "#4a2280" : "#24103c", a * 0.9);
+          if (lit) glow.rect(px, py, c, c, "#6a30b0", a * 0.3);
+        }
+      }
+    }
+    // flame tongues: columns that lick up and fall back, brightest at the root
+    const half = (Math.max(w, 8) * c) / 2 + 6;
+    const tongues = Math.max(8, Math.round(half / 2.5));
+    for (let i = 0; i < tongues; i++) {
+      const jitter = ((i * 7919) % 5) - 2;
+      const x = Math.round(cx - half + ((i + 0.5) / tongues) * half * 2) + jitter;
+      const edge = 1 - Math.abs((i + 0.5) / tongues - 0.5) * 1.2;
+      const lick = this.reducedMotion ? 0.6 : 0.5 + 0.5 * Math.sin(this.time * (4 + (i % 4)) + i * 2.1);
+      const len = Math.round((5 + lick * 16 + (i % 3) * 3) * edge * this.conjure);
+      for (let k = 0; k < len; k++) {
+        const u = k / Math.max(1, len);
+        const color = u < 0.25 ? "#f4d4ff" : u < 0.6 ? "#b050ff" : "#7428d0";
+        const wob = this.reducedMotion ? 0 : Math.round(Math.sin(this.time * 7 + i + k * 0.45) * u * 2);
+        const thick = u < 0.35 ? 3 : u < 0.7 ? 2 : 1;
+        base.rect(x + wob - (thick >> 1), gy - k, thick, 1, color, a * (1 - u * 0.55));
+        glow.rect(x + wob, gy - k, 1, 1, color, a * (1 - u) * 0.6);
       }
     }
   }

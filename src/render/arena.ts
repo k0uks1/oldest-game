@@ -4,6 +4,7 @@ import { hash32, rng } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 import { paletteFor, type SpritePalette } from "./palette.ts";
 import { alphaBox, artFor, artGlow, crop, resample, unionBox, type Box } from "./art.ts";
+import { EMPTY_MASK, fitMask, maskOf, type Mask } from "./morph.ts";
 import { displaySize, renderGlow, renderSprite, type PixelImage } from "./sprite.ts";
 import { ISO } from "./stage-iso.ts";
 import { FLOOR_Y, GROUND_Y, HEIGHT, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
@@ -111,6 +112,30 @@ export interface Aura {
   readonly kind: "fire" | "sparkle" | "smoke" | "motes" | "wisps" | "none";
   readonly color: string;
 }
+
+/** "Beschwörungsmatrix" state – see {@link ArenaSim.startConjuring}. */
+export interface Summoning {
+  readonly side: Side;
+  /** Arena pixels per mask cell. */
+  readonly cell: number;
+  readonly shapes: readonly Mask[];
+  next: number;
+  from: Mask;
+  to: Mask;
+  /** 0..1 through the current melt. */
+  t: number;
+  /** Seconds the current shape has stood. */
+  hold: number;
+  /** Settling on the real form – no more passing shapes. */
+  final: boolean;
+  seed: number;
+}
+
+/** Shapes that pass through the flames while a picture is painted (presentation only). */
+const MORPH_SHAPES = ["wolf", "drache", "ritter", "katze", "adler", "baum", "schlange", "spinne", "loewe", "hai", "elefant", "grossmutter", "eule", "golem"];
+const MORPH_SECONDS = 0.75;
+const MORPH_HOLD = 0.7;
+const FLAME = ["#b050ff", "#d890ff", "#8a3ce8", "#f0c8ff", "#6a20c0"];
 
 export interface Particle {
   x: number;
@@ -276,6 +301,8 @@ export abstract class ArenaSim {
   protected conjureAge = 0;
   /** Final burst when the picture arrives (1 → 0). */
   protected conjureBurst = 0;
+  /** "Beschwörungsmatrix": shapes forming in purple flames where the form will stand. */
+  protected summoning: Summoning | null = null;
   protected time = 0;
   protected last = 0;
   protected running = false;
@@ -522,28 +549,118 @@ export abstract class ArenaSim {
   }
 
   /**
-   * "Beschwörung": a picture is being painted for the form about to appear on `side`. The rune
-   * circle lights up and a pentagram of runes traces itself in, until {@link endConjuring}.
+   * "Beschwörung": a picture is being painted for `form`, about to appear on `side`. The rune
+   * circle lights up and a pentagram of runes traces itself in; where the form will stand, a
+   * summoning matrix rises, purple flames climb and shapes form inside them, melting from one into
+   * the next – until {@link endConjuring}.
    */
-  startConjuring(): void {
+  startConjuring(side?: Side, form?: Form): void {
     if (this.conjureTarget === 0) this.conjureAge = 0;
     this.conjureTarget = 1;
+    if (side !== undefined && form !== undefined && this.summoning?.side !== side) this.summoning = this.summoningFor(side, form);
     this.onCue?.("summon");
   }
 
-  /** The picture is here (or will not come): one bright flare, then the circle calms down. */
-  async endConjuring(arrived: boolean): Promise<void> {
+  /**
+   * The picture is here (or will not come): the flames settle on the form's own outline, one
+   * bright flare, then the circle calms down. With `form`, the final shape is taken from it.
+   */
+  async endConjuring(arrived: boolean, form?: Form): Promise<void> {
     if (this.conjureTarget === 0) return;
+    const s = this.summoning;
+    if (s !== null && form !== undefined) {
+      const final = maskOf(this.sprite(form).pixels, s.cell * this.density);
+      s.from = s.t >= 0.5 ? s.to : s.from;
+      s.to = final;
+      s.t = 0;
+      s.hold = 0;
+      s.final = true;
+      s.seed++;
+      if (!this.reducedMotion) await wait(MORPH_SECONDS * 1000 + 260);
+    }
     this.conjureTarget = 0;
+    const at = s === null ? null : { x: SIDE_X[s.side], y: this.gy(s.side) - (s.to.h * s.cell) / 2 };
+    this.summoning = null;
     if (!arrived) return;
     this.conjureBurst = 1;
     this.flash = Math.max(this.flash, 0.45);
     this.flashColor = "#f4e0ff";
     const { cx, cy } = this.stage.rune;
     this.rings.push({ x: cx, y: cy, r: 6, life: 0, max: 0.9, color: "#f0d8ff" });
-    this.burst(cx, cy - 4, "#e8c8ff", 70);
+    this.burst(at?.x ?? cx, at?.y ?? cy - 4, "#e8c8ff", 70);
     this.onCue?.("reveal");
     await wait(this.reducedMotion ? 80 : 420);
+  }
+
+  /** Passing shapes, each fitted to about the size of the form to come (its drawn sprite). */
+  private summoningFor(side: Side, form: Form): Summoning {
+    // big enough to be recognised even when a flea is coming – the final shape shrinks to its size
+    const drawn = renderSprite(this.onto, form);
+    const boxW = Math.max(drawn.width, 72);
+    const boxH = Math.max(drawn.height, 76);
+    const cell = Math.max(2, Math.ceil(Math.max(boxW, boxH) / 44));
+    const w = Math.ceil(boxW / cell);
+    const h = Math.ceil(boxH / cell);
+    const pool = MORPH_SHAPES.filter((id) => id !== form.id)
+      .map((id) => this.onto.formById(id))
+      .filter((f): f is Form => f !== undefined);
+    const shapes: Mask[] = [];
+    while (shapes.length < 5 && pool.length > 0) {
+      const [pick] = pool.splice(Math.floor(this.rand() * pool.length), 1);
+      if (pick === undefined) break;
+      const m = fitMask(maskOf(renderSprite(this.onto, pick), cell), w, h);
+      if (m.w > 0) shapes.push(m);
+    }
+    return { side, cell, shapes, next: 0, from: EMPTY_MASK, to: shapes[0] ?? EMPTY_MASK, t: 0, hold: 0, final: false, seed: hash32(form.id) };
+  }
+
+  /** Melt on; hold each shape a moment, then the next – the final one stays. */
+  private stepSummoning(dt: number): void {
+    const s = this.summoning;
+    if (s === null) return;
+    if (this.reducedMotion) {
+      s.t = 1;
+      return;
+    }
+    if (s.t < 1) {
+      s.t = Math.min(1, s.t + dt / MORPH_SECONDS);
+      return;
+    }
+    s.hold += dt;
+    if (s.final || s.hold < MORPH_HOLD || s.shapes.length < 2) return;
+    s.next = (s.next + 1) % s.shapes.length;
+    s.from = s.to;
+    s.to = s.shapes[s.next] ?? s.to;
+    s.t = 0;
+    s.hold = 0;
+    s.seed++;
+  }
+
+  /** Purple flames climbing around (and through) the forming shape. */
+  private emitSummoningFlames(dt: number): void {
+    const s = this.summoning;
+    if (s === null || this.reducedMotion) return;
+    const x0 = SIDE_X[s.side];
+    const gy = this.gy(s.side);
+    const half = (Math.max(s.from.w, s.to.w, 8) * s.cell) / 2 + 6;
+    const tall = Math.max(s.from.h, s.to.h, 10) * s.cell;
+    const n = dt * 45 * this.conjure;
+    for (let k = 0; k < Math.ceil(n); k++) {
+      if (k + 1 > n && this.rand() > n - k) break;
+      const inside = this.rand() < 0.15;
+      this.particles.push({
+        x: x0 + (this.rand() * 2 - 1) * half * (inside ? 0.6 : 1),
+        y: inside ? gy - this.rand() * tall * 0.8 : gy - this.rand() * 3,
+        vx: (this.rand() - 0.5) * 8,
+        vy: -22 - this.rand() * 34,
+        life: 0,
+        max: 0.45 + this.rand() * 0.6,
+        color: FLAME[Math.floor(this.rand() * FLAME.length)] ?? "#b050ff",
+        size: this.rand() < 0.3 ? 2 : 1,
+        gravity: -18,
+        glow: true,
+      });
+    }
   }
 
   /** Sparks rising from the pentagram's points while conjuring. */
@@ -1184,6 +1301,8 @@ export abstract class ArenaSim {
     this.conjureAge = this.conjureTarget > 0 ? this.conjureAge + dt : 0;
     this.conjureBurst = Math.max(0, this.conjureBurst - dt * 1.6);
     this.emitConjureSparks(dt);
+    this.stepSummoning(dt);
+    this.emitSummoningFlames(dt);
     this.stepAnimations(dt);
     this.updateCosmos(dt);
     for (const fx of this.fieldFx.values()) fx.level += (fx.target - fx.level) * Math.min(1, dt * 1.5);
