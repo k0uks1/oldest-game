@@ -17,7 +17,7 @@ import { reaches } from "../engine/rules.ts";
 import { describeInsight, learnInsights } from "./insight.ts";
 import type { Form, GameState, PlayerId } from "../engine/types.ts";
 import { isClaudeReady, type LlmSettings } from "../llm/client.ts";
-import { addRuling, amend, findLearned, learn } from "../llm/learning.ts";
+import { addRuling, amend, findLearned, learn, type Amendment } from "../llm/learning.ts";
 import { judgeWithClaude } from "../llm/judge.ts";
 import { loreWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
 import { parseWithClaude } from "../llm/parser.ts";
@@ -179,21 +179,20 @@ export class Resolver {
     first: AttemptOutcome,
   ): Promise<{ form: Form; outcome: AttemptOutcome; verdict: string } | undefined> {
     const target = currentTarget(state);
-    if (target === null || first.kind === "rejected" || !invented(form) || !invented(target) || !this.useClaude()) return undefined;
+    // Every pair with an invented form gets a judgement once – that is where no rule was ever
+    // written, and where absurd wins came from (a radio corroding a marten).
+    if (target === null || first.kind === "rejected" || (!invented(form) && !invented(target)) || !this.useClaude()) return undefined;
     if (this.onto.rulingFor(form.id, target.id) !== undefined) return undefined;
     const engine = first.kind === "success" ? `Sieg (${this.onto.verbs.get(first.move.verb ?? "")?.spec.label ?? "?"})` : `kein Sieg – ${first.failure.reason}`;
     const j = await judgeWithClaude(this.onto, this.host.llm(), form, target, engine);
     if (j === undefined) return undefined;
     const addVerb = j.win && j.verb !== undefined ? [j.verb] : [];
-    const amended = amend(
-      this.basePacks,
-      this.learned,
-      [
-        { id: form.id, tags: j.attacker.tags, verbs: addVerb, ...(j.attacker.qualities === undefined ? {} : { qualities: j.attacker.qualities }) },
-        { id: target.id, tags: j.target.tags, ...(j.target.qualities === undefined ? {} : { qualities: j.target.qualities }) },
-      ],
-      j.delta,
-    );
+    // only invented forms learn; hand-written ones stay as they are (a precedent covers the rest)
+    const amendments: Amendment[] = [];
+    if (invented(form)) amendments.push({ id: form.id, tags: j.attacker.tags, verbs: addVerb, ...(j.attacker.qualities === undefined ? {} : { qualities: j.attacker.qualities }) });
+    if (invented(target)) amendments.push({ id: target.id, tags: j.target.tags, ...(j.target.qualities === undefined ? {} : { qualities: j.target.qualities }) });
+    const useful = amendments.filter((a) => a.tags.length > 0 || (a.verbs?.length ?? 0) > 0 || a.qualities !== undefined);
+    const amended = useful.length === 0 && j.delta.tags.length === 0 && j.delta.verbs.length === 0 ? undefined : amend(this.basePacks, this.learned, useful, j.delta);
     let onto = amended?.onto ?? this.onto;
     let pack = amended?.pack ?? this.learned;
     const f2 = onto.formById(form.id) ?? form;
@@ -203,7 +202,10 @@ export class Resolver {
     let outcome = attempt(onto, state2, f2, verb, isDiscovery);
     // the engine, now knowing more, still disagrees: the judgement becomes a precedent for this pair
     if ((outcome.kind === "success") !== j.win && outcome.kind !== "rejected") {
-      const rulingVerb = j.verb ?? (outcome.kind === "failure" ? outcome.failure.closest?.verb : (outcome.move.verb ?? undefined));
+      // a precedent names a mechanism the attacker really has (a core attacker learns nothing new)
+      const own = onto.compileForm(f2).verbs;
+      const engineVerb = outcome.kind === "failure" ? outcome.failure.closest?.verb : (outcome.move.verb ?? undefined);
+      const rulingVerb = j.verb !== undefined && (own.includes(j.verb) || !j.win) ? j.verb : (engineVerb ?? own[0]);
       const stored = rulingVerb === undefined ? undefined : addRuling(this.basePacks, pack, { attacker: f2.id, target: t2.id, valid: j.win, verb: rulingVerb, reason: j.reason });
       if (stored !== undefined) {
         onto = stored.onto;
@@ -234,6 +236,35 @@ export class Resolver {
     this.learned = l.pack;
     this.onto = l.onto;
     return ` · neuer Siegweg: ${l.learned.map((n) => describeInsight(this.onto, n)).join("; ")}`;
+  }
+
+  /**
+   * "Quatsch!" on a win with an invented form: have the pair judged again, now knowing a player
+   * found it absurd. The verdict counts from the next time (the duel is not rewound): invented
+   * forms learn what was missing, and the pair gets a precedent. Returns the judge's reason, or
+   * undefined (no Claude, no invented form, unknown forms).
+   */
+  async reconsider(attackerId: string, targetId: string, verbLabel: string): Promise<string | undefined> {
+    const a = this.onto.formById(attackerId);
+    const t = this.onto.formById(targetId);
+    if (a === undefined || t === undefined || (!invented(a) && !invented(t)) || !this.useClaude()) return undefined;
+    const j = await judgeWithClaude(this.onto, this.host.llm(), a, t, `Sieg (${verbLabel}) – aber ein Spieler hält das für Quatsch. Prüfe streng.`);
+    if (j === undefined) return undefined;
+    const changes: Amendment[] = [];
+    if (invented(a)) changes.push({ id: a.id, tags: j.attacker.tags, ...(j.attacker.qualities === undefined ? {} : { qualities: j.attacker.qualities }) });
+    if (invented(t)) changes.push({ id: t.id, tags: j.target.tags, ...(j.target.qualities === undefined ? {} : { qualities: j.target.qualities }) });
+    const amended = amend(this.basePacks, this.learned, changes.filter((c) => c.tags.length > 0 || c.qualities !== undefined), j.delta);
+    const onto = amended?.onto ?? this.onto;
+    const pack = amended?.pack ?? this.learned;
+    const own = onto.compileForm(onto.formById(a.id) ?? a).verbs;
+    const verb = j.verb !== undefined && (own.includes(j.verb) || !j.win) ? j.verb : own[0];
+    const stored = verb === undefined ? undefined : addRuling(this.basePacks, pack, { attacker: a.id, target: t.id, valid: j.win, verb, reason: j.reason });
+    if (stored === undefined && amended === undefined) return undefined;
+    this.onto = stored?.onto ?? onto;
+    this.learned = stored?.pack ?? pack;
+    const ways = this.generalize();
+    this.host.saveLearned(this.learned);
+    return `${j.reason}${ways}`;
   }
 
   /** The form's legend for its card: its own, or a fresh one from Claude (undefined offline). */

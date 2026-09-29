@@ -76,11 +76,14 @@ export function evaluateForm(onto: Ontology, state: GameState, form: Form): Move
   if (Object.keys(state.config.escapeRoutes).some((r) => onto.formHas(form, r))) verbs.push(ESCAPE);
   const ruling = onto.rulingFor(form.id, target.id);
   if (ruling !== undefined && !verbs.includes(ruling.verb)) verbs.push(ruling.verb);
+  // "besiegt nicht" is about the pair, not one mechanism: a denying precedent holds for every
+  // way of attacking (getting away is no victory and stays possible)
+  const denied = ruling !== undefined && !ruling.valid;
   return verbs
     .map((verb) => {
       const check =
-        verb === ruling?.verb
-          ? checkRuling(onto, form, target, ruling, state.config, minScale)
+        ruling !== undefined && verb !== ESCAPE && (verb === ruling.verb || denied)
+          ? checkRuling(onto, form, target, { ...ruling, verb }, state.config, minScale)
           : verb === ESCAPE
             ? checkEscape(onto, form, target, state.config, minScale)
             : checkCounter(onto, form, target, verb, state.config, minScale, fieldModifiers(onto, fields, verb));

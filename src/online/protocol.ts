@@ -51,6 +51,9 @@ export interface AbsurdReport {
   readonly attacker: string;
   readonly target: string;
   readonly verb: string;
+  /** Form ids (newer clients) – lets the server have the pair judged again. */
+  readonly attackerId?: string;
+  readonly targetId?: string;
 }
 
 /** Validate a report from an untrusted client: three short printable strings. */
@@ -64,7 +67,10 @@ export function parseReport(o: Record<string, unknown>): AbsurdReport | undefine
   const attacker = field("attacker");
   const target = field("target");
   const verb = field("verb");
-  return attacker === undefined || target === undefined || verb === undefined ? undefined : { attacker, target, verb };
+  if (attacker === undefined || target === undefined || verb === undefined) return undefined;
+  const attackerId = field("attackerId");
+  const targetId = field("targetId");
+  return { attacker, target, verb, ...(attackerId === undefined ? {} : { attackerId }), ...(targetId === undefined ? {} : { targetId }) };
 }
 
 // ── server → client ───────────────────────────────────────────────────────
@@ -130,6 +136,8 @@ export type ServerMsg =
   | { readonly t: "learnedFull"; readonly pack: ContentPack }
   | { readonly t: "art"; readonly items: readonly ArtItem[] }
   | { readonly t: "lore"; readonly id: string; readonly text: string }
+  /** The judge looked at a reported win again (counts from the next time). */
+  | { readonly t: "reconsidered"; readonly text: string }
   | { readonly t: "error"; readonly code: ErrorCode; readonly message: string };
 
 // ── validation (the server never trusts a frame) ──────────────────────────
