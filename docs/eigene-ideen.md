@@ -533,3 +533,10 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | Idee | Was es tut | Wo |
 |---|---|---|
 | **Das All reicht bis unten** | Die Seitenwände des Iso-Raums reichen unter die Bodenlinie, das gemalte All endete aber dort – PixelLab hatte den leeren Rest weiß gefüllt. Fielen unten Steine heraus, schien Weiß durch. Jetzt füllt das All das ganze Bild (unten ein gedrehter, weich angesetzter Ausschnitt), und auch das gezeichnete All reicht bis unten, sodass ein neuer Malauftrag nichts Leeres mehr bekommt. | `scenery/void.png`, `paintStarfield` |
+
+## Der erste Schwung Bilder
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Alle Angriffe gemalt** | 40 Streifen (27 Angriffe plus Einschläge), alle über PixMiniMax (Minuten statt einer Viertelstunde). Vier misslungene wurden mit schärferen Beschreibungen neu gemalt: Wucht war ein Lagerfeuer, Schall goldene Äste, Klinge ein Verbotsschild. | `effects.json`, `render/effects/` |
+| **Alle Räume belebt** | 14 Raumzustände, jeder als Standbild und als Schleife. | `rooms.json`, `render/rooms/` |

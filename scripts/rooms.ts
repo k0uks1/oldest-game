@@ -1,7 +1,7 @@
 /**
  * The living room ("lebender Raum"): every state in content/core/rooms.json is our own painted
  * dungeon (src/render/scenery/iso.png) repainted by PixelLab (edit_with_text – walls, floor, gate and
- * rune circle stay where the arena expects them), plus an animation loop of it (animate-with-text on
+ * rune circle stay where the arena expects them), plus an animation loop of it (animate-pixminimax on
  * a half-size copy – the service animates at most 256×256). Writes src/render/rooms/<id>.png and
  * <id>-anim.png (frames side by side) and the index the arena imports.
  *
@@ -102,9 +102,14 @@ async function make(r: RoomSpec): Promise<void> {
   const still = decodePng(readFileSync(stillFile));
   if (still === undefined) throw new Error(`${r.id}: Bild nicht lesbar`);
   const first = encodePng(half(still)).toString("base64");
-  const frames = await job(`${r.id}-anim`, () =>
-    fetch(`${API}/animate-with-text-v3`, { method: "POST", headers, body: JSON.stringify({ first_frame: { type: "base64", base64: first }, action: r.motion, frame_count: 8, no_background: false, seed: 11 }) }),
-  );
+  // PixMiniMax: a far shorter queue than animate-with-text-v3; a full house (Tier 2: 11 jobs) answers 429 – wait for a slot
+  const frames = await job(`${r.id}-anim`, async () => {
+    for (;;) {
+      const res = await fetch(`${API}/animate-pixminimax`, { method: "POST", headers, body: JSON.stringify({ first_frame: { type: "base64", base64: first }, description: r.motion, frame_count: 8, no_background: false, seed: 11 }) });
+      if (res.status !== 429) return res;
+      await new Promise((w) => setTimeout(w, 15000));
+    }
+  });
   if (frames.length < 4) throw new Error(`${r.id}: zu wenige Bilder`);
   writeFileSync(animFile, strip(frames));
   console.log(`${r.id}: belebt (${String(frames.length)} Bilder)`);
