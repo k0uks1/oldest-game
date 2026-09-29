@@ -19,6 +19,10 @@ interface RoomSpec {
   readonly id: string;
   readonly repaint: string;
   readonly motion: string;
+  /** A painted-over copy of the iso room to repaint instead of the plain one (banners, a statue where they belong). */
+  readonly guide?: string;
+  readonly seed?: number;
+  readonly animSeed?: number;
 }
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -81,16 +85,17 @@ function strip(frames: readonly Rgba[]): Buffer {
   return encodePng({ width: w * frames.length, height: h, data });
 }
 
-const base = readFileSync(join(root, "src/render/scenery/iso.png")).toString("base64");
+const iso = readFileSync(join(root, "src/render/scenery/iso.png")).toString("base64");
 
 async function make(r: RoomSpec): Promise<void> {
   const stillFile = join(out, `${r.id}.png`);
   if (force || !existsSync(stillFile)) {
+    const base = r.guide === undefined ? iso : readFileSync(join(root, r.guide)).toString("base64");
     const [still] = await job(r.id, () =>
       fetch(`${API}/edit-images-v2`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ method: "edit_with_text", edit_images: [{ image: { type: "base64", base64: base }, width: 480, height: 270 }], image_size: { width: 480, height: 270 }, description: `${r.repaint}. ${KEEP}`, seed: 11 }),
+        body: JSON.stringify({ method: "edit_with_text", edit_images: [{ image: { type: "base64", base64: base }, width: 480, height: 270 }], image_size: { width: 480, height: 270 }, description: `${r.repaint}. ${KEEP}`, seed: r.seed ?? 11 }),
       }),
     );
     if (still === undefined) throw new Error(`${r.id}: kein Bild`);
@@ -105,7 +110,7 @@ async function make(r: RoomSpec): Promise<void> {
   // PixMiniMax: a far shorter queue than animate-with-text-v3; a full house (Tier 2: 11 jobs) answers 429 – wait for a slot
   const frames = await job(`${r.id}-anim`, async () => {
     for (;;) {
-      const res = await fetch(`${API}/animate-pixminimax`, { method: "POST", headers, body: JSON.stringify({ first_frame: { type: "base64", base64: first }, description: r.motion, frame_count: 8, no_background: false, seed: 11 }) });
+      const res = await fetch(`${API}/animate-pixminimax`, { method: "POST", headers, body: JSON.stringify({ first_frame: { type: "base64", base64: first }, description: r.motion, frame_count: 8, no_background: false, seed: r.animSeed ?? 11 }) });
       if (res.status !== 429) return res;
       await new Promise((w) => setTimeout(w, 15000));
     }
@@ -129,7 +134,7 @@ function writeIndex(): void {
 }
 
 mkdirSync(out, { recursive: true });
-const specs = (roomsJson as RoomSpec[]).filter((r) => only.length === 0 || only.includes(r.id));
+const specs = (roomsJson as readonly RoomSpec[]).filter((r) => only.length === 0 || only.includes(r.id));
 let next = 0;
 const failed: string[] = [];
 await Promise.all(

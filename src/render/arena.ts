@@ -7,8 +7,9 @@ import { alphaBox, artFor, artGlow, crop, resample, unionBox, type Box } from ".
 import { EMPTY_MASK, fitMask, maskOf, type Mask } from "./morph.ts";
 import { EFFECTS, type EffectKind } from "./effects.ts";
 import { EFFECT_SHEETS } from "./effects/index.ts";
-import { carriesField, chooseRoom, ROOM_MIN_SCALE } from "./rooms.ts";
+import { carriesField, chooseRoom, ROOM_MIN_SCALE, ROOMS } from "./rooms.ts";
 import { ROOM_PICTURES } from "./rooms/index.ts";
+import { SECRET_ANIMS } from "./secret/index.ts";
 import { displaySize, renderGlow, renderSprite, type PixelImage } from "./sprite.ts";
 import { ISO } from "./stage-iso.ts";
 import { acornImage, signatureFor, tattooImage, type Signature } from "./eichel.ts";
@@ -358,6 +359,8 @@ export abstract class ArenaSim {
   /** Flying pictures (acorns, the gang tattoo). */
   protected readonly props: Prop[] = [];
   private eichelArt: { acorn: HTMLCanvasElement } | null = null;
+  /** The secret characters' own animations (`render/secret/`): strip name → frames. */
+  private readonly secretAnims = new Map<string, readonly PixelImage[]>();
   protected readonly projectiles: Projectile[] = [];
   protected readonly rings: Ring[] = [];
   protected readonly bolts: Bolt[] = [];
@@ -448,6 +451,7 @@ export abstract class ArenaSim {
     void this.loadScenery();
     void this.loadEffects();
     void this.loadRooms();
+    void this.loadSecretAnims();
     const r = rng(4242);
     for (let i = 0; i < 38; i++) this.motes.push({ x: r() * WIDTH, y: 20 + r() * (GROUND_Y - 20), vx: (r() - 0.5) * 3, vy: (r() - 0.5) * 2, phase: r() * 10 });
     for (let i = 0; i < 12; i++) {
@@ -873,28 +877,62 @@ export abstract class ArenaSim {
    */
   animate(formId: string, frames: readonly PixelImage[], fps = 8): boolean {
     let any = false;
+    // one crop for all frames: the figure moves inside it instead of the frame jumping
+    const box = unionBox(frames.map((img) => alphaBox(img)));
     for (const side of [0, 1] as const) {
-      const f = this.fighters[side];
-      if (f?.form.id !== formId || frames.length < 2) continue;
-      const palette = f.sprite.palette;
-      // one crop for all frames: the figure moves inside it instead of the frame jumping
-      const box = unionBox(frames.map((img) => alphaBox(img)));
-      const entries = frames.map((img) => this.pictureEntry(f.form, img, palette, box));
-      const first = entries[0];
-      if (first === undefined) continue;
-      // the fighter's own canvases, repainted frame by frame
-      const own = (c: HTMLCanvasElement): HTMLCanvasElement => {
-        const copy = canvas(c.width, c.height);
-        ctx2d(copy).drawImage(c, 0, 0);
-        return copy;
-      };
-      const live: SpriteEntry = { ...first, image: own(first.image), glow: own(first.glow), silhouette: own(first.silhouette), rim: own(first.rim), stone: own(first.stone) };
-      this.fighters[side] = { ...f, sprite: live, anim: { frames: entries, fps, t: 0, shown: 0 }, flash: 0.6 };
-      this.rings.push({ x: SIDE_X[side], y: this.gy(side), r: 4, life: 0, max: 0.8, color: palette.glow });
+      if (this.fighters[side]?.form.id !== formId) continue;
+      const f = this.runFrames(side, frames, fps, box);
+      if (f === null) continue;
+      f.flash = 0.6;
+      this.rings.push({ x: SIDE_X[side], y: this.gy(side), r: 4, life: 0, max: 0.8, color: f.sprite.palette.glow });
       this.onCue?.("reveal");
       any = true;
     }
     return any;
+  }
+
+  /** Loop these frames on the fighter on `side` – in its own canvases, the cached sprite stays still. */
+  private runFrames(side: Side, frames: readonly PixelImage[], fps: number, box: Box | undefined): Fighter | null {
+    const f = this.fighters[side];
+    if (f === null || frames.length < 2) return null;
+    const entries = frames.map((img) => this.pictureEntry(f.form, img, f.sprite.palette, box));
+    const first = entries[0];
+    if (first === undefined) return null;
+    // the fighter's own canvases, repainted frame by frame
+    const own = (c: HTMLCanvasElement): HTMLCanvasElement => {
+      const copy = canvas(c.width, c.height);
+      ctx2d(copy).drawImage(c, 0, 0);
+      return copy;
+    };
+    const live: SpriteEntry = { ...first, image: own(first.image), glow: own(first.glow), silhouette: own(first.silhouette), rim: own(first.rim), stone: own(first.stone) };
+    const next: Fighter = { ...f, sprite: live, anim: { frames: entries, fps, t: 0, shown: 0 } };
+    this.fighters[side] = next;
+    return next;
+  }
+
+  /** One crop for a secret character's picture and all its animations, so switching between them never jumps. */
+  private secretBox(form: Form): Box | undefined {
+    const art = artFor(form);
+    const strips = [this.secretAnims.get(form.id), this.secretAnims.get(`${form.id}-attack`)].flatMap((x) => x ?? []);
+    return unionBox([art, ...strips].map((img) => (img === undefined ? undefined : alphaBox(img))));
+  }
+
+  /**
+   * A secret character's signature move: its `-attack` strip loops (in the canvases its idle loop already owns)
+   * while `run` plays, then the idle loop comes back. Just `run` when there is no strip.
+   */
+  private async withSecretMove(side: Side, run: () => Promise<void>): Promise<void> {
+    const f = this.fighters[side];
+    const idle = f?.anim;
+    const strip = f === null ? undefined : this.secretAnims.get(`${f.form.id}-attack`);
+    if (f === null || idle === undefined || strip === undefined || this.reducedMotion) {
+      await run();
+      return;
+    }
+    const box = this.secretBox(f.form);
+    f.anim = { frames: strip.map((img) => this.pictureEntry(f.form, img, f.sprite.palette, box)), fps: 12, t: 0, shown: -1 };
+    await run();
+    if (this.fighters[side] === f) f.anim = { ...idle, t: 0, shown: -1 };
   }
 
   /** Advance animations; repaint a fighter's canvases when its frame changes. */
@@ -955,6 +993,9 @@ export abstract class ArenaSim {
       aura: this.auraFor(form),
       flying: this.onto.formHas(form, "fliegt") || ["star", "orb", "ghost", "eye"].includes(form.archetype),
     };
+    // a secret character comes alive at once (its own bundled loop)
+    const idle = this.secretAnims.get(form.id);
+    if (idle !== undefined && !this.reducedMotion) this.runFrames(side, idle, 8, this.secretBox(form));
     const color = sprite.palette.glow;
     this.onCue?.("summon");
     this.rings.push({ x: SIDE_X[side], y: this.gy(side), r: 4, life: 0, max: 0.8, color });
@@ -998,8 +1039,8 @@ export abstract class ArenaSim {
     const attacker = this.fighters[side];
     const target = this.fighters[other];
     if (attacker === null) return;
-    if (signature === "eichelkaese") await this.eichelkaese(side);
-    else if (signature === "eichelhagel") await this.eichelhagel(side);
+    if (signature === "eichelkaese") await this.withSecretMove(side, () => this.eichelkaese(side));
+    else if (signature === "eichelhagel") await this.withSecretMove(side, () => this.eichelhagel(side));
     else await this.strike(side, style, false, effect);
     if (target === null) return;
     await this.suspense(other);
@@ -1727,6 +1768,22 @@ export abstract class ArenaSim {
     );
   }
 
+  /** Decode the secret characters' strips (square frames side by side) into pictures. */
+  private async loadSecretAnims(): Promise<void> {
+    await Promise.all(
+      Object.entries(SECRET_ANIMS).map(async ([id, url]) => {
+        const img = await loadImage(url);
+        if (img === undefined || img.height === 0) return;
+        const size = img.height;
+        const c = canvas(img.width, size);
+        const g = ctx2d(c);
+        g.drawImage(img, 0, 0);
+        const frames = Array.from({ length: Math.floor(img.width / size) }, (_, k): PixelImage => ({ width: size, height: size, data: g.getImageData(k * size, 0, size, size).data }));
+        if (frames.length >= 2) this.secretAnims.set(id, frames);
+      }),
+    );
+  }
+
   /** Decode the painted room states (the plain room shows until then; only the default iso room has them). */
   private async loadRooms(): Promise<void> {
     if (this.stage !== ISO) return;
@@ -1991,6 +2048,13 @@ export abstract class ArenaSim {
     const dur = this.reducedMotion ? 0.12 : (opts.fly ?? sheet.frames.length / fps);
     this.plays.push({ sheet, t: 0, fps, loop, dur, from: opts.from, to: opts.to ?? opts.from, size: opts.size, flip: opts.flip, alpha: opts.alpha ?? 1 });
     return wait(dur * 1000);
+  }
+
+  /** How much of the drawn wall banners shows: a room with banners of its own fades them out. */
+  protected bannersAlpha(): number {
+    let hidden = 0;
+    for (const [id, level] of this.roomFade) if (level > 0 && ROOMS.some((r) => r.id === id && r.hideBanners === true)) hidden = Math.max(hidden, easeOut(level));
+    return 1 - hidden;
   }
 
   /** Everything painted this frame: room states behind, effects in front of the fighters. */

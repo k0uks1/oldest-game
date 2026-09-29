@@ -17,6 +17,8 @@ export interface RoomSpec {
   readonly tags?: readonly string[];
   /** Any form with those properties changes the room at once – whatever its scale, before any field (Eichel-Arena). */
   readonly anyScale?: boolean;
+  /** The room has its own banners: the drawn ones on the walls fade out while it shows (Eichel-Arena). */
+  readonly hideBanners?: boolean;
 }
 
 export const ROOMS: readonly RoomSpec[] = roomsJson;

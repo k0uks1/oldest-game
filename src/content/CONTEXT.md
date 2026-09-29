@@ -27,5 +27,6 @@ always follow the **Bavarian deck's** look, not a generic fantasy one. Learned w
 - **Game lore fits the card game:** the Eichel-Ober is the highest trump in Schafkopf (flavour, aliases, moves).
 - **Secret by default:** such figures are `secret: true`, bring their own picture (`secret-art.json`) and may get a
   suit room (`rooms.json`, `anyScale`) and a signature attack (`render/eichel.ts` pattern).
-- **Pictures:** preferably painted with PixelLab from the card motif; a hand-downscaled painting looks soft – if
-  drawn by hand, use few colours, hard edges and a dark 1-px outline.
+- **Pictures:** painted with PixelLab from the card motif (`generate-image-v2` with the design and a Bavarian acorn
+  as reference images – describe the acorn explicitly, or it comes out brown); a hand-downscaled painting looks soft.
+  Animations and the suit room: see `src/render/CONTEXT.md` (Secret characters).

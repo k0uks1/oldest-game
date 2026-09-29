@@ -4,6 +4,7 @@ import room_arkan_anim from "./arkan-anim.png";
 import room_brand from "./brand.png";
 import room_brand_anim from "./brand-anim.png";
 import room_eichel from "./eichel.png";
+import room_eichel_anim from "./eichel-anim.png";
 import room_einsturz from "./einsturz.png";
 import room_einsturz_anim from "./einsturz-anim.png";
 import room_eis from "./eis.png";
@@ -35,6 +36,7 @@ export const ROOM_PICTURES: Readonly<Record<string, string>> = {
   "brand": room_brand,
   "brand-anim": room_brand_anim,
   "eichel": room_eichel,
+  "eichel-anim": room_eichel_anim,
   "einsturz": room_einsturz,
   "einsturz-anim": room_einsturz_anim,
   "eis": room_eis,
