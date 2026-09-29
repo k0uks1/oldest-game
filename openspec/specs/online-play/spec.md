@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Zwei Spieler duellieren sich über einen maßgeblichen Server; Zuschauer können zusehen. Stand heute sind Räume kurzlebig und setzen voraus, dass beide das Spiel offen haben. Details: `server/CONTEXT.md`, Protokoll in `src/online/protocol.ts`.
+Zwei Spieler duellieren sich über einen maßgeblichen Server; Zuschauer können zusehen. Stand heute sind Räume kurzlebig und setzen voraus, dass beide das Spiel offen haben (asynchrones Spiel: Issue #76). Details: `server/CONTEXT.md`, Protokoll in `src/online/protocol.ts`.
 
 ## Requirements
 
@@ -20,7 +20,7 @@ Ein Client SHALL mit Raumcode und Sitz-Token (`resume`) in einen noch offenen Ra
 
 #### Scenario: Neu laden
 - **WHEN** ein Spieler den Tab neu lädt, solange der Raum besteht
-- **THEN** sitzt er wieder auf seinem Platz und sieht Zustand und Chronik, ohne dass verpasste Züge animiert nachgespielt werden
+- **THEN** sitzt er wieder auf seinem Platz und sieht den aktuellen Zustand und die Chronik
 
 ### Requirement: Kurzlebige Räume
 

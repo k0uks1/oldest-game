@@ -15,17 +15,21 @@ The backlog of this repo lives in **GitHub issues** of `k0uks1/oldest-game`. Rea
   created and updated by `.github/workflows/backlog.yml` (`scripts/backlog.ts`): summary from the proposal's
   "Why", task progress from `tasks.md`, the PRs that touch it. Archiving the change on `main` closes the issue.
   A proposal that starts from an existing issue says `Issue: #<n>` under "## Why" and is attached to it.
-- **Labels** `openspec`, `wayfinder:*` and `needs-user` are created by the same workflow when missing.
+- **Labels** are created by the same workflow when missing: the kind of a plain issue – `enhancement` (wish,
+  new capability), `bug`, `debt` (clean-up) – plus `openspec`, `wayfinder:*` and `needs-user`.
 
 ## What agents do while working
 
-- **Found something that is out of scope for the current task** (bug, idea, debt, a user wish in passing):
-  search first (`search_issues` / `gh issue list --search`), then open one short issue – title in German,
-  body: what, where (`file:line`), why it matters. Don't fix it on the side.
+- **Something to note, not to do now** – a message starting with „Backlog:“ / „Idee:“, a user wish in passing,
+  or something out of scope you found (bug, idea, debt): search first (`search_issues` / `gh issue list --search`),
+  then open **one** issue with exactly one kind label (`enhancement` / `bug` / `debt`). Title in German; body:
+  the user's words quoted, what, where it differs today (`file:line`), why. Sized to the content: a small find is
+  three lines; a large wish also lists its open parts and the next route (`/opsx:propose` when work starts,
+  `/wayfinder` if the way is foggy) and names the specs it would change. Don't start the work and don't fix it on
+  the side – unless the user asked for it to be done now.
 - **Starting work on an issue:** non-trivial → `/opsx:propose` with `Issue: #<n>`; small fix → just the PR.
 - **PR body:** `Closes #<n>` for work that finishes a plain issue, `Refs #<n>` for an OpenSpec change's issue
   (that one closes itself when the change is archived).
-- **A user wish in chat that won't be done now** becomes an issue too, so it isn't lost in scrollback.
 - **Decisions are made, not parked:** record them with reasoning in the issue; the user objects there if they
   disagree. **`needs-user`** only when blocked on something only the user can *do* (key, account, payment,
   access) – comment the exact checklist, label, move on. Whoever sees it done removes the label and continues.

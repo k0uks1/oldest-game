@@ -9,6 +9,8 @@ Four places, each with one job – don't duplicate between them:
 | Work in flight: why, design, tasks | `openspec/changes/<name>/` | `/opsx:propose` → `/opsx:apply` → `/opsx:archive` |
 | Backlog: everything not started, and the state of what is | GitHub issues | **automatic** for OpenSpec changes, see below |
 
+- **Specs describe today's behaviour.** A wish that changes it is normal: its OpenSpec change carries a delta
+  (`## MODIFIED` / `## REMOVED Requirements`) for that spec, and the backlog issue names the spec it would change.
 - **Non-trivial feature or rule change** → `/opsx:propose` first (from an issue: `Issue: #<n>` under "## Why"),
   then `/opsx:apply`, and archive in the same PR that finishes it. Small fixes need no change folder.
 - **The backlog keeps itself.** `.github/workflows/backlog.yml` runs `scripts/backlog.ts` on every PR and push to

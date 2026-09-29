@@ -52,8 +52,11 @@ export interface Context {
 }
 
 export const LABEL = "openspec";
-/** Labels the planning workflows rely on; created when missing (nothing else creates them). */
+/** Labels the planning workflows rely on; created (or their descriptions updated) on every run. */
 export const LABELS: { name: string; color: string; description: string }[] = [
+  { name: "enhancement", color: "a2eeef", description: "Wunsch / neue Fähigkeit" },
+  { name: "bug", color: "d73a4a", description: "Etwas funktioniert nicht wie gedacht" },
+  { name: "debt", color: "fbca04", description: "Aufräumen, technische Schuld" },
   { name: LABEL, color: "5319e7", description: "OpenSpec-Änderung (automatisch gepflegt)" },
   { name: "wayfinder:map", color: "0e8a16", description: "Wayfinder-Karte eines großen Vorhabens" },
   { name: "wayfinder:research", color: "c5def5", description: "Wayfinder: Recherche (AFK)" },
