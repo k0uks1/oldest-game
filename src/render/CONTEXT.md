@@ -23,7 +23,9 @@ non-figures (by archetype) as „a single object on its own / a symbolic object,
 „full body“ for them (it turned a chainsaw into a man holding one); a description that asks for people or hands keeps them.
 Pictures show at `displaySize(scale)` (a finer ladder than drawn sprites: 40 · 48 · 64 · 80 · 96 · 112 · 120 · 128)
 and are made at `ART_DENSITY` (2)× that (`artSize`); transparent margins are cut away (`trimmed`, animation frames
-share one crop), so figures fill their place and stand on the ground. The Pixi arena renders at that density (scene
+share one crop), so figures fill their place and stand on the ground: the *figure* (not the picture) fills the display size on
+its long side, a slender one grows to about the area of a sturdy one, at most `SLENDER_MAX` (1.3)× (`figureSize`; the
+remaining upscale blur is issue #93). The Pixi arena renders at that density (scene
 in arena pixels, fighter sprites at ½ scale), the canvas fallback at 1. Clicking the name under a fighter opens its card.
 Clients ask by form id (`art` message online, `GET /api/art` for the local hot-seat) and get ready / pending /
 none; pending ones are pushed (online) or polled (local). While a picture is on its way the rune circle

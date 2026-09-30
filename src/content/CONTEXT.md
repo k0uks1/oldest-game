@@ -45,6 +45,7 @@ Figures with their own personality, built like the Eichel figures (standard pict
   Lehrerin, **Martin Luther**) are his favourite prey: he repeats their theses in a squeaky voice and ridicules them.
   Luther's weakness is `wortgewaltig` itself, so against him the engine picks „zieht ins Lächerliche“ by itself.
   Weakness `hoert`: whoever is louder (`uebertoent`) drowns him out.
-- **Kaktusarena:** the room `kaktus` (`anyScale`, tag `kaktusartig` – any cactus, also the plain one) turns the dungeon
+- **Kaktusarena:** the room `kaktus` (`anyScale`, tags `kaktusartig` – any cactus – and `wildwest`: Cowboy, Lasso, Pistole,
+  Kojote, Bison, Klapperschlange, Geier, Skorpion, Wüste, Treibsand; give new Texas/Mexico/Western forms `wildwest`) turns the dungeon
   into a Wild West desert arena. Picture: PixelLab `generate-image-v2` with a photo of the toy as reference and the
   Eichelober gang as style image; animations `animate-with-text-v3` on it (dance loop, singing for the attack).

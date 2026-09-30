@@ -177,6 +177,24 @@ export function trimmed(img: PixelImage): PixelImage {
   return box === undefined ? img : crop(img, box);
 }
 
+/** A slender figure may grow up to this much beyond its display size (on its long side). */
+export const SLENDER_MAX = 1.3;
+
+/**
+ * On-screen size (arena px) of a figure cut out of a picture: its long side fills the display size
+ * (margins in the picture never make it small), and a slender figure – a cactus, a lamp post – grows until
+ * it covers about as much area as a sturdy one would (0.8² of the square), at most SLENDER_MAX × the display
+ * size on its long side. Presentation only.
+ */
+export function figureSize(w: number, h: number, display: number): { w: number; h: number } {
+  if (w <= 0 || h <= 0) return { w: 1, h: 1 };
+  const long = Math.max(w, h);
+  const fill = display / long;
+  const area = (display * 0.8) / Math.sqrt(w * h);
+  const k = Math.min(Math.max(fill, area), (display * SLENDER_MAX) / long);
+  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+}
+
 /** Nearest-neighbour resample to any size (pixel art stays crisp; same size = unchanged). */
 export function resample(img: PixelImage, width: number, height: number): PixelImage {
   if (width === img.width && height === img.height) return img;

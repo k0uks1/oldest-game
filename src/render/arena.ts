@@ -3,7 +3,7 @@ import { loadImage, SCENERY, VOID } from "./scenery.ts";
 import { hash32, rng } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 import { paletteFor, type SpritePalette } from "./palette.ts";
-import { alphaBox, artFor, artGlow, crop, resample, unionBox, type Box } from "./art.ts";
+import { alphaBox, artFor, artGlow, crop, figureSize, resample, unionBox, type Box } from "./art.ts";
 import { EMPTY_MASK, fitMask, maskOf, type Mask } from "./morph.ts";
 import { EFFECTS, type EffectKind } from "./effects.ts";
 import { EFFECT_SHEETS } from "./effects/index.ts";
@@ -874,10 +874,8 @@ export abstract class ArenaSim {
     // only the figure (it stands on the ground, no halo of empty pixels), at the picture's own
     // detail: ART_DENSITY picture pixels per arena pixel, so Pixi (density 2) shows it unstretched
     const cut = crop(art, box ?? alphaBox(art) ?? { x: 0, y: 0, w: art.width, h: art.height });
-    // the whole picture spans the form's display size (older pictures made at another size scale to it)
-    const perArena = Math.max(art.width, art.height) / displaySize(form.scale);
-    const w = Math.max(1, Math.round(cut.width / perArena));
-    const h = Math.max(1, Math.round(cut.height / perArena));
+    // the figure itself fills the form's display size, slender ones a little more (see figureSize)
+    const { w, h } = figureSize(cut.width, cut.height, displaySize(form.scale));
     const pixels = resample(cut, w * d, h * d);
     return {
       image: toCanvas(pixels),

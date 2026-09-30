@@ -4,7 +4,8 @@ import { coreOntology } from "../src/content/index.ts";
 import { checkCounter, findCounters } from "../src/engine/rules.ts";
 import { namedForm } from "../src/engine/parse.ts";
 import { signatureFor } from "../src/render/eichel.ts";
-import { artFor } from "../src/render/art.ts";
+import { artFor, alphaBox, figureSize, SLENDER_MAX } from "../src/render/art.ts";
+import { displaySize } from "../src/render/sprite.ts";
 import { chooseRoom } from "../src/render/rooms.ts";
 import { isJohnny, parrot, songCry, songFor, SONGS } from "../src/render/johnny.ts";
 
@@ -63,5 +64,25 @@ describe("Johnny Gnadenlos, the singing cactus", () => {
     const all = (): boolean => true;
     assert.equal(chooseRoom(onto, [], [f("johnny_gnadenlos")], all)?.id, "kaktus");
     assert.equal(chooseRoom(onto, [], [f("kaktus")], all)?.id, "kaktus", "the plain cactus is only scale 2");
+    for (const id of ["cowboy", "kojote", "klapperschlange", "wueste"]) assert.equal(chooseRoom(onto, [], [f(id)], all)?.id, "kaktus", `${id}: Wild West`);
+  });
+
+  it("stands tall in the arena: the figure, not the picture with its margins, sets the size", () => {
+    const art = artFor(f("johnny_gnadenlos")) ?? assert.fail();
+    const box = alphaBox(art) ?? assert.fail();
+    const size = figureSize(box.w, box.h, displaySize(3));
+    assert.ok(size.h > displaySize(3), `slender Johnny grows: ${String(size.h)}`);
+    assert.ok(size.h <= Math.round(displaySize(3) * SLENDER_MAX));
+  });
+});
+
+describe("figureSize", () => {
+  it("a sturdy figure fills its display size on the long side, whatever the picture's margins", () => {
+    assert.deepEqual(figureSize(100, 100, 64), { w: 64, h: 64 });
+    assert.deepEqual(figureSize(50, 40, 64), { w: 64, h: 51 });
+  });
+  it("a slender one grows, but never past SLENDER_MAX", () => {
+    const s = figureSize(20, 100, 64);
+    assert.equal(s.h, Math.round(64 * SLENDER_MAX));
   });
 });
