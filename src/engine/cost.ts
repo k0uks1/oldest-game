@@ -27,6 +27,16 @@ export function formCost(onto: Ontology, form: Form): CostBreakdown {
   return { total: Math.max(1, sum), lines };
 }
 
+/**
+ * "Die Arena trägt": the share of a form's price the escalation forces on everyone is not paid.
+ * It covers the base price of the arena's minimum scale (never more than the form's own) minus one,
+ * so size is still paid for relative to the arena – and a clever small counter stays cheapest.
+ */
+export function arenaShare(formScale: number, minScale: number): number {
+  const carried = Math.min(formScale, minScale);
+  return carried < 1 ? 0 : (BASE_COST[carried - 1] ?? 23) - 1;
+}
+
 /** Surcharge for playing something bigger than the target ("Overkill"). */
 export function overkillSurcharge(attackerScale: number, targetScale: number): number {
   const gap = attackerScale - targetScale;

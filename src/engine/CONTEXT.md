@@ -56,7 +56,8 @@ attacker flies or is ≥ 2 steps larger) → intensity (every `needs {by, vs}`: 
 ≥ 2 on all → +1 "Übermacht"; `by` = `vs` is a contest: a tie fails) → scale rules (max +2 up; more than 3 down only with
 mythic leverage ≥ 4) → power = scale + leverage (+2 weakness) ≥ target scale. Game layer adds: echo
 (no mechanism from the last 2 moves), escalation (min scale rises every 3 moves, mythic exempt),
-one use per form, Wille budget, and discovery eleganz ("Einfallsreichtum": `play(…, discovery)` –
+one use per form, Wille budget ("Die Arena trägt": `moveCost` leaves out `arenaShare` – the base price of the
+minimum scale minus 1, at most the form's own – so escalation does not drain Wille; at least 1), and discovery eleganz ("Einfallsreichtum": `play(…, discovery)` –
 the flag comes from validated live learning, never from Claude directly).
 
 **Escape (`checkEscape`, pseudo-mechanism `entkommt`)**: instead of defeating, a form may get out of reach –
