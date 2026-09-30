@@ -17,7 +17,7 @@ import { reaches } from "../engine/rules.ts";
 import { describeInsight, learnInsights } from "./insight.ts";
 import type { AnimMove, Form, GameState, PlayerId } from "../engine/types.ts";
 import { isClaudeReady, type LlmSettings } from "../llm/client.ts";
-import { addAlias, addNote, addRuling, amend, cleanNote, findLearned, formPart, learn, namesakeOf, notesAbout, playerName, saysOnlyName, type Amendment } from "../llm/learning.ts";
+import { addAlias, addNote, addRuling, amend, cleanNote, findLearned, learn, namesakeOf, notesAbout, playerName, saysOnlyName, type Amendment } from "../llm/learning.ts";
 import { judgeWithClaude } from "../llm/judge.ts";
 import { movesWithClaude } from "../llm/moves.ts";
 import { loreWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
@@ -109,7 +109,7 @@ export class Resolver {
     const known = findLearned(this.onto, text);
     if (known !== undefined) return { ok: true, form: known, verb: null, novelty: { kind: "remembered", by: this.learnedSpec(known.id)?.discoveredBy ?? null } };
     // A lexicon form by its own name or alias, however spelt („Eichel Ober“, „Eichel-Ober“, „der Eichelober“): the original.
-    const named = text.trim() === formPart(text) ? namedForm(this.onto, text) : undefined;
+    const named = namedForm(this.onto, text);
     if (named !== undefined && !named.id.startsWith("g:")) return { ok: true, form: named, verb: null, novelty: null };
     const r = await parseWithClaude(this.onto, this.host.llm(), text);
     if (r === undefined) return { ok: false, reason: "Diese Gestalt lässt sich nicht fassen. Beschreibe sie anders." };
@@ -119,6 +119,7 @@ export class Resolver {
     // auf den Gegner ein“ is the house, attacking): whatever Claude read into such words is the move, not a new form.
     const plain = r.base !== null && sameName(r.form.name, r.base.name);
     if (plain && saysOnlyName(text, r.base.name)) return { ok: true, form: r.base, verb: r.intendedVerb, novelty: null };
+    // Claude's own verdict „just the lexicon form, nothing changed“ (a typo: „Wolff“) – the original, too.
     if (plain && (r.form.mods ?? []).length === 0 && r.delta.tags.length === 0 && r.delta.verbs.length === 0 && (r.delta.qualities ?? []).length === 0 && sameShape(r.form, r.base)) {
       return { ok: true, form: r.base, verb: r.intendedVerb, novelty: null };
     }
@@ -139,7 +140,7 @@ export class Resolver {
     const sketched = rows === undefined || r.sketch === undefined ? r.form : { ...r.form, sprite: rows, sketch: r.sketch };
     // the player's words stay: a name that dropped them („Gandalf“ for „zehnbeiniger Gandalf“) and is taken already gives way
     const taken = namesakeOf(this.learned, sketched, sketched.name) !== undefined || lookupKey(this.onto.formByAlias(lookupKey(sketched.name))?.name ?? "") === lookupKey(sketched.name);
-    const drawn = taken && !saysOnlyName(text, sketched.name) ? { ...sketched, name: playerName(text) } : sketched;
+    const drawn = taken && !saysOnlyName(text, sketched.name) ? { ...sketched, name: playerName(text, sketched.name) } : sketched;
     const discoverer = state.players[state.active].name;
     const l = learn(this.basePacks, this.learned, text, drawn, r.delta, { by: discoverer, at: this.host.today() });
     if (!l.ok) return { ok: false, reason: l.reason };

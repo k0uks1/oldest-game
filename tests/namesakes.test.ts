@@ -15,7 +15,7 @@ import type { ContentPack, FormSpec } from "../src/engine/ontology/pack.ts";
 import type { GameState } from "../src/engine/types.ts";
 import { Resolver } from "../src/game/resolver.ts";
 import { DEFAULT_SETTINGS } from "../src/llm/client.ts";
-import { emptyLearnedPack, mergeNamesakes, reconcileLearned } from "../src/llm/learning.ts";
+import { emptyLearnedPack, lexiconNames, mergeNamesakes, reconcileLearned } from "../src/llm/learning.ts";
 import { readLearnedFile } from "../server/learned.ts";
 
 const core = loadPack(CORE_PACK_RAW);
@@ -160,11 +160,13 @@ describe("Eine Gestalt, ein Eintrag", () => {
 
   it("repair: a stored name that kept the attack is cut back to the form's words", () => {
     const f: FormSpec = { id: "g:haus_stuerzt_auf_den_gegner_ein", name: "Haus, stürzt auf den Gegner ein", archetype: "house", scale: 4, plane: "materie", tags: ["stein"], verbs: ["trotzt"], base: "haus", aliases: ["haus stuerzt auf den gegner ein"] };
-    const fixed = mergeNamesakes({ ...emptyLearnedPack(), forms: [f] });
-    const [house] = fixed.forms;
-    assert.ok(house !== undefined);
+    const wild: FormSpec = { id: "g:veni_vidi_vici", name: "Veni, Vidi, Vici", archetype: "humanoid", scale: 3, plane: "geist", tags: ["mensch"], verbs: ["bannt"], aliases: ["veni vidi vici"] };
+    const fixed = mergeNamesakes({ ...emptyLearnedPack(), forms: [f, wild] }, lexiconNames([core]));
+    const [house, veni] = fixed.forms;
+    assert.ok(house !== undefined && veni !== undefined);
     assert.equal(house.name, "Haus");
     assert.deepEqual(house.aliases, ["haus stuerzt auf den gegner ein"], "its own first wording stays");
+    assert.equal(veni.name, "Veni, Vidi, Vici", "a wild name with commas stays whole – „Veni“ is no known form");
   });
 
   it("anchors: typos yes, lookalikes no – „unheiliger“ is not the monk's „heiliger“", async () => {

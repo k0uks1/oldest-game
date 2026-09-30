@@ -68,14 +68,28 @@ export function suggest(onto: Ontology, input: string, limit = 5): string[] {
  * read as modifiers (adjectives, compound prefixes, other nouns as elements).
  */
 /**
- * The keys a name may be meant by: as written, without a leading article, without any filler –
- * „ein Zeitalter der Finsternis“, „Flederm aus“ and „Eichel-Ober“ each meet their form's `lookupKey`.
+ * Words that only open a phrase („der“, „ein“, „ich bin ein“, „jetzt“). Particles like „von“, „zu“, „aus“, „und“,
+ * „mit“ are not among them: „von und zu Hohenstein“, „Hänsel und Gretel“ – they always belong to the name.
  */
-export function nameKeys(text: string): string[] {
+const OPENERS: ReadonlySet<string> = new Set([
+  "der", "die", "das", "den", "dem", "des", "ein", "eine", "einer", "eines", "einen", "einem",
+  "ich", "bin", "spiele", "werde", "nun", "jetzt", "dann", "so", "ist", "sein",
+]);
+
+/** The tokens of a name without the words that only open the phrase (at least one stays). */
+export function nameTokens(text: string): string[] {
   const tokens = tokenize(text);
   let lead = 0;
-  while (lead < tokens.length - 1 && STOPWORDS.has(tokens[lead] ?? "")) lead++;
-  return [...new Set([tokens.join(""), tokens.slice(lead).join(""), tokens.filter((t) => !STOPWORDS.has(t)).join("")])].filter((k) => k !== "");
+  while (lead < tokens.length - 1 && OPENERS.has(tokens[lead] ?? "")) lead++;
+  return tokens.slice(lead);
+}
+
+/**
+ * The keys a name may be meant by: as written, or without the words that open it – „ein Zeitalter der
+ * Finsternis“ and „Eichel-Ober“ meet their form's `lookupKey`. Words inside a name are never dropped.
+ */
+export function nameKeys(text: string): string[] {
+  return [...new Set([tokenize(text).join(""), nameTokens(text).join("")])].filter((k) => k !== "");
 }
 
 /** Do two names mean the same, however spelt („der Rost“ and „Rost“, „Eichel Ober“ and „Eichelober“)? */

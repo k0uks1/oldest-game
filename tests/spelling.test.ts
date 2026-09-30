@@ -11,8 +11,8 @@ import { CORE_PACK_RAW, loadPack } from "../src/content/index.ts";
 import { createGame } from "../src/engine/game.ts";
 import { Ontology, lookupKey } from "../src/engine/ontology/ontology.ts";
 import type { FormSpec } from "../src/engine/ontology/pack.ts";
-import { parseForm } from "../src/engine/parse.ts";
-import { hash32 } from "../src/engine/text.ts";
+import { STOPWORDS, namedForm, parseForm } from "../src/engine/parse.ts";
+import { hash32, tokenize } from "../src/engine/text.ts";
 import { Resolver } from "../src/game/resolver.ts";
 import { DEFAULT_SETTINGS } from "../src/llm/client.ts";
 import { emptyLearnedPack } from "../src/llm/learning.ts";
@@ -160,6 +160,63 @@ describe("Schreibweise macht keine neue Gestalt – für jede Gestalt des Lexiko
       await r.classify(state, `${adjectives[hash32(f.id) % adjectives.length] ?? "winziger"} ${f.name}`);
       assert.ok(claude.calls > before, `„… ${f.name}“ was asked`);
     }
+  });
+
+  it("words inside a name belong to it: „Hänsel und Gretel“ is not „Hänsel Gretel“, „Tiger im Tank“ not „Tiger Tank“", async () => {
+    // every lexicon name with a filler word after its first word – dropping it names another thing
+    const inner = forms.filter((f) => tokenize(f.name).slice(1).some((t) => STOPWORDS.has(t)));
+    assert.ok(inner.some((f) => f.id === "haensel") && inner.some((f) => f.id === "esso_tiger"));
+    const claude = fakeClaude(() => ({}));
+    const r = resolver();
+    const state = createGame(["A", "B"]);
+    for (const f of inner) {
+      const [first = "", ...rest] = tokenize(f.name);
+      const stripped = [first, ...rest.filter((t) => !STOPWORDS.has(t))].join(" ");
+      assert.notEqual(namedForm(onto, stripped)?.id, f.id, `„${stripped}“ is not ${f.name}`);
+      const before = claude.calls;
+      await r.classify(state, stripped);
+      assert.ok(claude.calls > before, `„${stripped}“ goes to Claude`);
+    }
+  });
+
+  it("wild names stay whole: particles and additions around a lexicon name make the player's own form", async () => {
+    // a sample moving through the lexicon, each with other particles – „Mann von und zu Hohenstein“, „Graf von Tiger“ …
+    const wild = [(n: string): string => `${n} von und zu Hohenstein`, (n: string): string => `Graf von ${n}`, (n: string): string => `${n} aus dem Nebel`, (n: string): string => `${n} zu Guttenberg`, (n: string): string => `${n} und die sieben Zwerge`, (n: string): string => `${n} von und zu`, (n: string): string => `von und zu ${n}`, (n: string): string => `${n} aus dem Off`];
+    const sample = forms.filter((_, i) => i % 61 === 29);
+    assert.ok(sample.length >= 16);
+    let answer: Record<string, unknown> = {};
+    const claude = fakeClaude(() => answer);
+    const r = resolver();
+    const state = createGame(["A", "B"]);
+    for (const [i, f] of sample.entries()) {
+      const text = (wild[i % wild.length] ?? wild[0] ?? ((n: string) => n))(f.name);
+      assert.equal(namedForm(onto, text), undefined, `„${text}“ is no lexicon name`);
+      // Claude keeps the player's naming and builds on the lexicon form
+      answer = { ...claudeSays(f, text, false), zusaetze: [text.replace(f.name, "").trim()] };
+      const before = claude.calls;
+      const c = await r.classify(state, text);
+      assert.ok(claude.calls > before, `„${text}“ was asked`);
+      assert.ok(c.ok, text);
+      assert.notEqual(c.form.id, f.id, `„${text}“ is not plain ${f.name}`);
+      assert.equal(c.form.name.toLowerCase(), text.toLowerCase(), "every word of the name stays");
+    }
+  });
+
+  it("a comma inside a wild name is part of it – only an attack after a known form is cut off", async () => {
+    const invented = { name: "Veni, Vidi, Vici", base: null, scale: 3, plane: "geist", archetype: "humanoid", properties: ["mensch", "magisch"], mechanisms: ["bannt"], weaknesses: ["mensch"], intended_mechanism: null };
+    fakeClaude(() => invented);
+    const r = resolver();
+    const state = createGame(["A", "B"]);
+    const v = await r.classify(state, "Veni, Vidi, Vici");
+    assert.ok(v.ok, v.ok ? "" : v.reason);
+    assert.equal(v.form.name, "Veni, Vidi, Vici");
+    // Claude answers with a taken lexicon name whose words are not all before the comma: the whole text stays
+    const haensel = core.forms.find((f) => f.id === "haensel");
+    assert.ok(haensel !== undefined);
+    fakeClaude(() => ({ ...claudeSays(haensel, haensel.name), zusaetze: ["mit der Hexe"] }));
+    const h = await r.classify(state, "Hänsel, Gretel und die Hexe");
+    assert.ok(h.ok, h.ok ? "" : h.reason);
+    assert.equal(h.form.name, "Hänsel, Gretel und die Hexe");
   });
 
   it("live mode: a varied form keeps the player's form words as its name – never the attack", async () => {
