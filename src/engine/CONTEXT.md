@@ -10,7 +10,8 @@ the game reducer applies cost, echo and escalation. The LLM never decides here (
 - `game.ts` – immutable game state reducer: `createGame` / `play` / `pass`
 - `attempt.ts` – player-facing move without foreknowledge: success / failure (costs Wille) / rejected
 - `cost.ts` – Wille cost, overkill surcharge, underdog refund, eleganz
-- `parse.ts` – mechanical parser (DEBUG ONLY in the game; used for anchors & tests)
+- `parse.ts` – mechanical parser (DEBUG ONLY in the game; used for anchors & tests). `namedForm`/`sameName`: a form named
+  outright, however spelt – shared with the live path (`Resolver.classify`), checked for every lexicon form in `tests/spelling.test.ts`
 - `text.ts` – `hash32` / `rng` for seeded randomness
 
 ## Core invariants here (numbering as in `AGENTS.md`)

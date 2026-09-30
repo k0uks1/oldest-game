@@ -9,12 +9,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { CORE_PACK_RAW, loadPack } from "../src/content/index.ts";
-import { createGame } from "../src/engine/game.ts";
+import { createGame, play } from "../src/engine/game.ts";
 import { Ontology } from "../src/engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../src/engine/ontology/pack.ts";
+import type { GameState } from "../src/engine/types.ts";
 import { Resolver } from "../src/game/resolver.ts";
 import { DEFAULT_SETTINGS } from "../src/llm/client.ts";
-import { emptyLearnedPack, mergeNamesakes, reconcileLearned } from "../src/llm/learning.ts";
+import { emptyLearnedPack, lexiconNames, mergeNamesakes, reconcileLearned } from "../src/llm/learning.ts";
 import { readLearnedFile } from "../server/learned.ts";
 
 const core = loadPack(CORE_PACK_RAW);
@@ -59,6 +60,16 @@ function resolver(): Resolver {
   });
 }
 
+/** A duel past its opening (a mouse on the board) – the opening allows only small forms. */
+function afterOpening(): GameState {
+  const onto = Ontology.compile([core]);
+  const mouse = onto.formById("maus");
+  assert.ok(mouse !== undefined);
+  const r = play(onto, createGame(["A", "B"]), mouse, null);
+  assert.ok(r.ok);
+  return r.value;
+}
+
 describe("Eine Gestalt, ein Eintrag", () => {
   it("the same thing in other words is the known form, remembered – and the new wording is learned", async () => {
     const r = resolver();
@@ -75,20 +86,20 @@ describe("Eine Gestalt, ein Eintrag", () => {
     assert.equal(asked.filter((t) => t === "gestalt").length, parses, "the new wording is known now – no Claude call");
   });
 
-  it("words beyond the name make another form: the ten-legged Gandalf stays ten-legged", async () => {
-    const gandalf = { name: "Gandalf", base: null, scale: 3, plane: "geist", archetype: "humanoid", properties: ["mensch", "magisch"], mechanisms: ["bannt"], weaknesses: ["mensch"], intended_mechanism: null };
+  it("words beyond the name make another form: the ten-legged Rincewind stays ten-legged", async () => {
+    const rincewind = { name: "Rincewind", base: null, scale: 3, plane: "geist", archetype: "humanoid", properties: ["mensch", "magisch"], mechanisms: ["bannt"], weaknesses: ["mensch"], intended_mechanism: null };
     const r = resolver();
-    fakeClaude(gandalf);
-    const plain = await r.resolve(createGame(["A", "B"]), "Gandalf");
+    fakeClaude(rincewind);
+    const plain = await r.resolve(createGame(["A", "B"]), "Rincewind");
     assert.ok(plain.kind === "turn");
-    // Claude calls the joke form just „Gandalf“ again (with its extra legs in the properties)
-    fakeClaude({ ...gandalf, properties: ["mensch", "magisch", "schnell"] });
-    const ten = await r.resolve(createGame(["A", "B"]), "zehnbeiniger Gandalf");
+    // Claude calls the joke form just „Rincewind“ again (with its extra legs in the properties)
+    fakeClaude({ ...rincewind, properties: ["mensch", "magisch", "schnell"] });
+    const ten = await r.resolve(createGame(["A", "B"]), "zehnbeiniger Rincewind");
     assert.ok(ten.kind === "turn");
     assert.notEqual(ten.turn.form.id, plain.turn.form.id);
-    assert.equal(ten.turn.form.name, "Zehnbeiniger Gandalf", "the player's words, since „Gandalf“ is taken");
+    assert.equal(ten.turn.form.name, "Zehnbeiniger Rincewind", "the player's words, since „Rincewind“ is taken");
     // and it is recognised by its own words from now on – still ten-legged
-    const again = await r.resolve(createGame(["A", "B"]), "zehnbeiniger Gandalf");
+    const again = await r.resolve(createGame(["A", "B"]), "zehnbeiniger Rincewind");
     assert.ok(again.kind === "turn");
     assert.equal(again.turn.form.id, ten.turn.form.id);
   });
@@ -117,6 +128,45 @@ describe("Eine Gestalt, ein Eintrag", () => {
     const m = await r.resolve(createGame(["A", "B"]), "ein Mönch");
     assert.ok(m.kind === "turn");
     assert.equal(m.turn.form.id, "moench");
+  });
+
+  it("spelling does not make another form: „Eichel Ober“, „Eichel-Ober“, „Eichel Ober Gang“ are the lexicon's", async () => {
+    // Claude would call it a variation – it is never asked
+    const asked = fakeClaude({ name: "Eichel Ober", base: "eichelober", scale: 4, plane: "leben", archetype: "humanoid", properties: ["laut"], mechanisms: [], weaknesses: [], intended_mechanism: null, zusaetze: ["Eichel Ober"] });
+    const r = resolver();
+    for (const [text, id] of [["Eichel Ober", "eichelober"], ["Eichel-Ober", "eichelober"], ["der eichelober", "eichelober"], ["Eichel Ober Gang", "eichelober_gang"], ["Eichelober Gang", "eichelober_gang"]] as const) {
+      const t = await r.resolve(afterOpening(), text);
+      assert.ok(t.kind === "turn", text);
+      assert.equal(t.turn.form.id, id, text);
+    }
+    assert.equal(asked.filter((t) => t === "gestalt").length, 0, "no Claude call for a spelling");
+    assert.equal(r.learned.forms.length, 0, "nothing learned");
+  });
+
+  it("how a form attacks is not its name: „Haus, stürzt auf den Gegner ein“ is the house", async () => {
+    // Claude reads the collapse into the house as a variation
+    fakeClaude({ name: "Haus", base: "haus", scale: 4, plane: "materie", archetype: "house", properties: ["masse"], mechanisms: ["begraebt"], weaknesses: [], intended_mechanism: "begraebt", zusaetze: ["stürzt ein"] });
+    const r = resolver();
+    const t = await r.resolve(afterOpening(), "Haus, stürzt auf den Gegner ein");
+    assert.ok(t.kind === "turn");
+    assert.equal(t.turn.form.id, "haus");
+    assert.equal(r.learned.forms.length, 0, "no grimoire entry");
+    // a real variation with a clause keeps the player's form words only
+    fakeClaude({ name: "Haus", base: "haus", scale: 5, plane: "materie", archetype: "house", properties: ["brennt"], mechanisms: [], weaknesses: [], intended_mechanism: null, zusaetze: ["brennend"] });
+    const b = await r.resolve(afterOpening(), "brennendes Haus, stürzt ein");
+    assert.ok(b.kind === "turn");
+    assert.equal(b.turn.form.name, "Brennendes Haus");
+  });
+
+  it("repair: a stored name that kept the attack is cut back to the form's words", () => {
+    const f: FormSpec = { id: "g:haus_stuerzt_auf_den_gegner_ein", name: "Haus, stürzt auf den Gegner ein", archetype: "house", scale: 4, plane: "materie", tags: ["stein"], verbs: ["trotzt"], base: "haus", aliases: ["haus stuerzt auf den gegner ein"] };
+    const wild: FormSpec = { id: "g:veni_vidi_vici", name: "Veni, Vidi, Vici", archetype: "humanoid", scale: 3, plane: "geist", tags: ["mensch"], verbs: ["bannt"], aliases: ["veni vidi vici"] };
+    const fixed = mergeNamesakes({ ...emptyLearnedPack(), forms: [f, wild] }, lexiconNames([core]));
+    const [house, veni] = fixed.forms;
+    assert.ok(house !== undefined && veni !== undefined);
+    assert.equal(house.name, "Haus");
+    assert.deepEqual(house.aliases, ["haus stuerzt auf den gegner ein"], "its own first wording stays");
+    assert.equal(veni.name, "Veni, Vidi, Vici", "a wild name with commas stays whole – „Veni“ is no known form");
   });
 
   it("anchors: typos yes, lookalikes no – „unheiliger“ is not the monk's „heiliger“", async () => {

@@ -39,8 +39,15 @@ content through validation. Client, parser (text → Form), narrator, referee, j
    pack deltas (`PackDelta.qualities`). One thing, one entry: a learned form of the same name, base and variations is
    reused only when the player's words say nothing beyond its name („die Bibel“; `namesakeOf` → `addAlias`) – words
    beyond it („zehnbeiniger Gandalf“) make another form, named in the player's words if Claude's name is taken
-   (`playerName`). On load only exact twins (same name *and* shape) are folded (`mergeNamesakes`), and wordings that say
-   more than a form's name come off it again (they belong to another form).
+   (`playerName`). Spelling never makes another form: a lexicon form typed by its name or a declared alias in any
+   spelling („Eichel Ober“, „eichel-ober“, „ein Zeitalter der Finsternis“ – `namedForm` → `Ontology.formByName`; the
+   debug parser uses the same) is played without asking Claude, and a Claude answer whose name only differs in spelling
+   from its base is the base. Only words that *open* a phrase may drop („der“, „ich bin ein“); particles and every word
+   inside a name belong to it („Hänsel und Gretel“, „… von und zu Hohenstein“ – `nameTokens`). What follows a comma,
+   colon or spaced dash says how the form attacks (`formPart`) – but only once the words before it hold the whole name;
+   otherwise the comma is part of a wild name („Hänsel, Gretel und die Hexe“, „Veni, Vidi, Vici“). On load only exact
+   twins (same name *and* shape) are folded (`mergeNamesakes`), wordings that say more than a form's name come off it
+   again (they belong to another form), and a stored name that kept an attack after a known form is cut back.
 
 ## Claude integration
 

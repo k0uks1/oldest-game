@@ -1,8 +1,8 @@
 import { Ontology, OntologyError, lookupKey } from "../engine/ontology/ontology.ts";
 import { parsePack, type ContentPack, type FormSpec, type NoteSpec, type QualitySpec, type RulingSpec, type TagSpec, type VerbSpec } from "../engine/ontology/pack.ts";
-import { STOPWORDS } from "../engine/parse.ts";
+import { nameTokens, namedForm, sameName } from "../engine/parse.ts";
 import { findCounters } from "../engine/rules.ts";
-import { normalize, tokenize } from "../engine/text.ts";
+import { normalize } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 
 /**
@@ -362,19 +362,42 @@ export function notesAbout(learned: ContentPack, ids: readonly string[], limit =
 const MAX_ALIASES = 12;
 
 /** The meaningful words of a text (fillers like „die“, „ein“ dropped). */
+/** The words that make a name – only the words that open a phrase („die“, „ich bin ein“) are dropped. */
 function words(text: string): Set<string> {
-  return new Set(tokenize(text).filter((w) => !STOPWORDS.has(w)));
+  return new Set(nameTokens(text));
 }
 
-/** Does the text say nothing beyond the name („die Bibel“ for Bibel – but not „zehnbeiniger Gandalf“ for Gandalf)? */
+/**
+ * The part of a player's text that names the form – what follows a comma, semicolon, colon or a
+ * spaced dash says how it attacks („Haus, stürzt auf den Gegner ein“ → „Haus“).
+ */
+export function formPart(text: string): string {
+  const head = (text.split(/[,;:]|\s[–—-]\s/)[0] ?? "").trim();
+  return head === "" ? text.trim() : head;
+}
+
+/**
+ * Does the text say nothing beyond the name („die Bibel“ for Bibel, „Eichel Ober“ for Eichelober – but not
+ * „zehnbeiniger Gandalf“ for Gandalf)? Only the form part counts, not how it attacks.
+ */
 export function saysOnlyName(text: string, name: string): boolean {
   const n = words(name);
-  return [...words(text)].every((w) => n.has(w));
+  const part = formPartOf(text, name);
+  return [...words(part)].every((w) => n.has(w)) || sameName(part, name);
+}
+
+/**
+ * The form part of a text meant as `name`: the attack after a comma is cut off only when the words before it hold
+ * the whole name („Haus, stürzt ein“) – otherwise the comma is part of a wild name („Hänsel, Gretel und die Hexe“).
+ */
+function formPartOf(text: string, name: string): string {
+  const head = formPart(text);
+  return isSubset(words(name), words(head)) || sameName(head, name) ? head : text.trim();
 }
 
 /** What makes two learned forms the same thing: name, the lexicon form they vary, and how. */
 function sameThingKey(f: { readonly name: string; readonly base?: string | undefined; readonly mods?: readonly string[] | undefined }): string {
-  return `${normalize(f.name)}\u0000${f.base ?? ""}\u0000${(f.mods ?? []).map((m) => normalize(m)).join("|")}`;
+  return `${lookupKey(f.name)}\u0000${f.base ?? ""}\u0000${(f.mods ?? []).map((m) => normalize(m)).join("|")}`;
 }
 
 /** …and exactly the same shape – only such twins are folded on load (a ten-legged Gandalf is another Gandalf). */
@@ -399,9 +422,14 @@ export function namesakeOf(learned: ContentPack, form: Pick<Form, "name" | "base
  * The player's words as a name – when Claude's name dropped what the player added („Gandalf“ for
  * „zehnbeiniger Gandalf“) and that name is taken already.
  */
-export function playerName(text: string): string {
-  const clean = text.replace(/[\p{C}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 40);
+export function playerName(text: string, taken: string): string {
+  const clean = formPartOf(text, taken).replace(/[\p{C}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 40);
   return clean.charAt(0).toLocaleUpperCase("de") + clean.slice(1);
+}
+
+/** Every word of `small` in `big`. */
+function isSubset(small: ReadonlySet<string>, big: ReadonlySet<string>): boolean {
+  return [...small].every((w) => big.has(w));
 }
 
 /** Every word of `small` in `big`, and `big` has more. */
@@ -427,7 +455,7 @@ export function addAlias(base: readonly ContentPack[], learned: ContentPack, id:
  * different wordings) into the first: its aliases grow, and precedents, notes and Siegweg evidence
  * that named a later twin name the first. Nothing else changes.
  */
-export function mergeNamesakes(pack: ContentPack): ContentPack {
+export function mergeNamesakes(pack: ContentPack, named: (text: string) => boolean = () => false): ContentPack {
   const firstOf = new Map<string, number>();
   const moved = new Map<string, string>();
   const forms: FormSpec[] = [];
@@ -445,10 +473,15 @@ export function mergeNamesakes(pack: ContentPack): ContentPack {
   }
   // repair: a wording that says more than the name („zehnbeiniger gandalf“ on Gandalf) belongs to another
   // form – earlier merges hung such aliases on the plain one. Its own first wording (the id) stays.
+  // A name that kept how the form attacks („Haus, stürzt auf den Gegner ein“) is cut back to the form it names –
+  // only when that is a known form; a wild name with a comma („Veni, Vidi, Vici“) stays whole.
   const repaired = forms.map((f) => {
     const own = f.id.startsWith("g:") ? f.id.slice(2) : f.id;
-    const keep = (f.aliases ?? []).filter((a) => slug(a) === own || saysOnlyName(a, f.name) || !isSuperset(words(a), words(f.name)));
-    return keep.length === (f.aliases ?? []).length ? f : { ...f, aliases: keep };
+    const head = formPart(f.name);
+    const name = head !== f.name && named(head) ? head : f.name;
+    const keep = (f.aliases ?? []).filter((a) => slug(a) === own || saysOnlyName(a, name) || !isSuperset(words(a), words(name)));
+    if (keep.length === (f.aliases ?? []).length && name === f.name) return f;
+    return { ...f, name, aliases: keep };
   });
   const aliasesFixed = repaired.some((f, i) => f !== forms[i]);
   if (moved.size === 0 && !aliasesFixed) return pack;
@@ -494,9 +527,18 @@ export function mergeNamesakes(pack: ContentPack): ContentPack {
  * in favour of the core, and any form that no longer compiles is left out instead of
  * discarding the whole pack. Returns undefined if nothing usable remains.
  */
+/** Does a text name a form of these packs outright (for repairs on load)? */
+export function lexiconNames(base: readonly ContentPack[]): (text: string) => boolean {
+  let onto: Ontology | undefined;
+  return (text) => {
+    onto ??= Ontology.compile(base);
+    return namedForm(onto, text) !== undefined;
+  };
+}
+
 export function reconcileLearned(base: readonly ContentPack[], stored: ContentPack): ContentPack | undefined {
   // a form learned twice from different wordings is one grimoire entry
-  const pack = mergeNamesakes(stored);
+  const pack = mergeNamesakes(stored, lexiconNames(base));
   const ids = (pick: (p: ContentPack) => readonly { readonly id: string }[]): Set<string> =>
     new Set(base.flatMap((p) => pick(p).map((x) => x.id)));
   const tags = ids((p) => p.tags);

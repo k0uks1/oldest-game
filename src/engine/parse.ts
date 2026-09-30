@@ -67,9 +67,55 @@ export function suggest(onto: Ontology, input: string, limit = 5): string[] {
  * The last phrase naming a lexicon entry is the head; everything else is
  * read as modifiers (adjectives, compound prefixes, other nouns as elements).
  */
+/**
+ * Words that only open a phrase („der“, „ein“, „ich bin ein“, „jetzt“). Particles like „von“, „zu“, „aus“, „und“,
+ * „mit“ are not among them: „von und zu Hohenstein“, „Hänsel und Gretel“ – they always belong to the name.
+ */
+const OPENERS: ReadonlySet<string> = new Set([
+  "der", "die", "das", "den", "dem", "des", "ein", "eine", "einer", "eines", "einen", "einem",
+  "ich", "bin", "spiele", "werde", "nun", "jetzt", "dann", "so", "ist", "sein",
+]);
+
+/** The tokens of a name without the words that only open the phrase (at least one stays). */
+export function nameTokens(text: string): string[] {
+  const tokens = tokenize(text);
+  let lead = 0;
+  while (lead < tokens.length - 1 && OPENERS.has(tokens[lead] ?? "")) lead++;
+  return tokens.slice(lead);
+}
+
+/**
+ * The keys a name may be meant by: as written, or without the words that open it – „ein Zeitalter der
+ * Finsternis“ and „Eichel-Ober“ meet their form's `lookupKey`. Words inside a name are never dropped.
+ */
+export function nameKeys(text: string): string[] {
+  return [...new Set([tokenize(text).join(""), nameTokens(text).join("")])].filter((k) => k !== "");
+}
+
+/** Do two names mean the same, however spelt („der Rost“ and „Rost“, „Eichel Ober“ and „Eichelober“)? */
+export function sameName(a: string, b: string): boolean {
+  const kb = nameKeys(b);
+  return nameKeys(a).some((k) => kb.includes(k));
+}
+
+/**
+ * The form a text names outright: its own name, id or declared alias, however spelt – joined, spaced,
+ * hyphenated, any case, with or without an article („ein Zeitalter der Finsternis“, „Eichel-Ober“).
+ */
+export function namedForm(onto: Ontology, text: string): Form | undefined {
+  for (const k of nameKeys(text)) {
+    const f = onto.formByName(k);
+    if (f !== undefined) return f;
+  }
+  return undefined;
+}
+
 export function parseForm(onto: Ontology, input: string): ParseResult {
   const tokens = tokenize(input).filter((t) => !STOPWORDS.has(t));
   if (tokens.length === 0) return { ok: false, error: "Beschreibe eine Gestalt.", suggestions: [] };
+  // 0. the whole input is a form's own name or alias, however spelt („Zeitalter der Finsternis“, „Eichel Ober“)
+  const named = namedForm(onto, input);
+  if (named !== undefined) return { ok: true, form: named, base: named, modifiers: [], ignored: [] };
 
   let head: HeadHit | undefined;
   let headStart = -1;
