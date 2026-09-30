@@ -6,7 +6,7 @@
 import type { PixelImage } from "./sprite.ts";
 
 /** Johnny by name – and anything that is plainly a singing or dancing cactus. */
-export const JOHNNY_NAME = /j(o|oh)nny|(sing|tanz|sprech)ende?r?\s*kaktus|tanzkaktus|dancing\s*cactus/i;
+export const JOHNNY_NAME = /jo?h?nny\s*-?\s*gnadenlos|(sing|tanz|sprech)ende?r?\s*kaktus|tanzkaktus|dancing\s*cactus/i;
 
 export function isJohnny(name: string): boolean {
   return JOHNNY_NAME.test(name);

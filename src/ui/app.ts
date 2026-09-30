@@ -25,9 +25,6 @@ import { Resolver, type Novelty, type PlayedOutcome, type Turn } from "../game/r
 import { attackOutcome, attackStyle, easterEggFor, type AttackStyle } from "../render/arena.ts";
 import { SIGNATURE_CRY, signatureFor } from "../render/eichel.ts";
 import { isJohnny, parrot, songCry, songFor } from "../render/johnny.ts";
-
-/** Johnny's mechanisms that throw the opponent's words back at it; against the eloquent he always does (else he sings). */
-const MOCKING: ReadonlySet<string> = new Set(["aefft_nach", "zieht_ins_laecherliche"]);
 import { createArena, type Arena } from "../render/arenas.ts";
 import { clear, h } from "./dom.ts";
 import { OnlineLink, type LinkStart, type LinkStatus } from "../online/link.ts";
@@ -50,6 +47,9 @@ import { ANIM_ACTION_IDS, animLabel, MOVE_ACTIONS, type AnimAction } from "../on
 /** The general moves, for forms without their own. */
 const GENERAL_ANIMS = ANIM_ACTION_IDS.filter((a) => !(MOVE_ACTIONS as readonly string[]).includes(a));
 import { Sound } from "./sound.ts";
+
+/** Johnny's mechanisms that throw the opponent's words back at it; against the eloquent he always does (else he sings). */
+const MOCKING: ReadonlySet<string> = new Set(["aefft_nach", "zieht_ins_laecherliche"]);
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));

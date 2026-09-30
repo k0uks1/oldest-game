@@ -42,7 +42,9 @@ describe("Johnny Gnadenlos, the singing cactus", () => {
     assert.equal(signatureFor("Johnny Gnadenlos"), "klassiker");
     assert.equal(signatureFor("ein singender Kaktus"), "klassiker");
     assert.equal(signatureFor("Kaktus"), null);
-    assert.ok(isJohnny("Jonny"));
+    assert.ok(isJohnny("Jonny Gnadenlos"));
+    assert.equal(signatureFor("Johnny Cash"), null, "not every Johnny is a cactus");
+    assert.ok(!isJohnny("Johnny Depp"));
   });
 
   it("claims thirty songs, sings the same five in a row – and gets more tiresome", () => {
