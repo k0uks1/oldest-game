@@ -55,16 +55,22 @@ export interface HubLimits {
   readonly claudeMovesPerHour: number;
   /** A room nobody joined is closed after this long. */
   readonly waitingTtlMs: number;
-  /** A room without activity is closed after this long. */
+  /**
+   * A running duel stays open until it ends – even with nobody connected (players may come back
+   * hours later). Only this long without any activity closes it anyway.
+   */
   readonly idleTtlMs: number;
-  /** A room without any connection is closed after this long. */
+  /** A finished duel is closed after this long without activity … */
+  readonly finishedTtlMs: number;
+  /** … or this long without any connection. */
   readonly abandonedTtlMs: number;
   /** A seat without connection this long may be taken by anyone who joins with the room code. */
   readonly seatFreeAfterMs: number;
 }
 
 export const DEFAULT_LIMITS: HubLimits = {
-  maxRooms: 200,
+  // rooms live until their duel ends – room for many long-running ones
+  maxRooms: 1000,
   watchersPerRoom: 20,
   // generous: friends often share one address (home router, office NAT)
   connectionsPerIp: 24,
@@ -73,8 +79,9 @@ export const DEFAULT_LIMITS: HubLimits = {
   burstWindowMs: 10_000,
   moveGapMs: 1_500,
   claudeMovesPerHour: 600,
-  waitingTtlMs: 60 * 60_000,
-  idleTtlMs: 3 * 60 * 60_000,
+  waitingTtlMs: 24 * 60 * 60_000,
+  idleTtlMs: 14 * 24 * 60 * 60_000,
+  finishedTtlMs: 3 * 60 * 60_000,
   abandonedTtlMs: 15 * 60_000,
   seatFreeAfterMs: 5 * 60_000,
 };
@@ -88,6 +95,8 @@ export interface HubOptions {
   readonly epilogue: (state: GameState) => Promise<string>;
   /** Persist the shared learned pack (called after every change). */
   readonly persist?: (pack: ContentPack) => void;
+  /** Rooms changed – persist `hub.saved()` (debounce it), so a restart does not end any duel. */
+  readonly roomsChanged?: () => void;
   readonly now?: () => number;
   readonly log?: (line: string) => void;
   /** Generated pictures (optional): look one up for a form, starting generation if needed. */
@@ -146,6 +155,21 @@ interface Room {
   /** "Beleben": animations left per seat in this duel, and the ones made so far. */
   animLeft: [number, number];
   anims: AnimItem[];
+}
+
+/** A room as kept on disk: everything but connections and what is only true while running. */
+export interface SavedRoom {
+  readonly code: string;
+  readonly seats: readonly [Seat | null, Seat | null];
+  readonly sameDevice: boolean;
+  readonly watchers: readonly string[];
+  readonly state: GameState | null;
+  readonly seq: number;
+  readonly chronicle: readonly ChronicleEntry[];
+  readonly epilogue: string | null;
+  readonly created: number;
+  readonly lastActive: number;
+  readonly animLeft: readonly [number, number];
 }
 
 export class Conn {
@@ -296,27 +320,83 @@ export class OnlineHub {
     }
   }
 
-  /** Close rooms that are over, abandoned or idle. Call periodically. */
+  /**
+   * Close rooms nobody joined, finished duels nobody looks at any more, and duels without any
+   * activity for `idleTtlMs`. A running duel is never closed just because nobody is connected.
+   * Call periodically.
+   */
   sweep(): void {
     const now = this.now();
     const L = this.limits;
+    let closed = false;
     for (const [code, r] of this.rooms) {
+      const quiet = now - r.lastActive;
       const waiting = r.state === null && now - r.created > L.waitingTtlMs;
-      const idle = now - r.lastActive > L.idleTtlMs;
-      const abandoned = r.emptySince !== null && now - r.emptySince > L.abandonedTtlMs;
-      if (!waiting && !idle && !abandoned) continue;
+      const idle = quiet > L.idleTtlMs;
+      const over = r.state?.phase === "finished" && (quiet > L.finishedTtlMs || (r.emptySince !== null && now - r.emptySince > L.abandonedTtlMs));
+      if (!waiting && !idle && !over) continue;
       for (const c of r.conns) {
         c.peer.send({ t: "error", code: "noroom", message: "Der Raum wurde geschlossen." });
         c.room = null;
       }
       this.rooms.delete(code);
+      closed = true;
     }
+    if (closed) this.opts.roomsChanged?.();
     for (const [ip, stamps] of this.roomsByIp) {
       const recent = stamps.filter((t) => now - t < 3_600_000);
       if (recent.length === 0) this.roomsByIp.delete(ip);
       else this.roomsByIp.set(ip, recent);
     }
     this.claudeMoves = this.claudeMoves.filter((t) => now - t < 3_600_000);
+  }
+
+  // ── persistence ─────────────────────────────────────────────────────────
+
+  /** Every room as it would survive a restart. */
+  saved(): SavedRoom[] {
+    return [...this.rooms.values()].map((r) => ({
+      code: r.code,
+      seats: r.seats,
+      sameDevice: r.sameDevice,
+      watchers: [...r.watchers],
+      state: r.state,
+      seq: r.seq,
+      chronicle: r.chronicle,
+      epilogue: r.epilogue,
+      created: r.created,
+      lastActive: r.lastActive,
+      animLeft: r.animLeft,
+    }));
+  }
+
+  /** Bring back rooms saved before a restart: nobody is connected yet, every seat waits for its player. */
+  restore(rooms: readonly SavedRoom[]): void {
+    const now = this.now();
+    for (const s of rooms) {
+      if (this.rooms.has(s.code)) continue;
+      this.rooms.set(s.code, {
+        code: s.code,
+        seats: [s.seats[0], s.seats[1]],
+        sameDevice: s.sameDevice,
+        conns: new Set(),
+        watchers: new Set(s.watchers),
+        state: s.state,
+        busy: false,
+        seq: s.seq,
+        chronicle: [...s.chronicle],
+        epilogue: s.epilogue,
+        created: s.created,
+        lastActive: s.lastActive,
+        lastMove: 0,
+        emptySince: now,
+        away: [s.seats[0] === null ? null : now, s.seats[1] === null ? null : now],
+        animLeft: [s.animLeft[0], s.animLeft[1]],
+        anims: [],
+      });
+    }
+    // a finished duel whose epilogue was lost in the restart gets it now
+    for (const r of this.rooms.values()) if (r.state?.phase === "finished" && r.epilogue === null) void this.finish(r);
   }
 
   // ── lobby ───────────────────────────────────────────────────────────────
@@ -486,6 +566,8 @@ export class OnlineHub {
     room.lastActive = this.now();
     this.sendWelcome(c, room);
     this.broadcast(room, { t: "presence", players: this.presence(room), watchers: this.watcherCount(room) }, c);
+    // seats and tokens may be new (create, join, take back)
+    this.opts.roomsChanged?.();
   }
 
   private leave(c: Conn): void {
@@ -569,6 +651,7 @@ export class OnlineHub {
     };
     room.chronicle.push(entry);
     this.broadcast(room, { t: "turn", seq, turn });
+    this.opts.roomsChanged?.();
     const finished = turn.state.phase === "finished";
     let text2: string;
     try {
@@ -579,6 +662,7 @@ export class OnlineHub {
     const i = room.chronicle.indexOf(entry);
     if (i >= 0) room.chronicle[i] = { ...entry, text: text2 };
     this.broadcast(room, { t: "narration", seq, text: text2 });
+    this.opts.roomsChanged?.();
     if (finished) await this.finish(room);
   }
 
@@ -592,6 +676,7 @@ export class OnlineHub {
     room.state = next;
     room.lastActive = this.now();
     this.broadcast(room, { t: "resigned", seat, state: next });
+    this.opts.roomsChanged?.();
     void this.finish(room);
   }
 
@@ -607,6 +692,7 @@ export class OnlineHub {
     if (room.state !== state) return;
     room.epilogue = text;
     this.broadcast(room, { t: "epilogue", text });
+    this.opts.roomsChanged?.();
   }
 
   private rematch(c: Conn): void {
@@ -628,6 +714,7 @@ export class OnlineHub {
     room.lastActive = this.now();
     // Seats may have swapped – every client gets a fresh welcome.
     for (const conn of room.conns) this.sendWelcome(conn, room);
+    this.opts.roomsChanged?.();
   }
 
   private sendWelcome(c: Conn, room: Room): void {

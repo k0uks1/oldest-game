@@ -1,18 +1,29 @@
-# online-play Specification
+## ADDED Requirements
 
-## Purpose
+### Requirement: Räume leben bis zum Ende des Duells
 
-Zwei Spieler duellieren sich über einen maßgeblichen Server; Zuschauer können zusehen. Laufende Duelle bleiben offen, auch wenn niemand verbunden ist, und überstehen einen Neustart des Servers; Benachrichtigungen und das Nachspielen verpasster Züge fehlen noch (asynchrones Spiel: Issue #76). Details: `server/CONTEXT.md`, Protokoll in `src/online/protocol.ts`.
+Ein Raum mit laufendem Duell SHALL offen bleiben, auch wenn kein Spieler verbunden ist, und MUST einen Neustart des Servers überstehen (gespeichert in `online-rooms.json` neben dem gelernten Paket). Nur ein laufendes Duell ganz ohne Aktivität für 14 Tage SHALL geschlossen werden. Ein beendetes Duell SHALL nach 15 min ohne Verbindung oder 3 h ohne Aktivität geschlossen werden, ein Raum ohne zweiten Spieler nach 24 h.
 
-## Requirements
+#### Scenario: Beide tabben raus
+- **WHEN** beide Spieler eines laufenden Duells einen Tag lang keine Verbindung haben
+- **THEN** besteht der Raum weiter, und `resume` bringt jeden auf seinen Platz mit dem aktuellen Zustand
 
-### Requirement: Der Server ist maßgeblich
+#### Scenario: Server-Neustart
+- **WHEN** der Server während eines laufenden Duells neu startet
+- **THEN** ist der Raum danach wieder da, und die Spieler kehren per `resume` oder per Name zurück
 
-Der Server SHALL den Spielzustand und den Claude-Key halten und Züge mit demselben `Resolver` wie der Hot-Seat auflösen. Clients MUST NOT Online-Züge selbst auflösen; sie erhalten `turn`, `narration` und `learned`.
+#### Scenario: Beendetes Duell
+- **WHEN** ein Duell beendet ist und 15 Minuten niemand verbunden ist
+- **THEN** ist der Raum weg und `resume` meldet „Diesen Raum gibt es nicht mehr.“
 
-#### Scenario: Ein Zug online
-- **WHEN** ein Spieler online einen Zug schickt
-- **THEN** löst der Server ihn auf und sendet `turn` (mit fortlaufender `seq`) und danach `narration` an alle im Raum
+## REMOVED Requirements
+
+### Requirement: Kurzlebige Räume
+
+**Reason**: Laufende Duelle endeten, sobald beide Spieler 15 min offline waren oder der Server neu startete. Das verträgt sich nicht mit Raustabben und asynchronem Spiel.
+**Migration**: Ersetzt durch „Räume leben bis zum Ende des Duells“.
+
+## MODIFIED Requirements
 
 ### Requirement: Wiederverbinden
 
@@ -49,35 +60,3 @@ Ohne Token SHALL ein `join` per Raumcode den Sitz des Spielers mit demselben Nam
 #### Scenario: Zweiter Tab
 - **WHEN** ein Spieler in einem Tab spielt und das Spiel in einem zweiten Tab öffnet
 - **THEN** bleibt der Sitz beim ersten Tab, und der zweite zeigt den Startdialog
-
-### Requirement: Missbrauchsgrenzen
-
-Der Server SHALL Grenzen für Räume, Verbindungen je IP, Nachrichten-Bursts, Abstand zwischen Zügen und Claude-Züge je Stunde durchsetzen (`HubLimits`); `tests/online.test.ts` deckt sie ab.
-
-#### Scenario: Zu schnelle Züge
-- **WHEN** ein Client schneller als der Mindestabstand zieht
-- **THEN** wird der Zug abgewiesen
-
-### Requirement: Zuschauen
-
-Zuschauer SHALL einem Raum beitreten und alle Züge sehen können, MUST aber keinen Sitz belegen.
-
-#### Scenario: Zuschauer im vollen Raum
-- **WHEN** ein Zuschauer einem Raum mit zwei Spielern beitritt
-- **THEN** sieht er das Duell, und beide Sitze bleiben bei den Spielern
-
-### Requirement: Räume leben bis zum Ende des Duells
-
-Ein Raum mit laufendem Duell SHALL offen bleiben, auch wenn kein Spieler verbunden ist, und MUST einen Neustart des Servers überstehen (gespeichert in `online-rooms.json` neben dem gelernten Paket). Nur ein laufendes Duell ganz ohne Aktivität für 14 Tage SHALL geschlossen werden. Ein beendetes Duell SHALL nach 15 min ohne Verbindung oder 3 h ohne Aktivität geschlossen werden, ein Raum ohne zweiten Spieler nach 24 h.
-
-#### Scenario: Beide tabben raus
-- **WHEN** beide Spieler eines laufenden Duells einen Tag lang keine Verbindung haben
-- **THEN** besteht der Raum weiter, und `resume` bringt jeden auf seinen Platz mit dem aktuellen Zustand
-
-#### Scenario: Server-Neustart
-- **WHEN** der Server während eines laufenden Duells neu startet
-- **THEN** ist der Raum danach wieder da, und die Spieler kehren per `resume` oder per Name zurück
-
-#### Scenario: Beendetes Duell
-- **WHEN** ein Duell beendet ist und 15 Minuten niemand verbunden ist
-- **THEN** ist der Raum weg und `resume` meldet „Diesen Raum gibt es nicht mehr.“

@@ -21,6 +21,10 @@ proxy). Protocol shared with the browser: `src/online/` (WebSocket protocol + br
   a (re)connect skips turns it already has, stops waiting for a `narration` lost with the socket (that wait once
   blocked every later turn – forms stopped appearing after leaving the tab) and settles the arena after whatever
   still plays. `tests/playback.test.ts` replays that drop against a real hub.
+- Rooms live until their duel ends: a running duel stays open with nobody connected (players tab out, play
+  asynchronously) and closes only after `idleTtlMs` (14 days) without any activity; finished duels and rooms nobody
+  joined are swept sooner. Rooms survive a restart: `online-rooms.json` next to the learned pack
+  (`server/room-store.ts`, written debounced via `roomsChanged`, loaded with `hub.restore()`).
 - Abuse limits live in `server/online.ts` (`HubLimits`); `tests/online.test.ts` covers rooms, reconnect and limits.
 
 ## Keys

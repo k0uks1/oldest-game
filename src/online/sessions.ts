@@ -15,9 +15,12 @@ import type { PlayerId } from "../engine/types.ts";
 
 const LIST_KEY = "oldest-game:sessions";
 const TAB_KEY = "oldest-game:online";
-/** As long as the server keeps an idle room (`idleTtlMs`) – older entries cannot come back. */
-export const SESSION_TTL_MS = 3 * 60 * 60_000;
-export const MAX_SESSIONS = 8;
+/**
+ * As long as the server keeps a running duel without activity (`idleTtlMs`, 14 days) – older
+ * entries cannot come back. A closed room answers `noroom` and is forgotten then anyway.
+ */
+export const SESSION_TTL_MS = 14 * 24 * 60 * 60_000;
+export const MAX_SESSIONS = 12;
 
 export interface Seat {
   readonly room: string;
