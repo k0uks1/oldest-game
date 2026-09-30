@@ -414,7 +414,7 @@ export class OnlineHub {
     room.animLeft = [ANIMS_PER_PLAYER, ANIMS_PER_PLAYER];
     room.anims = [];
     this.enter(c, room, token);
-    this.broadcast(room, { t: "start", state: room.state }, c);
+    this.broadcast(room, { t: "start", state: room.state, seq: room.seq }, c);
   }
 
   /** The seat whose player has this name (a guest named like the host got " II"). */
@@ -643,6 +643,7 @@ export class OnlineHub {
       art: this.opts.art !== undefined,
       ...(this.opts.anim === undefined ? {} : { anim: { left: room.animLeft, items: room.anims } }),
       state: room.state,
+      seq: room.seq,
       chronicle: room.chronicle,
       epilogue: room.epilogue,
       learned: this.resolver.learned,

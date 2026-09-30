@@ -645,6 +645,11 @@ export abstract class ArenaSim {
     this.props.length = 0;
   }
 
+  /** Which form stands on each side (ids) – to check the arena against the game state. */
+  shownForms(): readonly [string | null, string | null] {
+    return [this.fighters[0]?.form.id ?? null, this.fighters[1]?.form.id ?? null];
+  }
+
   /** Swap in a grown ontology (live learning). Cached sprites stay valid – they depend on form ids. */
   setOntology(onto: Ontology): void {
     this.onto = onto;

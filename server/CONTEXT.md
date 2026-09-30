@@ -17,6 +17,10 @@ proxy). Protocol shared with the browser: `src/online/` (WebSocket protocol + br
   `seatFreeAfterMs` anyone with the code may. The heartbeat (15 s) makes dead sockets count as offline within 30 s.
   The browser remembers every duel it is in (`src/online/sessions.ts`: list in `localStorage`, the tab's own in
   `sessionStorage`); a fresh tab resumes the last one with `ifAway`, so it never steals a seat from a playing tab.
+- On screen (`src/online/playback.ts`): turns play in order; `welcome` / `start` carry the `seq` their state holds, so
+  a (re)connect skips turns it already has, stops waiting for a `narration` lost with the socket (that wait once
+  blocked every later turn – forms stopped appearing after leaving the tab) and settles the arena after whatever
+  still plays. `tests/playback.test.ts` replays that drop against a real hub.
 - Abuse limits live in `server/online.ts` (`HubLimits`); `tests/online.test.ts` covers rooms, reconnect and limits.
 
 ## Keys
