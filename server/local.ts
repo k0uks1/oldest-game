@@ -29,6 +29,7 @@ import { artRequest } from "./art-prompts.ts";
 import { LoreStore, MoveStore } from "./lore-store.ts";
 import { ArtService } from "./art-service.ts";
 import { handleLearned, readLearnedFile, writeLearnedFile } from "./learned.ts";
+import { readRoomsFile, writeRoomsFile } from "./room-store.ts";
 import { OnlineHub, type HubAnim, type HubArt, type HubLimits } from "./online.ts";
 import { animatePixelArt, generatePixelArt } from "./pixellab.ts";
 import type { Rgba } from "./png.ts";
@@ -233,6 +234,15 @@ export function startServer(opts: ServerOptions): RunningServer {
     onDone: (listener) => animations.onDone(listener),
   };
 
+  const roomsFile = join(dirname(file), "online-rooms.json");
+  let roomsTimer: ReturnType<typeof setTimeout> | undefined;
+  const saveRooms = (): void => {
+    try {
+      writeRoomsFile(roomsFile, theHub.saved());
+    } catch (e) {
+      console.error(`Räume konnten nicht gespeichert werden: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
   const theHub = new OnlineHub(resolver, {
     report: storeReport,
     art: hubArt,
@@ -243,6 +253,13 @@ export function startServer(opts: ServerOptions): RunningServer {
     ...(opts.limits === undefined ? {} : { limits: opts.limits }),
     claude,
     epilogue: async (state) => (claude() && state.history.length > 1 ? narrateEpilogueWithClaude(llm, state, narrateEnd(state)) : narrateEnd(state)),
+    roomsChanged: () => {
+      // debounced: a move is several changes (turn, narration, epilogue)
+      roomsTimer ??= setTimeout(() => {
+        roomsTimer = undefined;
+        saveRooms();
+      }, 1_000);
+    },
     persist: (pack) => {
       // debounced: a burst of learning is one write
       pending = pack;
@@ -253,6 +270,10 @@ export function startServer(opts: ServerOptions): RunningServer {
     },
     log,
   });
+
+  // Running duels survive a restart: rooms are kept next to the learned pack.
+  theHub.restore(readRoomsFile(roomsFile, log));
+  if (theHub.roomCount > 0) log(`${String(theHub.roomCount)} Räume wiederhergestellt`);
 
   /** Persist + broadcast what the resolver learned. */
   const learnedChanged = (): void => {
@@ -435,6 +456,8 @@ export function startServer(opts: ServerOptions): RunningServer {
         clearInterval(sweeper);
         if (saveTimer !== undefined) clearTimeout(saveTimer);
         flush();
+        if (roomsTimer !== undefined) clearTimeout(roomsTimer);
+        saveRooms();
         for (const ws of wss.clients) ws.terminate();
         wss.close();
         server.close(() => {

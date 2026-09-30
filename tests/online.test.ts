@@ -324,9 +324,72 @@ describe("online rooms (authoritative server)", () => {
     assert.equal(hub.attach(third), undefined, "connections per IP");
     assert.ok(third.closed);
     assert.equal(hub.roomCount, 2);
-    now += 2 * 60 * 60_000;
+    now += hub.limits.waitingTtlMs + 1;
     hub.sweep();
     assert.equal(hub.roomCount, 0, "nobody joined – rooms are swept");
+  });
+
+  it("a running duel stays open while nobody is connected; a finished one is closed", async () => {
+    let now = 1_000_000;
+    const { hub } = setup({ now: () => now });
+    const { a, b, code, ca, cb } = openRoom(hub);
+    ca.receive(JSON.stringify({ t: "move", text: "Ritter" }));
+    await settle();
+    const tokens = [a.last("welcome")?.token, b.last("welcome")?.token];
+    ca.closed();
+    cb.closed();
+    // both tabbed out for a day: the duel waits for them
+    now += 24 * 60 * 60_000;
+    hub.sweep();
+    assert.equal(hub.roomCount, 1, "running duel kept without connections");
+    const b2 = new FakePeer("10.0.0.2");
+    const cb2 = hub.attach(b2);
+    cb2?.receive(JSON.stringify({ t: "resume", room: code, token: tokens[1] }));
+    assert.equal(b2.last("welcome")?.state?.history.length, 1, "back where it was");
+    cb2?.receive(JSON.stringify({ t: "pass" }));
+    await settle();
+    cb2?.closed();
+    // over and nobody looking: closed after abandonedTtlMs
+    now += hub.limits.abandonedTtlMs + 1;
+    hub.sweep();
+    assert.equal(hub.roomCount, 0, "finished duel swept");
+  });
+
+  it("a running duel without any activity is closed after idleTtlMs", () => {
+    let now = 1_000_000;
+    const { hub } = setup({ now: () => now });
+    const { ca, cb } = openRoom(hub);
+    ca.closed();
+    cb.closed();
+    now += hub.limits.idleTtlMs - 1;
+    hub.sweep();
+    assert.equal(hub.roomCount, 1);
+    now += 2;
+    hub.sweep();
+    assert.equal(hub.roomCount, 0);
+  });
+
+  it("rooms survive a restart: saved, restored, resumed or taken back by name", async () => {
+    const { hub } = setup();
+    const { a, b, code, ca } = openRoom(hub);
+    ca.receive(JSON.stringify({ t: "move", text: "Ritter" }));
+    await settle();
+    const saved = JSON.parse(JSON.stringify(hub.saved())) as ReturnType<OnlineHub["saved"]>;
+    const { hub: hub2 } = setup();
+    hub2.restore(saved);
+    assert.equal(hub2.roomCount, 1);
+    const a2 = new FakePeer("10.0.0.1");
+    hub2.attach(a2)?.receive(JSON.stringify({ t: "resume", room: code, token: a.last("welcome")?.token }));
+    const w = a2.last("welcome");
+    assert.deepEqual(w?.seats, [0]);
+    assert.equal(w.state?.history.length, 1);
+    assert.equal(w.chronicle[0]?.name, "Ritter");
+    assert.deepEqual(w.players.map((p) => p?.online), [true, false], "the other seat waits for its player");
+    // the guest lost their token meanwhile – the name still brings them back
+    const b2 = new FakePeer("10.0.0.2");
+    hub2.attach(b2)?.receive(JSON.stringify({ t: "join", room: code, name: "Choronzon" }));
+    assert.deepEqual(b2.last("welcome")?.seats, [1]);
+    assert.notEqual(b2.last("welcome")?.token, b.last("welcome")?.token);
   });
 
   it("caps Claude-resolved moves per hour across all rooms", async () => {
@@ -452,6 +515,43 @@ describe("online server (real WebSocket)", () => {
     }
   });
 });
+
+describe("online server restart", () => {
+  it("a running duel is back after the server restarts", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "og-rooms-"));
+    const start = (): ReturnType<typeof startServer> =>
+      startServer({ port: 0, html: () => "", env: { apiKey: "", model: "m", maxTokens: 10 }, learnedFile: join(dir, "pack.json"), quiet: true, limits: { moveGapMs: 0 } });
+    const first = start();
+    let code = "";
+    let token = "";
+    try {
+      const a = hubPeer(first.hub, "10.0.0.1");
+      a.conn.receive(JSON.stringify({ t: "create", name: "Morpheus" }));
+      const w = a.peer.last("welcome") ?? assert.fail();
+      code = w.room;
+      token = w.token;
+      hubPeer(first.hub, "10.0.0.2").conn.receive(JSON.stringify({ t: "join", room: code, name: "Choronzon" }));
+      a.conn.receive(JSON.stringify({ t: "move", text: "Ritter" }));
+      await settle();
+    } finally {
+      await first.close();
+    }
+    const second = start();
+    try {
+      assert.equal(second.hub.roomCount, 1);
+      const a = hubPeer(second.hub, "10.0.0.1");
+      a.conn.receive(JSON.stringify({ t: "resume", room: code, token }));
+      assert.equal(a.peer.last("welcome")?.state?.history[0]?.form.name, "Ritter");
+    } finally {
+      await second.close();
+    }
+  });
+});
+
+function hubPeer(hub: OnlineHub, ip: string): { peer: FakePeer; conn: NonNullable<ReturnType<OnlineHub["attach"]>> } {
+  const peer = new FakePeer(ip);
+  return { peer, conn: hub.attach(peer) ?? assert.fail() };
+}
 
 describe("Quatsch-Meldungen", () => {
   it("a player in a room can report an absurd win; junk is refused", () => {
