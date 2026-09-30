@@ -181,12 +181,15 @@ export type ServerMsg =
       readonly anim?: { readonly left: readonly [number, number]; readonly items: readonly AnimItem[] };
       /** null while waiting for the second player. */
       readonly state: GameState | null;
+      /** The last turn `state` holds (the `seq` of its `turn` message; 0 before the first). */
+      readonly seq: number;
       readonly chronicle: readonly ChronicleEntry[];
       readonly epilogue: string | null;
       readonly learned: ContentPack;
     }
   | { readonly t: "presence"; readonly players: readonly [SeatInfo | null, SeatInfo | null]; readonly watchers: number }
-  | { readonly t: "start"; readonly state: GameState }
+  /** `seq`: the last turn so far (0 in a fresh room). */
+  | { readonly t: "start"; readonly state: GameState; readonly seq: number }
   | { readonly t: "thinking"; readonly seat: PlayerId }
   | { readonly t: "rejected"; readonly reason: string }
   /** To everyone else: the active player tried something that does not count (free retry). */

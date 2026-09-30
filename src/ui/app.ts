@@ -27,6 +27,7 @@ import { SIGNATURE_CRY, signatureFor } from "../render/eichel.ts";
 import { createArena, type Arena } from "../render/arenas.ts";
 import { clear, h } from "./dom.ts";
 import { OnlineLink, type LinkStart, type LinkStatus } from "../online/link.ts";
+import { arenaMatches, Playback } from "../online/playback.ts";
 import { findSession, listSessions, tabSeat, type Session } from "../online/sessions.ts";
 import { applyPackDelta, normalizeRoom, type ChronicleEntry, type SeatInfo, type ServerMsg } from "../online/protocol.ts";
 import { Music } from "./music.ts";
@@ -204,10 +205,8 @@ export class App {
   /** Seats this client plays online (both on one device). */
   private seats: readonly PlayerId[] = [];
   private players: readonly [SeatInfo | null, SeatInfo | null] = [null, null];
-  /** Online turns play one after another, even if they arrive in a burst. */
-  private onlineQueue: Promise<void> = Promise.resolve();
-  private readonly narrations = new Map<number, (text: string) => void>();
-  private readonly earlyNarrations = new Map<number, string>();
+  /** Online turns play one after another, even if they arrive in a burst; a (re)connect takes over. */
+  private playback = this.newPlayback();
   /** Start dialog: last tab, typed values (kept across a failed attempt), access code (memory only). */
   private startTab: StartTab = "local";
   private draft = { name0: rememberedName(), name1: "", room: "" };
@@ -605,14 +604,17 @@ export class App {
     if (!on) this.els.input.focus();
   }
 
-  /** Show a resolved turn (local or from the server) in the arena. */
-  private async playTurn(turn: Turn, narration: Promise<string>): Promise<void> {
+  /**
+   * Show a resolved turn (local or from the server) in the arena. `current()` turns false once a
+   * (re)connect adopted a newer state meanwhile – the turn then leaves state and chronicle alone.
+   */
+  private async playTurn(turn: Turn, narration: Promise<string>, current: () => boolean = () => true): Promise<void> {
     this.state = turn.state;
     if (turn.novelty?.kind === "discovery") this.discoveries.push({ name: turn.form.name, player: turn.actor });
     this.resetInput();
     this.hideCaption();
     try {
-      await this.animate(turn.actor, turn.form, turn.outcome, turn.novelty, turn.verdict, narration);
+      await this.animate(turn.actor, turn.form, turn.outcome, turn.novelty, turn.verdict, narration, current);
     } finally {
       this.render();
       if (this.state.phase === "finished") void this.showEnd();
@@ -630,6 +632,7 @@ export class App {
     novelty: Novelty,
     verdict: string | null,
     narration: Promise<string>,
+    current: () => boolean,
   ): Promise<void> {
     this.arena.setThinking(false);
     this.els.plates[actor].textContent = "";
@@ -695,12 +698,13 @@ export class App {
       this.flashBanner("Es genügt nicht.", "bad");
       if (f.closest !== null) this.showWhy(form, f.closest.check, false, f.reason);
     }
+    if (!current()) return;
     this.render();
     const li = this.addChronicle(actor, form.name, "…", outcome.kind === "failure", why, discovery);
     this.showCaption("…", true);
     const text = await narration;
     li.querySelector(".text")?.replaceChildren(text);
-    this.showCaption(text, false);
+    if (current()) this.showCaption(text, false);
   }
 
   /**
@@ -1271,8 +1275,7 @@ export class App {
     this.seats = [];
     this.joined = false;
     this.showWatchers(0);
-    this.narrations.clear();
-    this.earlyNarrations.clear();
+    this.playback = this.newPlayback();
     this.setBusy(false);
   }
 
@@ -1302,15 +1305,21 @@ export class App {
     this.setBusy(true);
   }
 
-  /** The narration for an online turn arrives separately (Claude writes while the arena plays). */
-  private narrationFor(seq: number): Promise<string> {
-    const early = this.earlyNarrations.get(seq);
-    if (early !== undefined) {
-      this.earlyNarrations.delete(seq);
-      return Promise.resolve(early);
-    }
-    return new Promise((resolve) => {
-      this.narrations.set(seq, resolve);
+  private newPlayback(): Playback<Turn> {
+    return new Playback<Turn>({
+      play: async (turn, narration, current) => {
+        this.setBusy(true);
+        try {
+          await this.playTurn(turn, narration, current);
+        } finally {
+          if (current()) this.setBusy(false);
+        }
+      },
+      lateNarration: (index, text) => {
+        // the chronicle is newest first
+        const items = this.els.chronicle.children;
+        items[items.length - 1 - index]?.querySelector(".text")?.replaceChildren(text);
+      },
     });
   }
 
@@ -1319,10 +1328,12 @@ export class App {
     this.setOntology(this.resolver.onto);
   }
 
-  /** Show a server-side game as it stands (join, reconnect, rematch) – no animation replay. */
-  private adoptState(state: GameState, chronicle: readonly ChronicleEntry[], epilogue: string | null): void {
+  /**
+   * Show a server-side game as it stands (join, reconnect, rematch) – no animation replay. `seq`:
+   * the last turn it holds; turns up to it that are still queued or playing are dropped.
+   */
+  private adoptState(state: GameState, chronicle: readonly ChronicleEntry[], epilogue: string | null, seq: number): void {
     this.state = state;
-    this.arena.clear();
     this.retry = false;
     this.epilogue = epilogue;
     this.discoveries = chronicle.filter((e) => e.discovery).map((e) => ({ name: e.name, player: e.actor }));
@@ -1330,14 +1341,21 @@ export class App {
     this.lastWille = [state.players[0].wille, state.players[1].wille];
     clear(this.els.chronicle);
     for (const e of chronicle) this.addChronicle(e.actor, e.name, e.text, e.failed, [], e.discovery);
-    // Only the form still standing – every earlier one was answered.
-    const last = state.history.at(-1);
-    if (last !== undefined) void this.resummon(last.player, last.form);
+    // The arena follows once whatever still plays is over (it may have been cut off mid-turn).
+    void this.playback.adopt(seq, chronicle.length, () => this.settleArena());
     this.hideCaption();
     this.resetInput();
     this.setBusy(false);
     this.render();
     if (state.phase === "finished") void this.showEnd();
+  }
+
+  /** Put the arena right for the current state: only the form still standing (`standingForms`). */
+  private async settleArena(): Promise<void> {
+    if (arenaMatches(this.arena.shownForms(), this.state)) return;
+    this.arena.clear();
+    const last = this.state.history.at(-1);
+    if (last !== undefined) await this.resummon(last.player, last.form);
   }
 
   /** The form still standing after a (re)connect – with its picture if the server has or makes one. */
@@ -1382,7 +1400,7 @@ export class App {
           else this.showInvite(m.room, true);
           return;
         }
-        this.adoptState(m.state, m.chronicle, m.epilogue);
+        this.adoptState(m.state, m.chronicle, m.epilogue, m.seq);
         return;
       }
       case "presence": {
@@ -1399,7 +1417,7 @@ export class App {
       }
       case "start":
         this.closeModal();
-        this.adoptState(m.state, [], null);
+        this.adoptState(m.state, [], null, m.seq);
         this.flashBanner(`${m.state.players[m.state.active].name} beginnt.`, "info");
         return;
       case "thinking":
@@ -1415,28 +1433,15 @@ export class App {
         return;
       case "turn": {
         this.art.want([m.turn.form]);
-        const narration = this.narrationFor(m.seq);
-        this.onlineQueue = this.onlineQueue.then(async () => {
-          this.setBusy(true);
-          try {
-            await this.playTurn(m.turn, narration);
-          } finally {
-            this.setBusy(false);
-          }
-        });
+        void this.playback.turn(m.seq, m.turn);
         return;
       }
       case "narration": {
-        const resolve = this.narrations.get(m.seq);
-        if (resolve === undefined) this.earlyNarrations.set(m.seq, m.text);
-        else {
-          this.narrations.delete(m.seq);
-          resolve(m.text);
-        }
+        this.playback.narration(m.seq, m.text);
         return;
       }
       case "resigned":
-        this.onlineQueue = this.onlineQueue.then(() => {
+        void this.playback.run(() => {
           this.state = m.state;
           this.flashBanner(`${m.state.players[m.seat].name} gibt auf.`, "info");
           this.render();
