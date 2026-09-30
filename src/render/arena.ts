@@ -3,7 +3,7 @@ import { loadImage, SCENERY, VOID } from "./scenery.ts";
 import { hash32, rng } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
 import { paletteFor, type SpritePalette } from "./palette.ts";
-import { alphaBox, artFor, artGlow, crop, resample, unionBox, type Box } from "./art.ts";
+import { alphaBox, artFor, artGlow, crop, figureSize, resample, unionBox, type Box } from "./art.ts";
 import { EMPTY_MASK, fitMask, maskOf, type Mask } from "./morph.ts";
 import { EFFECTS, type EffectKind } from "./effects.ts";
 import { EFFECT_SHEETS } from "./effects/index.ts";
@@ -13,6 +13,7 @@ import { FORM_ANIMS } from "./form-anims/index.ts";
 import { displaySize, renderGlow, renderSprite, type PixelImage } from "./sprite.ts";
 import { ISO } from "./stage-iso.ts";
 import { acornImage, signatureFor, tattooImage, type Signature } from "./eichel.ts";
+import { JOHNNY_NAME, NOTE_COLORS, noteImage } from "./johnny.ts";
 import { FLOOR_Y, GROUND_Y, HEIGHT, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
 
 export { FLOOR_Y, GROUND_Y, HEIGHT, TORCH_X, WIDTH } from "./stage.ts";
@@ -31,12 +32,14 @@ export type Side = 0 | 1;
 export type ArenaCue = "summon" | "reveal" | "strike" | "impact" | "fizzle" | "discovery" | "boom";
 
 /** Special spectacles for a few forms – pure show, no rules involved. */
-export type EasterEgg = "nuke" | "meteor" | "rainbow" | "confetti" | "vortex" | "tattoo" | "eicheln";
+export type EasterEgg = "nuke" | "meteor" | "rainbow" | "confetti" | "vortex" | "tattoo" | "eicheln" | "johnny";
 
 const EGG_PATTERNS: readonly (readonly [RegExp, EasterEgg])[] = [
   // the Eichel figures: the gang shows its tattoo, the Eichelober arrives in a shower of acorns
   [/eichel\s*-?\s*(ober\s*-?\s*)?(gang|bande)/i, "tattoo"],
   [/eichel\s*-?\s*ober/i, "eicheln"],
+  // Johnny Gnadenlos, the singing cactus, arrives in a burst of music notes
+  [JOHNNY_NAME, "johnny"],
   [/atom|nuklear|kernwaffe|a-bombe|wasserstoffbombe|nuke/i, "nuke"],
   [/meteor|asteroid|komet|sternschnuppe/i, "meteor"],
   [/regenbogen|rainbow/i, "rainbow"],
@@ -359,6 +362,8 @@ export abstract class ArenaSim {
   /** Flying pictures (acorns, the gang tattoo). */
   protected readonly props: Prop[] = [];
   private eichelArt: { acorn: HTMLCanvasElement } | null = null;
+  /** Johnny's music notes by colour and kind (render/johnny.ts). */
+  private readonly noteArt = new Map<number, HTMLCanvasElement>();
   /** Standard animations that come with the game (`render/form-anims/`): strip name → frames. */
   private readonly formAnims = new Map<string, readonly PixelImage[]>();
   protected readonly projectiles: Projectile[] = [];
@@ -554,6 +559,19 @@ export abstract class ArenaSim {
         this.vortex = { x, y: this.gy(side) - 40, life: 0 };
         await wait(rm ? 100 : 900);
         return;
+      case "johnny": {
+        // Johnny arrives: a burst of coloured notes from his pot, and he is already humming
+        const top = this.gy(side) - (f?.sprite.height ?? 60);
+        for (let i = 0; i < 14; i++) {
+          const a = -Math.PI / 2 + (r() - 0.5) * 2.4;
+          const sp = 40 + r() * 60;
+          this.props.push({ image: this.johnnyNote(), x, y: top + 20, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: -r() * 0.3, max: 1.4, gravity: -10, w: 8, h: 11, flip: false, fade: 0.25, glow: 0.7 });
+        }
+        this.rings.push({ x, y: this.gy(side), r: 4, life: 0, max: 0.9, color: "#8ce85a" });
+        this.onCue?.("discovery");
+        await wait(rm ? 100 : 900);
+        return;
+      }
       case "eicheln": {
         // the Eichelober arrives: acorns rain around him, clouds puff up where he lands
         const { acorn } = this.eichelProps();
@@ -856,10 +874,8 @@ export abstract class ArenaSim {
     // only the figure (it stands on the ground, no halo of empty pixels), at the picture's own
     // detail: ART_DENSITY picture pixels per arena pixel, so Pixi (density 2) shows it unstretched
     const cut = crop(art, box ?? alphaBox(art) ?? { x: 0, y: 0, w: art.width, h: art.height });
-    // the whole picture spans the form's display size (older pictures made at another size scale to it)
-    const perArena = Math.max(art.width, art.height) / displaySize(form.scale);
-    const w = Math.max(1, Math.round(cut.width / perArena));
-    const h = Math.max(1, Math.round(cut.height / perArena));
+    // the figure itself fills the form's display size, slender ones a little more (see figureSize)
+    const { w, h } = figureSize(cut.width, cut.height, displaySize(form.scale));
     const pixels = resample(cut, w * d, h * d);
     return {
       image: toCanvas(pixels),
@@ -1038,14 +1054,15 @@ export abstract class ArenaSim {
 
   /** Attacker on `side` strikes the other side, which is destroyed. */
   /** `effect`: a painted attack animation (see `chooseEffect`) instead of the drawn one, if it is loaded. */
-  /** `signature`: the Eichel figures' own attack instead of any other. */
-  async attack(side: Side, style: AttackStyle, weaknessHit: boolean, outcome: AttackOutcome = "destroy", effect?: string, signature?: Signature): Promise<void> {
+  /** `signature`: a figure's own attack instead of any other (Eichel figures, Johnny); `signatureSeconds`: how long Johnny sings. */
+  async attack(side: Side, style: AttackStyle, weaknessHit: boolean, outcome: AttackOutcome = "destroy", effect?: string, signature?: Signature, signatureSeconds?: number): Promise<void> {
     const other: Side = side === 0 ? 1 : 0;
     const attacker = this.fighters[side];
     const target = this.fighters[other];
     if (attacker === null) return;
     if (signature === "eichelkaese") await this.withSignatureMove(side, () => this.eichelkaese(side));
     else if (signature === "eichelhagel") await this.withSignatureMove(side, () => this.eichelhagel(side));
+    else if (signature === "klassiker") await this.withSignatureMove(side, () => this.klassiker(side, signatureSeconds));
     else await this.strike(side, style, false, effect);
     if (target === null) return;
     await this.suspense(other);
@@ -1475,6 +1492,7 @@ export abstract class ArenaSim {
     this.stepEffects(dt);
     this.stepProps(dt);
     this.emitEichelRain(dt);
+    this.emitHumming(dt);
     this.stepRoom(dt);
     this.updateCosmos(dt);
     for (const fx of this.fieldFx.values()) fx.level += (fx.target - fx.level) * Math.min(1, dt * 1.5);
@@ -1863,7 +1881,11 @@ export abstract class ArenaSim {
    * leaves keep falling from the vault (the room itself turns into the acorn hall, see rooms.json).
    */
   private emitEichelRain(dt: number): void {
-    if (this.reducedMotion || !this.fighters.some((f) => f !== null && f.alpha > 0 && signatureFor(f.form.name) !== null)) return;
+    const eichel = (name: string): boolean => {
+      const s = signatureFor(name);
+      return s === "eichelkaese" || s === "eichelhagel";
+    };
+    if (this.reducedMotion || !this.fighters.some((f) => f !== null && f.alpha > 0 && eichel(f.form.name))) return;
     const r = this.rand;
     if (r() < dt * 2.2) {
       const { acorn } = this.eichelProps();
@@ -1877,6 +1899,86 @@ export abstract class ArenaSim {
     if (r() < dt * 9) {
       const c = ["#c86a20", "#e0a030", "#8a4a1a", "#6e7828"][Math.floor(r() * 4)] ?? "#c86a20";
       this.particles.push({ x: r() * WIDTH, y: -4, vx: (r() - 0.5) * 24, vy: 14 + r() * 12, life: 0, max: 5 + r() * 3, color: c, size: 2, gravity: 2, glow: false });
+    }
+  }
+
+  /** Johnny never stops humming: now and then a note rises from his pot while he stands in the arena. */
+  private emitHumming(dt: number): void {
+    if (this.reducedMotion) return;
+    for (const side of [0, 1] as const) {
+      const f = this.fighters[side];
+      if (f === null || f.alpha <= 0 || signatureFor(f.form.name) !== "klassiker" || this.rand() >= dt * 0.9) continue;
+      const top = this.gy(side) - f.sprite.height * 0.75;
+      const dir = side === 0 ? 1 : -1;
+      this.props.push({ image: this.johnnyNote(), x: SIDE_X[side] + f.offsetX + dir * 6, y: top, vx: dir * (6 + this.rand() * 10), vy: -14 - this.rand() * 8, life: 0, max: 2.2, gravity: 0, w: 7, h: 10, flip: false, fade: 0.5, glow: 0.5 });
+    }
+  }
+
+  /** One of Johnny's notes, single or beamed, in a light colour of the toy. */
+  private johnnyNote(): HTMLCanvasElement {
+    const k = Math.floor(this.rand() * NOTE_COLORS.length * 2);
+    let c = this.noteArt.get(k);
+    if (c === undefined) {
+      c = toCanvas(noteImage(k % 2 === 1, NOTE_COLORS[k >> 1] ?? [255, 255, 255]));
+      this.noteArt.set(k, c);
+    }
+    return c;
+  }
+
+  /**
+   * "Der Klassiker": Johnny belts out one of his five songs – rings of sound pulse from his pot and a stream of
+   * notes dances over to the opponent, who squirms more with every bar; a big beamed note ends it.
+   */
+  private async klassiker(side: Side, seconds = 4): Promise<void> {
+    const attacker = this.fighters[side];
+    if (attacker === null) return;
+    const other: Side = side === 0 ? 1 : 0;
+    const target = this.fighters[other];
+    const dir = side === 0 ? 1 : -1;
+    const rm = this.reducedMotion;
+    const r = this.rand;
+    const tx = SIDE_X[other];
+    const th = target?.sprite.height ?? 40;
+    const ty = this.gy(other) - th / 2;
+    const mouth = (): [number, number] => [SIDE_X[side] + attacker.offsetX + dir * attacker.sprite.width * 0.1, this.gy(side) - attacker.sprite.height * 0.72];
+    const total = rm ? 0.6 : Math.max(2, Math.min(6, seconds));
+    const step = 0.13;
+    const flight = 0.9;
+    let beat = 0;
+    for (let t = 0; t < total; t += step) {
+      const [mx, my] = mouth();
+      const hx = tx + (r() - 0.5) * (target?.sprite.width ?? 30) * 0.7;
+      const hy = ty + (r() - 0.5) * th * 0.6;
+      // an arc over the arena: up first, then down onto the opponent
+      const lift = 60 + r() * 50;
+      this.props.push({ image: this.johnnyNote(), x: mx, y: my, vx: (hx - mx) / flight, vy: (hy - my) / flight - lift, life: 0, max: flight, gravity: (2 * lift) / flight, w: 8, h: 11, flip: false, fade: 0.08, glow: 0.8 });
+      if (t >= beat) {
+        beat += 0.5;
+        this.rings.push({ x: mx, y: my, r: 3, life: 0, max: 0.5, color: "#8ce85a", grow: 70 });
+        this.onCue?.("strike");
+      }
+      // the opponent squirms – more with every bar
+      if (target !== null && t > flight) {
+        const annoyed = Math.min(1, (t - flight) / Math.max(0.5, total - flight));
+        target.offsetX = (r() - 0.5) * 2 * (1 + annoyed * 4);
+        if (r() < 0.15) target.flash = 0.3;
+      }
+      await wait(step * 1000);
+    }
+    await wait(flight * 1000);
+    // the finale: one big beamed note
+    const [mx, my] = mouth();
+    const big = rm ? 0.15 : 0.45;
+    this.props.push({ image: this.johnnyNote(), x: mx, y: my, vx: (tx - mx) / big, vy: (ty - my) / big, life: 0, max: big, gravity: 0, w: 24, h: 22, flip: false, fade: 0, glow: 0.9 });
+    await wait(big * 1000);
+    if (target !== null) target.offsetX = 0;
+    this.flash = 0.4;
+    this.flashColor = "#f06ab8";
+    this.shake = rm ? 0 : 6;
+    for (let k = 0; k < 3; k++) this.rings.push({ x: tx, y: ty, r: 4, life: -k * 0.1, max: 0.8, color: ["#8ce85a", "#f06ab8", "#6ac8f8"][k] ?? "#ffffff", grow: 120 });
+    for (let i = 0; i < 10; i++) {
+      const a = r() * Math.PI * 2;
+      this.props.push({ image: this.johnnyNote(), x: tx, y: ty, vx: Math.cos(a) * 90, vy: Math.sin(a) * 90 - 40, life: 0, max: 1, gravity: 120, w: 8, h: 11, flip: false, fade: 0.3, glow: 0.6 });
     }
   }
 

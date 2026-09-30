@@ -132,6 +132,76 @@ export class Sound {
     }
   }
 
+  /**
+   * Johnny Gnadenlos sings: a melody (MIDI note, beats; 0 = rest) as a squeaky toy-speaker voice –
+   * square wave an octave up with a little vibrato. Returns its length in seconds.
+   */
+  song(notes: readonly (readonly [number, number])[], bpm: number): number {
+    const ctx = this.ctx;
+    const master = this.master;
+    const beat = 60 / bpm;
+    const total = notes.reduce((s, [, b]) => s + b, 0) * beat;
+    if (ctx === null || master === null || this.muted) return total;
+    let t = ctx.currentTime + 0.05;
+    for (const [midi, beats] of notes) {
+      const dur = beats * beat;
+      if (midi > 0) {
+        const freq = 440 * 2 ** ((midi + 12 - 69) / 12);
+        const o = ctx.createOscillator();
+        o.type = "square";
+        o.frequency.setValueAtTime(freq, t);
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = 6;
+        const depth = ctx.createGain();
+        depth.gain.value = freq * 0.012;
+        lfo.connect(depth);
+        depth.connect(o.frequency);
+        const f = ctx.createBiquadFilter();
+        f.type = "lowpass";
+        f.frequency.value = 2600;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.16, t + 0.02);
+        g.gain.setValueAtTime(0.16, t + dur * 0.75);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.95);
+        o.connect(f);
+        f.connect(g);
+        g.connect(master);
+        o.start(t);
+        lfo.start(t);
+        o.stop(t + dur);
+        lfo.stop(t + dur);
+      }
+      t += dur;
+    }
+    return total;
+  }
+
+  /**
+   * Johnny parrots what was said to him, in a high squeaky voice: the browser's speech synthesis at
+   * the highest pitch where there is one, else a burst of chirps.
+   */
+  parrot(text: string): void {
+    if (this.muted || text === "") return;
+    const synth = (globalThis as { speechSynthesis?: SpeechSynthesis }).speechSynthesis;
+    const Utterance = (globalThis as { SpeechSynthesisUtterance?: typeof SpeechSynthesisUtterance }).SpeechSynthesisUtterance;
+    if (synth !== undefined && Utterance !== undefined) {
+      const u = new Utterance(text);
+      u.lang = "de-DE";
+      u.pitch = 2;
+      u.rate = 1.15;
+      u.volume = 0.8;
+      synth.cancel();
+      synth.speak(u);
+      return;
+    }
+    const ctx = this.ctx;
+    if (ctx === null) return;
+    const t = ctx.currentTime + 0.01;
+    const syllables = Math.min(12, Math.max(2, Math.round(text.length / 3)));
+    for (let i = 0; i < syllables; i++) this.tone(900 + ((i * 377) % 500), t + i * 0.09, 0.08, 0.12, "square", 0, 1400);
+  }
+
   private tone(freq: number, t: number, dur: number, vol: number, type: OscillatorType, filterTo = 0, slideTo = 0): void {
     const ctx = this.ctx;
     const master = this.master;

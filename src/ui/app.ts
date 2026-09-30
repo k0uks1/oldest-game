@@ -24,6 +24,7 @@ import { narrateEnd } from "../narrate/offline.ts";
 import { Resolver, type Novelty, type PlayedOutcome, type Turn } from "../game/resolver.ts";
 import { attackOutcome, attackStyle, easterEggFor, type AttackStyle } from "../render/arena.ts";
 import { SIGNATURE_CRY, signatureFor } from "../render/eichel.ts";
+import { isJohnny, parrot, songCry, songFor } from "../render/johnny.ts";
 import { createArena, type Arena } from "../render/arenas.ts";
 import { clear, h } from "./dom.ts";
 import { OnlineLink, type LinkStart, type LinkStatus } from "../online/link.ts";
@@ -46,6 +47,9 @@ import { ANIM_ACTION_IDS, animLabel, MOVE_ACTIONS, type AnimAction } from "../on
 /** The general moves, for forms without their own. */
 const GENERAL_ANIMS = ANIM_ACTION_IDS.filter((a) => !(MOVE_ACTIONS as readonly string[]).includes(a));
 import { Sound } from "./sound.ts";
+
+/** Johnny's mechanisms that throw the opponent's words back at it; against the eloquent he always does (else he sings). */
+const MOCKING: ReadonlySet<string> = new Set(["aefft_nach", "zieht_ins_laecherliche"]);
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -165,6 +169,8 @@ export class App {
   private localProxy: string | null = null;
   /** Did the active player's last attempt fail? (changes the prompt) */
   private retry = false;
+  /** How often Johnny Gnadenlos has sung – always the same five songs, in the same order. */
+  private johnnySongs = 0;
   /** Forms first seen in this duel (for the end screen). */
   private discoveries: DuelDiscovery[] = [];
   private lastWille: [number, number] = [0, 0];
@@ -177,6 +183,8 @@ export class App {
     chronicle: HTMLElement;
     hud: [HTMLElement, HTMLElement];
     plates: [HTMLElement, HTMLElement];
+    /** Speech bubbles over the fighters (Johnny parrots and sings). */
+    bubbles: [HTMLElement, HTMLElement];
     caption: HTMLElement;
     why: HTMLElement;
     peek: HTMLDetailsElement;
@@ -284,6 +292,7 @@ export class App {
         h("div", { class: "hud left", role: "button", title: "Was bedeutet das?", onclick: () => { this.showInfo("wille"); } }),
         h("div", { class: "hud right", role: "button", title: "Was bedeutet das?", onclick: () => { this.showInfo("wille"); } }),
       ] as [HTMLElement, HTMLElement],
+      bubbles: [h("div", { class: "bubble left", "aria-live": "polite" }), h("div", { class: "bubble right", "aria-live": "polite" })] as [HTMLElement, HTMLElement],
       plates: [
         h("div", { class: "plate left", role: "button", title: "Eigenschaften ansehen", onclick: () => { this.showFighter(0); } }),
         h("div", { class: "plate right", role: "button", title: "Eigenschaften ansehen", onclick: () => { this.showFighter(1); } }),
@@ -317,6 +326,8 @@ export class App {
           h("div", { class: "crown" }, sigilBtn, els.round, els.fields, els.watchers),
           els.plates[0],
           els.plates[1],
+          els.bubbles[0],
+          els.bubbles[1],
           h("div", { class: "reveal" }, els.revealName, els.revealSub),
         ),
         // Outcome line and narration: over the arena on wide screens, below it on phones – never on top of each other.
@@ -667,6 +678,13 @@ export class App {
     }
     this.els.plates[actor].textContent = form.name;
     this.hideName();
+    // Johnny Gnadenlos parrots whatever is said to him – in a squeaky voice
+    const opposite = outcome.kind === "success" ? this.state.history.at(-2)?.form : outcome.failure.target;
+    if (opposite !== undefined && isJohnny(opposite.name) && !isJohnny(form.name)) {
+      this.bubble(actor === 0 ? 1 : 0, parrot(form.name));
+      this.sound.parrot(`${form.name}? ${form.name}!`);
+      await sleep(1600);
+    }
     let why: readonly string[] = [];
     if (outcome.kind === "success") {
       const move = outcome.move;
@@ -682,8 +700,23 @@ export class App {
       } else if (move.verb !== null) {
         const kind = move.check?.outcome ?? "vernichtet";
         const signature = signatureFor(form.name);
-        if (signature !== null) this.flashBanner(SIGNATURE_CRY[signature], "info");
-        await this.arena.attack(actor, this.styleOf(move.verb), move.check?.weaknessHit === true, attackOutcome(kind), this.effectOf(form, move.verb), signature ?? undefined);
+        let seconds: number | undefined;
+        const parroted = this.state.history.at(-2)?.form;
+        if (signature === "klassiker" && parroted !== undefined && (MOCKING.has(move.verb) || this.onto.formHas(parroted, "wortgewaltig"))) {
+          // mirroring and ridiculing: he parrots the opponent's own words back in a squeaky voice
+          this.flashBanner("♪ IN KOPFSTIMME!", "info");
+          this.bubble(actor, parrot(parroted.name), 3000);
+          this.sound.parrot(`${parroted.name}? ${parroted.name}! ${parroted.name}!`);
+          seconds = 3;
+        } else if (signature === "klassiker") {
+          // one of the same five classics, every time (he claims thirty)
+          const n = this.johnnySongs++;
+          const song = songFor(n);
+          this.flashBanner(songCry(n), "info");
+          seconds = this.sound.song(song.notes, song.bpm);
+          this.bubble(actor, `♪ ${song.line}`, seconds * 1000);
+        } else if (signature !== null) this.flashBanner(SIGNATURE_CRY[signature], "info");
+        await this.arena.attack(actor, this.styleOf(move.verb), move.check?.weaknessHit === true, attackOutcome(kind), this.effectOf(form, move.verb), signature ?? undefined, seconds);
         const how = VICTORY_TEXT[kind] ?? "";
         this.flashBanner(`Es genügt${how === "" ? "." : ` – ${how}`}${move.eleganz > 1 ? `  ✦ ${String(move.eleganz)}` : ""}`, "good");
       }
@@ -1188,6 +1221,19 @@ export class App {
   private hideCaption(): void {
     this.els.caption.className = "caption";
     this.els.why.className = "why-line";
+  }
+
+  private readonly bubbleTimers: [ReturnType<typeof setTimeout> | undefined, ReturnType<typeof setTimeout> | undefined] = [undefined, undefined];
+  /** A speech bubble over the fighter on `side`, for a while. */
+  private bubble(side: PlayerId, text: string, ms = 2600): void {
+    const b = this.els.bubbles[side];
+    b.textContent = text;
+    b.classList.add("show");
+    const old = this.bubbleTimers[side];
+    if (old !== undefined) clearTimeout(old);
+    this.bubbleTimers[side] = setTimeout(() => {
+      b.classList.remove("show");
+    }, ms);
   }
 
   private bannerTimer: ReturnType<typeof setTimeout> | undefined;

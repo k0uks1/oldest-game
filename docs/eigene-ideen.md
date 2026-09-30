@@ -549,3 +549,14 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Aus einem Issue wird eine Änderung** | Steht `Issue: #12` im Proposal, hängt sich die Änderung an dieses Issue statt ein neues zu öffnen – Ideen aus dem Backlog laufen ohne Doppelung weiter. | `openspec/config.yaml` (Regel für Proposals) |
 | **Labels legt der Sync an** | `openspec` und die `wayfinder:*`-Labels entstehen beim ersten Lauf – Wayfinder selbst legt keine an. | `LABELS` in `scripts/backlog.ts` |
 | **Kontext dort, wo er gebraucht wird** | `CLAUDE.md` ist nur noch `@AGENTS.md`; `AGENTS.md` ist ein Katalog nach ICM (wo liegt was, wohin bei welcher Aufgabe, die sechs Invarianten als Einzeiler). Der Inhalt steht in der `CONTEXT.md` jedes Ordners; der Katalog sagt, welche man bei welcher Aufgabe öffnet. | `AGENTS.md`, `src/*/CONTEXT.md`, `server/`, `scripts/` |
+
+## Johnny Gnadenlos (PR „feat/johnny-gnadenlos“)
+
+| Idee | Was sie tut | Wo |
+|---|---|---|
+| **Johnny als Cowboy** | Hut und rotes Halstuch (nach dem Western-Foto des Spielzeugs), damit „Gnadenlos“ nach Revolverheld klingt. | `content/core/form-art.json`, `render/form-anims/johnny_gnadenlos*.png` |
+| **Die fünf Klassiker** | La Cucaracha, Oh! Susanna, Alle meine Entchen, Hänschen klein, Yankee Doodle – alles gemeinfreie Lieder, als quäkende Spielzeug-Melodie. Das Banner ist beim ersten Durchgang begeistert („Lied 3 von angeblich 30!“), dann „Schon wieder …“, dann „NICHT SCHON WIEDER …“. | `render/johnny.ts` (`SONGS`, `songCry`), `ui/sound.ts` (`song`) |
+| **Nachplappern mit Sprachausgabe** | Wer gegen Johnny antritt, hört seinen Namen in Kopfstimme zurück (Sprachsynthese des Browsers, höchste Tonlage), mit gedehntem Vokal in der Sprechblase. | `parrot`, `Sound.parrot`, `.bubble` |
+| **Tag „wörtlich“** | Johnnys vier Mechanismen greifen alles an, was gesprochen oder gesungen ist; Wort, Witz, Lüge, Fluch, Wiegenlied, Echo, Passwort, Versprechen und Papagei tragen den Tag. Schwäche: Wer lauter ist, übertönt ihn. | `tags.json`, `verbs.json` |
+| **Summen** | Solange Johnny in der Arena steht, steigt ab und zu eine Note aus seinem Topf. | `ArenaSim.emitHumming` |
+| **Martin Luther und „wortgewaltig“** | Auf Wunsch „Johnny schlägt wortstarke Figuren“: Luther steht im Lexikon (Thesen, „Hier stehe ich“), seine Schwäche sind seine eigenen Worte. Gegen Wortgewaltige plappert Johnny immer nach, statt zu singen. | `forms/charaktere.json`, `tags.json`, `ui/app.ts` (`MOCKING`) |

@@ -279,6 +279,57 @@ canvas.arena {
   text-underline-offset: 4px;
 }
 
+/* speech bubbles over the fighters (Johnny Gnadenlos parrots and sings) */
+.bubble {
+  position: absolute;
+  bottom: 52%;
+  max-width: 34%;
+  padding: 0.35em 0.7em;
+  font-size: clamp(13px, 1.6vw, 19px);
+  line-height: 1.2;
+  color: #1a1020;
+  background: #f4f0e6;
+  border: 2px solid #1a1020;
+  border-radius: 0.9em;
+  box-shadow: 0 0 12px rgba(140, 232, 90, 0.45);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px) scale(0.9);
+  transition: opacity 0.25s, transform 0.25s;
+}
+.bubble.left {
+  left: 14%;
+}
+.bubble.right {
+  right: 14%;
+}
+.bubble.show {
+  opacity: 1;
+  transform: none;
+}
+.bubble::after {
+  content: "";
+  position: absolute;
+  bottom: -9px;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  border-right: 2px solid #1a1020;
+  border-bottom: 2px solid #1a1020;
+  transform: rotate(45deg);
+}
+.bubble.left::after {
+  left: 30%;
+}
+.bubble.right::after {
+  right: 30%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bubble {
+    transition: none;
+  }
+}
+
 /* ── Words over the arena ───────────────────────────────────────────────── */
 
 /* narration and the "why" line flow as one column – a long narration pushes the line down, never over it */

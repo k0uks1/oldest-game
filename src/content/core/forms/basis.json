@@ -27,7 +27,7 @@
   {"id": "keule", "name": "Keule", "archetype": "weapon", "scale": 2, "plane": "materie", "tags": ["holz", "masse"], "verbs": ["zerschlaegt"], "weak": ["holz"], "aliases": ["prügel", "holzkeule"]},
   {"id": "pfeil", "name": "Pfeil", "archetype": "weapon", "scale": 1, "plane": "materie", "tags": ["holz", "eisen", "fliegt", "spitz"], "verbs": ["durchbohrt"], "weak": ["holz"], "aliases": ["pfeile"]},
   {"id": "bombe", "name": "Bombe", "archetype": "orb", "scale": 3, "plane": "materie", "tags": ["eisen", "feuer", "chaotisch", "explosiv"], "qualities": {"hitze": 3}, "verbs": ["sprengt"], "weak": ["chaotisch"], "aliases": ["sprengsatz", "granate"]},
-  {"id": "pistole", "name": "Pistole", "archetype": "weapon", "scale": 2, "plane": "materie", "tags": ["stahl", "maschine", "spitz"], "verbs": ["durchbohrt"], "weak": ["maschine"], "aliases": ["revolver", "colt"]},
+  {"id": "pistole", "name": "Pistole", "archetype": "weapon", "scale": 2, "plane": "materie", "tags": ["wildwest", "stahl", "maschine", "spitz"], "verbs": ["durchbohrt"], "weak": ["maschine"], "aliases": ["revolver", "colt"]},
   {"id": "peitsche", "name": "Peitsche", "archetype": "weapon", "scale": 1, "plane": "materie", "tags": ["stoff", "bindend", "unheimlich"], "verbs": ["fesselt", "aengstigt"], "weak": ["stoff"]},
   {"id": "helm", "name": "Helm", "archetype": "skull", "scale": 1, "plane": "materie", "tags": ["stahl", "gepanzert", "standhaft"], "verbs": ["trotzt"], "weak": ["stahl"], "aliases": ["helme"]},
   {"id": "seil", "name": "Seil", "archetype": "cloth", "scale": 1, "plane": "materie", "tags": ["stoff", "brennbar", "bindend"], "verbs": ["fesselt"], "weak": ["brennbar"], "aliases": ["strick", "tau", "lasso seil"]},

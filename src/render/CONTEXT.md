@@ -23,7 +23,9 @@ non-figures (by archetype) as „a single object on its own / a symbolic object,
 „full body“ for them (it turned a chainsaw into a man holding one); a description that asks for people or hands keeps them.
 Pictures show at `displaySize(scale)` (a finer ladder than drawn sprites: 40 · 48 · 64 · 80 · 96 · 112 · 120 · 128)
 and are made at `ART_DENSITY` (2)× that (`artSize`); transparent margins are cut away (`trimmed`, animation frames
-share one crop), so figures fill their place and stand on the ground. The Pixi arena renders at that density (scene
+share one crop), so figures fill their place and stand on the ground: the *figure* (not the picture) fills the display size on
+its long side, a slender one grows to about the area of a sturdy one, at most `SLENDER_MAX` (1.3)× (`figureSize`; the
+remaining upscale blur is issue #93). The Pixi arena renders at that density (scene
 in arena pixels, fighter sprites at ½ scale), the canvas fallback at 1. Clicking the name under a fighter opens its card.
 Clients ask by form id (`art` message online, `GET /api/art` for the local hot-seat) and get ready / pending /
 none; pending ones are pushed (online) or polled (local). While a picture is on its way the rune circle
@@ -92,3 +94,12 @@ the engine decides as for every form. **Eichel-Arena:** the room `eichel` (`room
 in the arena. Painted by `npm run rooms` from a **guide** (`guide`: the iso room with banners and the statue pasted in,
 `docs/art/eichel-raum-vorlage.png`; `seed`, `animSeed` pin the chosen result); `hideBanners` fades the drawn wall banners
 out so the room's yellow Eichelober banners show.
+
+## Johnny Gnadenlos (`render/johnny.ts`)
+
+The singing cactus arrives in a burst of music notes and keeps humming (a note now and then) while he stands.
+His signature *Der Klassiker* (`signatureFor` → `klassiker`): the singing strip loops, sound rings pulse, a stream of notes
+arcs over to the opponent, who squirms more with every bar; a big beamed note ends it. The UI plays the song
+(`Sound.song`: squeaky square wave, an octave up), shows a speech bubble (`.bubble`) and a banner that is funny the first
+time round and weary after five (`songCry`). When a form is played against him, he parrots its name
+(`parrot`, `Sound.parrot`: speech synthesis at the highest pitch, chirps without one). Pure show – the engine decides.

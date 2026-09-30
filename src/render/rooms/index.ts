@@ -21,6 +21,8 @@ import room_gruft from "./gruft.png";
 import room_gruft_anim from "./gruft-anim.png";
 import room_heilig from "./heilig.png";
 import room_heilig_anim from "./heilig-anim.png";
+import room_kaktus from "./kaktus.png";
+import room_kaktus_anim from "./kaktus-anim.png";
 import room_nebel from "./nebel.png";
 import room_nebel_anim from "./nebel-anim.png";
 import room_sturm from "./sturm.png";
@@ -53,6 +55,8 @@ export const ROOM_PICTURES: Readonly<Record<string, string>> = {
   "gruft-anim": room_gruft_anim,
   "heilig": room_heilig,
   "heilig-anim": room_heilig_anim,
+  "kaktus": room_kaktus,
+  "kaktus-anim": room_kaktus_anim,
   "nebel": room_nebel,
   "nebel-anim": room_nebel_anim,
   "sturm": room_sturm,

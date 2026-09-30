@@ -31,3 +31,21 @@ always follow the **Bavarian deck's** look, not a generic fantasy one. Learned w
 - **Pictures:** painted with PixelLab from the card motif (`generate-image-v2` with the design and a Bavarian acorn
   as reference images – describe the acorn explicitly, or it comes out brown); a hand-downscaled painting looks soft.
   Animations and the suit room: see `src/render/CONTEXT.md` (Standard pictures and animations).
+
+## Original characters (`forms/charaktere.json`)
+
+Figures with their own personality, built like the Eichel figures (standard picture, own animations, signature, room):
+
+- **Johnny Gnadenlos** – the singing plush cactus (after the dancing-cactus toy, as a cowboy: hat, red bandana).
+  Claims to know thirty songs, always sings the same five classics (`render/johnny.ts`, public-domain songs only),
+  and parrots whatever is said to him in a squeaky voice. His mechanisms `nervt`, `stellt_zur_schau`,
+  `zieht_ins_laecherliche`, `aefft_nach` (label „spiegelt“) all act on the tag **`woertlich`** – anything spoken or sung
+  (Wort, Witz, Lüge, Fluch, Wiegenlied, Echo, Passwort, Versprechen, Papagei, Sirene). A new speech-like form gets `woertlich`.
+  **Wortgewaltige** (`wortgewaltig`, is-a `woertlich`: people who live by words – Politiker, Priester, Dichter, Anwalt,
+  Lehrerin, **Martin Luther**) are his favourite prey: he repeats their theses in a squeaky voice and ridicules them.
+  Luther's weakness is `wortgewaltig` itself, so against him the engine picks „zieht ins Lächerliche“ by itself.
+  Weakness `hoert`: whoever is louder (`uebertoent`) drowns him out.
+- **Kaktusarena:** the room `kaktus` (`anyScale`, tags `kaktusartig` – any cactus – and `wildwest`: Cowboy, Lasso, Pistole,
+  Kojote, Bison, Klapperschlange, Geier, Skorpion, Wüste, Treibsand; give new Texas/Mexico/Western forms `wildwest`) turns the dungeon
+  into a Wild West desert arena. Picture: PixelLab `generate-image-v2` with a photo of the toy as reference and the
+  Eichelober gang as style image; animations `animate-with-text-v3` on it (dance loop, singing for the attack).

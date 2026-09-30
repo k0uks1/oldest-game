@@ -32,9 +32,10 @@ import combos from "./core/combos.json" with { type: "json" };
 import sketches from "./core/sketches.json" with { type: "json" };
 import formArt from "./core/form-art.json" with { type: "json" };
 import spielkarten from "./core/forms/spielkarten.json" with { type: "json" };
+import charaktere from "./core/forms/charaktere.json" with { type: "json" };
 
 /** Forms are split by theme to keep files reviewable; order = lookup priority for aliases. */
-const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte, alltag, maerchen, film, werbung, alltag2, zukunft, tierreich, goetter, grundelemente, selbstspiel1, selbstspiel2, werkzeug, spiele, basis, basis2, spielkarten];
+const FORM_FILES: readonly unknown[][] = [grundstock, tiere, mythos, menschen, dinge, natur, kosmos, konzepte, alltag, maerchen, film, werbung, alltag2, zukunft, tierreich, goetter, grundelemente, selbstspiel1, selbstspiel2, werkzeug, spiele, basis, basis2, spielkarten, charaktere];
 
 /** Hand-drawn SVG sketches for everyday things live in one file (id → svg), merged in here. */
 function withSketches(forms: readonly unknown[]): unknown[] {
