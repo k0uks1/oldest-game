@@ -4,14 +4,17 @@
  * name asks for. Presentation only – the engine decides the outcome as for every other form.
  */
 import type { PixelImage } from "./sprite.ts";
+import { JOHNNY_NAME } from "./johnny.ts";
 
 /** A signature attack that replaces the ordinary strike. */
-export type Signature = "eichelkaese" | "eichelhagel";
+export type Signature = "eichelkaese" | "eichelhagel" | "klassiker";
 
 /** The gang is checked first – "Eichelober-Gang" also contains "Eichelober". */
 const SIGNATURE_PATTERNS: readonly (readonly [RegExp, Signature])[] = [
   [/eichel\s*-?\s*(ober\s*-?\s*)?(gang|bande)/i, "eichelhagel"],
   [/eichel\s*-?\s*ober|eichelk(ä|ae)se/i, "eichelkaese"],
+  // Johnny Gnadenlos, the singing cactus (render/johnny.ts)
+  [JOHNNY_NAME, "klassiker"],
 ];
 
 /** Which signature attack (if any) a form's name asks for. */
@@ -23,6 +26,7 @@ export function signatureFor(name: string): Signature | null {
 export const SIGNATURE_CRY: Readonly<Record<Signature, string>> = {
   eichelkaese: "EICHELKÄSEATTACKE!",
   eichelhagel: "EICHELHAGEL!",
+  klassiker: "DER KLASSIKER!",
 };
 
 type Grid = readonly string[];
