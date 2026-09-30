@@ -156,6 +156,7 @@
   {"id": "stinkend", "label": "stinkend (Gestank, der Augen tränen lässt)", "group": "faehigkeit", "parents": ["reizend"]},
   {"id": "kaesig", "label": "käsig (Eichelkäse – macht aus allem Käse)", "group": "faehigkeit", "grants": ["verkaest"]},
   {"id": "woertlich", "label": "wörtlich (Wort, Rede, Lied – etwas Gesprochenes oder Gesungenes)", "group": "merkmal"},
+  {"id": "wortgewaltig", "label": "wortgewaltig (lebt von Worten: Thesen, Predigten, Reden, Verse, Plädoyers)", "group": "merkmal", "parents": ["woertlich"]},
   {"id": "kaktusartig", "label": "Kaktus (stachelig, genügsam, aus der Wüste)", "group": "koerper", "parents": ["pflanze"]},
   {"id": "nachaeffend", "label": "äfft nach (plappert alles Gesagte in Kopfstimme nach)", "group": "faehigkeit", "grants": ["aefft_nach", "zieht_ins_laecherliche"]},
   {"id": "betrunken", "label": "betrunken", "group": "merkmal", "parents": ["chaotisch"]},

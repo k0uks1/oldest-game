@@ -25,6 +25,9 @@ import { Resolver, type Novelty, type PlayedOutcome, type Turn } from "../game/r
 import { attackOutcome, attackStyle, easterEggFor, type AttackStyle } from "../render/arena.ts";
 import { SIGNATURE_CRY, signatureFor } from "../render/eichel.ts";
 import { isJohnny, parrot, songCry, songFor } from "../render/johnny.ts";
+
+/** Johnny's mechanisms that throw the opponent's words back at it; against the eloquent he always does (else he sings). */
+const MOCKING: ReadonlySet<string> = new Set(["aefft_nach", "zieht_ins_laecherliche"]);
 import { createArena, type Arena } from "../render/arenas.ts";
 import { clear, h } from "./dom.ts";
 import { OnlineLink, type LinkStart, type LinkStatus } from "../online/link.ts";
@@ -698,7 +701,14 @@ export class App {
         const kind = move.check?.outcome ?? "vernichtet";
         const signature = signatureFor(form.name);
         let seconds: number | undefined;
-        if (signature === "klassiker") {
+        const parroted = this.state.history.at(-2)?.form;
+        if (signature === "klassiker" && parroted !== undefined && (MOCKING.has(move.verb) || this.onto.formHas(parroted, "wortgewaltig"))) {
+          // mirroring and ridiculing: he parrots the opponent's own words back in a squeaky voice
+          this.flashBanner("♪ IN KOPFSTIMME!", "info");
+          this.bubble(actor, parrot(parroted.name), 3000);
+          this.sound.parrot(`${parroted.name}? ${parroted.name}! ${parroted.name}!`);
+          seconds = 3;
+        } else if (signature === "klassiker") {
           // one of the same five classics, every time (he claims thirty)
           const n = this.johnnySongs++;
           const song = songFor(n);

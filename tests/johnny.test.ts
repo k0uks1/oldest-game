@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import { coreOntology } from "../src/content/index.ts";
 import { checkCounter, findCounters } from "../src/engine/rules.ts";
+import { namedForm } from "../src/engine/parse.ts";
 import { signatureFor } from "../src/render/eichel.ts";
 import { artFor } from "../src/render/art.ts";
 import { chooseRoom } from "../src/render/rooms.ts";
@@ -26,6 +27,14 @@ describe("Johnny Gnadenlos, the singing cactus", () => {
     assert.ok(!checkCounter(onto, f("johnny_gnadenlos"), f("drache"), "aefft_nach").valid, "a dragon is no word");
     // the mimicry needs the ability – a plain cactus cannot do it
     assert.ok(!onto.compileForm(f("kaktus")).verbs.includes("aefft_nach"));
+  });
+
+  it("beats the eloquent: Martin Luther's theses are parroted and ridiculed", () => {
+    const johnny = f("johnny_gnadenlos");
+    for (const v of ["zieht_ins_laecherliche", "aefft_nach", "nervt", "stellt_zur_schau"]) assert.ok(checkCounter(onto, johnny, f("martin_luther"), v).valid, v);
+    for (const id of ["politiker", "priester", "dichter", "anwalt"]) assert.ok(findCounters(onto, f(id)).some((c) => c.form === johnny), id);
+    assert.equal(namedForm(onto, "Martin Luther")?.id, "martin_luther");
+    assert.equal(namedForm(onto, "Luther")?.id, "martin_luther");
   });
 
   it("the name picks the show", () => {

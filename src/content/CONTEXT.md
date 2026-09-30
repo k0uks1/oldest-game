@@ -40,7 +40,10 @@ Figures with their own personality, built like the Eichel figures (standard pict
   Claims to know thirty songs, always sings the same five classics (`render/johnny.ts`, public-domain songs only),
   and parrots whatever is said to him in a squeaky voice. His mechanisms `nervt`, `stellt_zur_schau`,
   `zieht_ins_laecherliche`, `aefft_nach` (label „spiegelt“) all act on the tag **`woertlich`** – anything spoken or sung
-  (Wort, Witz, Lüge, Fluch, Wiegenlied, Echo, Passwort, Versprechen, Papagei). A new speech-like form gets `woertlich`.
+  (Wort, Witz, Lüge, Fluch, Wiegenlied, Echo, Passwort, Versprechen, Papagei, Sirene). A new speech-like form gets `woertlich`.
+  **Wortgewaltige** (`wortgewaltig`, is-a `woertlich`: people who live by words – Politiker, Priester, Dichter, Anwalt,
+  Lehrerin, **Martin Luther**) are his favourite prey: he repeats their theses in a squeaky voice and ridicules them.
+  Luther's weakness is `wortgewaltig` itself, so against him the engine picks „zieht ins Lächerliche“ by itself.
   Weakness `hoert`: whoever is louder (`uebertoent`) drowns him out.
 - **Kaktusarena:** the room `kaktus` (`anyScale`, tag `kaktusartig` – any cactus, also the plain one) turns the dungeon
   into a Wild West desert arena. Picture: PixelLab `generate-image-v2` with a photo of the toy as reference and the
