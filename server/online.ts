@@ -59,6 +59,8 @@ export interface HubLimits {
   readonly idleTtlMs: number;
   /** A room without any connection is closed after this long. */
   readonly abandonedTtlMs: number;
+  /** A seat without connection this long may be taken by anyone who joins with the room code. */
+  readonly seatFreeAfterMs: number;
 }
 
 export const DEFAULT_LIMITS: HubLimits = {
@@ -74,6 +76,7 @@ export const DEFAULT_LIMITS: HubLimits = {
   waitingTtlMs: 60 * 60_000,
   idleTtlMs: 3 * 60 * 60_000,
   abandonedTtlMs: 15 * 60_000,
+  seatFreeAfterMs: 5 * 60_000,
 };
 
 export interface HubOptions {
@@ -138,6 +141,8 @@ interface Room {
   lastMove: number;
   /** Set when the last connection left. */
   emptySince: number | null;
+  /** Per seat: since when no connection holds its token (null = someone is there, or no seat). */
+  away: [number | null, number | null];
   /** "Beleben": animations left per seat in this duel, and the ones made so far. */
   animLeft: [number, number];
   anims: AnimItem[];
@@ -353,6 +358,7 @@ export class OnlineHub {
       lastActive: now,
       lastMove: 0,
       emptySince: null,
+      away: [null, null],
       animLeft: [ANIMS_PER_PLAYER, ANIMS_PER_PLAYER],
       anims: [],
     };
@@ -368,21 +374,74 @@ export class OnlineHub {
       this.error(c, "noroom", "Diesen Raum gibt es nicht (mehr).");
       return;
     }
-    if (room.seats[1] !== null) {
-      this.error(c, "full", "Dieser Raum ist schon voll – du kannst aber zuschauen.");
+    // Someone who lost their token (tab closed, other device) comes back under their name.
+    const back = this.seatNamed(room, msg.name);
+    if (back !== undefined && room.away[back] !== null) {
+      this.reclaim(c, room, back);
       return;
     }
+    if (room.seats[1] === null) {
+      this.seatGuest(c, room, msg.name);
+      return;
+    }
+    // A seat nobody came back to for a long time: whoever has the code may play it on.
+    const now = this.now();
+    const free = ([0, 1] as const).find((p) => {
+      const since = room.away[p];
+      return since !== null && now - since >= this.limits.seatFreeAfterMs;
+    });
+    if (free !== undefined && !room.sameDevice) {
+      this.reclaim(c, room, free);
+      return;
+    }
+    this.error(
+      c,
+      "full",
+      back === undefined
+        ? "Dieser Raum ist schon voll – du kannst aber zuschauen."
+        : `„${room.seats[back]?.name ?? msg.name}“ ist in diesem Raum noch verbunden. Warst du das? Dann versuch es in einer halben Minute noch einmal.`,
+    );
+  }
+
+  private seatGuest(c: Conn, room: Room, wanted: string): void {
     this.leave(c);
     const token = randomUUID();
     const host = room.seats[0]?.name ?? "";
     // Same name as the host would make the HUD ambiguous.
-    const name = msg.name === host ? `${msg.name} II` : msg.name;
+    const name = wanted === host ? `${wanted} II` : wanted;
     room.seats[1] = { name, token };
     room.state = createGame([host, name]);
     room.animLeft = [ANIMS_PER_PLAYER, ANIMS_PER_PLAYER];
     room.anims = [];
     this.enter(c, room, token);
     this.broadcast(room, { t: "start", state: room.state }, c);
+  }
+
+  /** The seat whose player has this name (a guest named like the host got " II"). */
+  private seatNamed(room: Room, name: string): PlayerId | undefined {
+    const key = (s: string): string => s.trim().toLocaleLowerCase("de");
+    const want = key(name);
+    return ([0, 1] as const).find((p) => {
+      const seat = room.seats[p];
+      return seat !== null && (key(seat.name) === want || key(seat.name) === `${want} ii`);
+    });
+  }
+
+  /**
+   * Hand a seat nobody holds to this connection under a fresh token – the lost one is dead from
+   * now on. On one device both seats share the token, so both move over.
+   */
+  private reclaim(c: Conn, room: Room, p: PlayerId): void {
+    const old = room.seats[p]?.token;
+    if (old === undefined) return;
+    this.leave(c);
+    const token = randomUUID();
+    for (const q of [0, 1] as const) {
+      const seat = room.seats[q];
+      if (seat?.token === old) room.seats[q] = { name: seat.name, token };
+    }
+    this.opts.log?.(`room ${room.code}: seat ${String(p)} taken back`);
+    this.enter(c, room, token);
   }
 
   /** A spectator: sees everything, changes nothing. */
@@ -409,6 +468,11 @@ export class OnlineHub {
       this.error(c, "noroom", "Diesen Raum gibt es nicht mehr.");
       return;
     }
+    // A fresh tab trying a remembered seat must not steal it from a tab that is still playing.
+    if (msg.ifAway === true && [...room.conns].some((o) => o !== c && o.token === msg.token)) {
+      this.error(c, "seated", "Dieses Duell ist schon in einem anderen Tab offen.");
+      return;
+    }
     this.leave(c);
     this.enter(c, room, msg.token);
   }
@@ -418,6 +482,7 @@ export class OnlineHub {
     c.token = token;
     room.conns.add(c);
     room.emptySince = null;
+    for (const p of [0, 1] as const) if (room.seats[p]?.token === token) room.away[p] = null;
     room.lastActive = this.now();
     this.sendWelcome(c, room);
     this.broadcast(room, { t: "presence", players: this.presence(room), watchers: this.watcherCount(room) }, c);
@@ -430,7 +495,12 @@ export class OnlineHub {
     c.room = null;
     c.token = null;
     c.seats = [];
-    if (room.conns.size === 0) room.emptySince = this.now();
+    const now = this.now();
+    if (room.conns.size === 0) room.emptySince = now;
+    for (const p of [0, 1] as const) {
+      const seat = room.seats[p];
+      if (seat !== null && room.away[p] === null && ![...room.conns].some((o) => o.token === seat.token)) room.away[p] = now;
+    }
     this.broadcast(room, { t: "presence", players: this.presence(room), watchers: this.watcherCount(room) });
   }
 
@@ -548,6 +618,7 @@ export class OnlineHub {
     if (state.winner === 0) {
       room.seats[0] = b;
       room.seats[1] = a;
+      room.away = [room.away[1], room.away[0]];
     }
     room.state = createGame([room.seats[0]?.name ?? a.name, room.seats[1]?.name ?? b.name]);
     room.chronicle = [];

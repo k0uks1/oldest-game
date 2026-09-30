@@ -26,8 +26,9 @@ import { attackOutcome, attackStyle, easterEggFor, type AttackStyle } from "../r
 import { SIGNATURE_CRY, signatureFor } from "../render/eichel.ts";
 import { createArena, type Arena } from "../render/arenas.ts";
 import { clear, h } from "./dom.ts";
-import { OnlineLink, savedSeat, type LinkStatus } from "../online/link.ts";
-import { applyPackDelta, normalizeRoom, type ChronicleEntry, type ClientMsg, type SeatInfo, type ServerMsg } from "../online/protocol.ts";
+import { OnlineLink, type LinkStart, type LinkStatus } from "../online/link.ts";
+import { findSession, listSessions, tabSeat, type Session } from "../online/sessions.ts";
+import { applyPackDelta, normalizeRoom, type ChronicleEntry, type SeatInfo, type ServerMsg } from "../online/protocol.ts";
 import { Music } from "./music.ts";
 import { addReport, clearReports, loadReports, reportsText } from "./reports.ts";
 import { ArtClient, httpTransport, socketTransport } from "./art-client.ts";
@@ -491,11 +492,17 @@ export class App {
     await this.loadLearned();
     if (this.server?.online === true) {
       const invite = new URLSearchParams(location.search).get("room");
-      if (savedSeat() !== null) {
-        this.goOnline(null);
+      const room = invite === null ? undefined : normalizeRoom(invite);
+      // This tab's duel (reload), the invited duel if we already sit there, or the last one
+      // left behind by a closed tab – the latter only if no other tab is playing it.
+      const own = tabSeat();
+      const known = room === undefined ? undefined : findSession(room);
+      const last = listSessions().find((s) => !s.over);
+      const back = own !== null ? { resume: own } : known !== undefined ? { resume: known } : room === undefined && last !== undefined ? { resume: last, ifAway: true } : undefined;
+      if (back !== undefined) {
+        this.goOnline(back);
         return;
       }
-      const room = invite === null ? undefined : normalizeRoom(invite);
       if (room !== undefined) {
         history.replaceState(null, "", location.pathname);
         this.showStart({ tab: "online", room });
@@ -1234,15 +1241,15 @@ export class App {
     return this.online === null || this.seats.includes(this.state.active);
   }
 
-  /** Connect to the server's rooms; `hello` = create/join, null = resume the saved seat. */
-  private goOnline(hello: ClientMsg | null, from: StartTab = "online"): void {
-    this.online?.close();
+  /** Connect to the server's rooms: create / join / watch, or back to a remembered seat. */
+  private goOnline(start: LinkStart, from: StartTab = "online"): void {
+    this.online?.close(false);
     this.seats = [];
     this.joined = false;
     this.startTab = from;
     this.showConnecting();
     this.online = new OnlineLink(
-      hello,
+      start,
       (m) => {
         this.onServer(m);
       },
@@ -1252,9 +1259,10 @@ export class App {
     );
   }
 
-  private leaveOnline(): void {
+  /** `forget`: leave the duel for good; otherwise it stays in the start dialog to go back to. */
+  private leaveOnline(forget = true): void {
     if (this.online === null) return;
-    this.online.close();
+    this.online.close(forget);
     this.online = null;
     this.art.setTransport(this.server?.art === true ? httpTransport() : null);
     this.lore.direct((f) => this.resolver.legend(f));
@@ -1474,7 +1482,7 @@ export class App {
         return;
       case "error":
         // Not (or no longer) in a room: back to the start dialog, the reason next to the field.
-        if (!this.joined || m.code === "noroom" || m.code === "access" || m.code === "full") {
+        if (!this.joined || m.code === "noroom" || m.code === "access" || m.code === "full" || m.code === "seated") {
           const tab = this.startTab;
           this.leaveOnline();
           this.showStart({ tab, error: m.message, ...(m.code === "access" ? { focus: "access" as const } : m.code === "noroom" || m.code === "full" ? { focus: "room" as const } : {}) });
@@ -1586,7 +1594,7 @@ export class App {
       const [a, b] = [this.draft.name0 || "Spieler 1", this.draft.name1 || "Spieler 2"];
       if (viaRoom) {
         const code = access();
-        this.goOnline({ t: "create", name: a, name2: b, ...(code === undefined ? {} : { code }) }, "local");
+        this.goOnline({ hello: { t: "create", name: a, name2: b, ...(code === undefined ? {} : { code }) } }, "local");
         return;
       }
       this.closeModal();
@@ -1612,7 +1620,7 @@ export class App {
       if (name === undefined) return;
       this.unlockAudio();
       const code = access();
-      this.goOnline({ t: "create", name, ...(code === undefined ? {} : { code }) }, "online");
+      this.goOnline({ hello: { t: "create", name, ...(code === undefined ? {} : { code }) } }, "online");
     };
     const join = h("button", { class: "btn primary", onclick: () => {
           joinRoom();
@@ -1631,7 +1639,7 @@ export class App {
           }
           this.unlockAudio();
           const code = access();
-          this.goOnline({ t: "watch", room: target, ...(code === undefined ? {} : { code }) }, "online");
+          this.goOnline({ hello: { t: "watch", room: target, ...(code === undefined ? {} : { code }) } }, "online");
         } }, "Zuschauen");
     const joinRoom = (): void => {
       const code6 = validRoom();
@@ -1642,8 +1650,14 @@ export class App {
       const name = checkOnline();
       if (name === undefined) return;
       this.unlockAudio();
+      // Already sitting in this room (another tab, an earlier visit): back to that seat.
+      const known = findSession(code6);
+      if (known !== undefined) {
+        this.goOnline({ resume: known }, "online");
+        return;
+      }
       const code = access();
-      this.goOnline({ t: "join", room: code6, name, ...(code === undefined ? {} : { code }) }, "online");
+      this.goOnline({ hello: { t: "join", room: code6, name, ...(code === undefined ? {} : { code }) } }, "online");
     };
     const updateJoin = (): void => {
       room.value = room.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -1688,6 +1702,7 @@ export class App {
       "div",
       { class: "start-pane" },
       h("p", { class: "hint" }, "Zwei Geräte, ein Duell: Einer eröffnet einen Raum und schickt Code oder Link, der andere tritt bei."),
+      this.runningDuels(),
       h("label", { for: "start-me" }, "Dein Name", me),
       needsAccess ? h("label", { for: "start-access" }, "Zugangscode des Servers", accessOnline) : null,
       h(
@@ -1734,6 +1749,31 @@ export class App {
     focus.focus();
   }
 
+  /** Duels this browser still has a seat in – one click back to each (several at once are fine). */
+  private runningDuels(): HTMLElement | null {
+    const duels = listSessions().filter((s) => s.room !== this.online?.room);
+    if (duels.length === 0) return null;
+    const label = (s: Session): string => {
+      const who = s.seats.length === 0 ? `zuschauen${s.foe === "" ? "" : ` bei ${s.foe}`}` : `${s.me || "du"}${s.foe === "" ? "" : ` gegen ${s.foe}`}`;
+      return `${s.room} · ${who}${s.over ? " (vorbei)" : ""}`;
+    };
+    return h(
+      "div",
+      { class: "choice running" },
+      h("h3", {}, "Deine Duelle"),
+      ...duels.map((s) =>
+        h(
+          "div",
+          { class: "actions" },
+          h("button", { class: "btn", title: "Zurück auf deinen Platz", onclick: () => {
+                this.unlockAudio();
+                this.goOnline({ resume: s }, "online");
+              } }, label(s)),
+        ),
+      ),
+    );
+  }
+
   /** While the connection to a room is being made – instead of an empty arena. */
   private showConnecting(trouble = false): void {
     this.modal(
@@ -1743,7 +1783,7 @@ export class App {
         "div",
         { class: "actions" },
         h("button", { class: "btn ghost", onclick: () => {
-              this.leaveOnline();
+              this.leaveOnline(false);
               this.showStart();
             } }, "Abbrechen"),
       ),
