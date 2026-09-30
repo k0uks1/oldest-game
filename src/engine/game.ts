@@ -1,4 +1,4 @@
-import { eleganzFor, formCost, overkillSurcharge, underdogRefund } from "./cost.ts";
+import { arenaShare, eleganzFor, formCost, overkillSurcharge, underdogRefund } from "./cost.ts";
 import { activeFields, fieldModifiers } from "./fields.ts";
 import type { Ontology } from "./ontology/ontology.ts";
 import { checkCounter, checkEscape, checkRuling, DEFAULT_CONFIG, effectiveVerbs, ESCAPE } from "./rules.ts";
@@ -70,7 +70,7 @@ export function evaluateForm(onto: Ontology, state: GameState, form: Form): Move
   const echo = echoedVerbs(state);
   const wille = state.players[state.active].wille;
   const minScale = arenaMinScale(state);
-  const cost = formCost(onto, form).total + overkillSurcharge(form.scale, Math.max(target.scale, minScale));
+  const cost = moveCost(onto, state, form);
   const fields = activeFields(onto, state);
   const verbs = [...effectiveVerbs(onto, form)];
   if (Object.keys(state.config.escapeRoutes).some((r) => onto.formHas(form, r))) verbs.push(ESCAPE);
@@ -106,7 +106,9 @@ export function evaluateForm(onto: Ontology, state: GameState, form: Form): Move
 
 export function moveCost(onto: Ontology, state: GameState, form: Form): number {
   const target = currentTarget(state);
-  return formCost(onto, form).total + (target === null ? 0 : overkillSurcharge(form.scale, Math.max(target.scale, arenaMinScale(state))));
+  if (target === null) return formCost(onto, form).total;
+  const minScale = arenaMinScale(state);
+  return Math.max(1, formCost(onto, form).total - arenaShare(form.scale, minScale)) + overkillSurcharge(form.scale, Math.max(target.scale, minScale));
 }
 
 /**

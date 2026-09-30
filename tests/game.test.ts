@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { coreOntology } from "../src/content/index.ts";
 import { attempt } from "../src/engine/attempt.ts";
-import { createGame, evaluateForm as evaluate, pass, play as playMove } from "../src/engine/game.ts";
+import { arenaShare } from "../src/engine/cost.ts";
+import { rng } from "../src/engine/text.ts";
+import { arenaMinScale, createGame, evaluateForm as evaluate, moveCost, pass, play as playMove, regenFor, roundNumber } from "../src/engine/game.ts";
 import type { Form, GameState } from "../src/engine/types.ts";
 
 const onto = coreOntology();
@@ -164,5 +166,45 @@ describe("rule-blocked attempts", () => {
     assert.ok(r.kind === "rejected");
     assert.ok(r.reason.includes("Arena ist gewachsen"));
     assert.equal(r.state, g);
+  });
+});
+
+describe("Wille over a long duel (\"Die Arena trägt\")", () => {
+  it("the arena pays the share of the price its minimum scale forces", () => {
+    assert.equal(arenaShare(5, 1), 0, "no escalation yet – full price");
+    assert.equal(arenaShare(7, 7), 16, "a form at the floor pays only what lies above it");
+    assert.equal(arenaShare(8, 7), 16, "bigger than the floor: the rest is paid");
+    assert.equal(arenaShare(3, 7), 2, "a mythic small form never gets more than its own base price back");
+  });
+
+  it("a late counter at the arena's floor stays affordable with a round's regeneration", () => {
+    // escalation: after 18 moves every form needs scale 7; one round brings 12 Wille back
+    const late = createGame(["A", "B"]);
+    const floor7 = onto.lexicon.filter((f) => f.scale === 7);
+    const state: GameState = { ...late, phase: "playing", history: Array.from({ length: 18 }, (_, i) => ({ player: i % 2 === 0 ? 0 : 1, form: lx("titan"), verb: null, cost: 0, eleganz: 0, refund: 0, check: null, discovery: false }) as const) };
+    const costs = floor7.map((f) => moveCost(onto, state, f)).sort((a, b) => a - b);
+    const median = costs[Math.floor(costs.length / 2)] ?? Infinity;
+    assert.ok(median <= regenFor(state.config, 10), `a typical scale-7 form costs ${String(median)}`);
+  });
+
+  it("trading blows at ever bigger sizes still reaches the last round", () => {
+    // the pattern from the report: each answers the other at (at least) its size – never cleverly from below
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const random = rng(seed);
+      let g = createGame(["A", "B"]);
+      g = must(play(g, onto.lexicon.filter((f) => f.scale === 1)[seed] ?? lx("funke"), null));
+      while (g.phase !== "finished") {
+        const target = g.history.at(-1)?.form;
+        assert.ok(target);
+        const options = onto.lexicon
+          .filter((f) => !g.usedFormIds.includes(f.id) && f.scale >= Math.min(target.scale, arenaMinScale(g)))
+          .flatMap((f) => evaluateForm(g, f).filter((o) => o.playable).map((o) => ({ f, o })));
+        // any fitting answer, not the cheapest – like a player who does not know the price list
+        const pick = options[Math.floor(random() * options.length)];
+        assert.ok(pick, `stuck in round ${String(roundNumber(g))} with ${String(g.players[g.active].wille)} Wille against ${target.name}`);
+        g = must(play(g, pick.f, pick.o.verb));
+      }
+      assert.equal(g.endReason, "rounds");
+    }
   });
 });

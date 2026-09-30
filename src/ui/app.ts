@@ -843,7 +843,7 @@ export class App {
     if (kind === "wille") {
       this.modal(
         "Wille & Eleganz",
-        h("p", {}, h("strong", {}, "Wille"), " (die leuchtende Linie, Zahl links) ist deine Kraft, dich zu verwandeln. Jede Gestalt kostet Wille – je größer, desto teurer. Wer viel größer spielt als nötig, zahlt Aufpreis."),
+        h("p", {}, h("strong", {}, "Wille"), " (die leuchtende Linie, Zahl links) ist deine Kraft, dich zu verwandeln. Jede Gestalt kostet Wille – je größer, desto teurer. Wer viel größer spielt als nötig, zahlt Aufpreis. Die Größe, die die Arena gerade verlangt, trägt die Arena: Du zahlst nur, was darüber hinausgeht."),
         h("p", {}, `Du bekommst jede Runde Wille zurück (anfangs ${String(c.regen)}, dann mehr). Höchstens ${String(c.maxWille)}. Zerschellt eine Gestalt, kostet sie die Hälfte ihres Preises plus ${String(c.failurePenalty)}. Wem der Wille ausgeht, der verliert.`),
         h("p", {}, h("strong", {}, "✦ Eleganz"), " sind Punkte für kluge Siege: Kleines schlägt Großes, Schwachstellen, Gnade, neue Entdeckungen. Nach ", String(c.roundLimit), " Runden gewinnt, wer mehr Eleganz hat."),
         h("p", { class: "hint" }, `Gerade: ${s.players[0].name} ${String(s.players[0].wille)} Wille ✦ ${String(s.players[0].eleganz)} · ${s.players[1].name} ${String(s.players[1].wille)} Wille ✦ ${String(s.players[1].eleganz)}`),
@@ -1813,7 +1813,7 @@ export class App {
         li(`Spieler 1 eröffnet mit einer kleinen Gestalt (höchstens Stufe ${String(c.maxOpeningScale)}) – kostenlos und mit ${String(c.openingEleganz)} Eleganz als Ausgleich für den ersten Zug.`),
         li("Abwechselnd wird jeder zu etwas, das die letzte Gestalt des Gegners besiegt – mit einem ", h("em", {}, "Mechanismus"), " (verbrennt, ertränkt, nennt den wahren Namen …)."),
         li("Die Engine prüft deterministisch: Hat das Ziel eine passende Angriffsfläche? Blockiert etwas? Kommt man überhaupt heran (Nahkampf erreicht nichts, was fliegt)? Reicht die Intensität (eine Kerze schmilzt keinen Anker, ein Eimer Wasser trägt keinen Fels ab)? Reicht die Kraft (Stufe + Hebel + Schwäche)?"),
-        li(`Jede Gestalt kostet `, h("strong", {}, "Wille"), ` (die leuchtende Linie). Größe ist teuer, Schwächen machen billiger. Wer mehr als eine Stufe über dem Ziel spielt, zahlt Overkill. Maximal +${String(c.maxScaleJump)} Stufen.`),
+        li(`Jede Gestalt kostet `, h("strong", {}, "Wille"), ` (die leuchtende Linie). Größe ist teuer, Schwächen machen billiger; die Mindestgröße der Arena ist schon bezahlt. Wer mehr als eine Stufe über dem Ziel spielt, zahlt Overkill. Maximal +${String(c.maxScaleJump)} Stufen.`),
         li("Wer kleiner als das Ziel gewinnt, bekommt Wille zurück und viel ", h("strong", {}, "Eleganz ✦"), "."),
         li(`Einfallsreichtum: Wer zu etwas wird, das das Spiel noch nie gesehen hat, lehrt es dem Grimoire – und bekommt bei Erfolg +${String(c.discoveryEleganz)} Eleganz.`),
         li(`Eskalation: Alle ${String(c.escalateEveryMoves)} Züge steigt die Mindeststufe – die Mauern der Arena fallen. Nur mythische Hebel (≥ ${String(c.mythicLeverage)}) – Hoffnung, wahre Namen, Erwachen – ignorieren das.`),
