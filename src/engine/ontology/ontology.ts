@@ -107,6 +107,8 @@ export class Ontology {
 
   // lookup indexes
   private readonly aliasExact = new Map<string, Form>();
+  /** Only what a pack declares (name, id, aliases) – not the head-noun aliases derived from multi-word names. */
+  private readonly declaredNames = new Map<string, Form>();
   private readonly aliasSuffix = new Trie<{ alias: string; form: Form }>();
   private readonly aliasFuzzy = new TrigramIndex<Form>();
   private readonly modifierStems = new Trie<ModifierSpec>();
@@ -357,6 +359,7 @@ export class Ontology {
         const keys = pass === "name" ? [spec.name, spec.id] : [...(spec.aliases ?? []), normalize(spec.name).split(" ").at(-1) ?? ""];
         for (const raw of keys) {
           const k = lookupKey(raw);
+          if (k.length >= 2 && (pass === "name" || (spec.aliases ?? []).includes(raw)) && !this.declaredNames.has(k)) this.declaredNames.set(k, form);
           if (k.length < 3) {
             // two-letter names ("Ei") are found by exact match only – never as suffix or typo
             if (pass === "name" && k.length === 2 && !this.aliasExact.has(k)) this.aliasExact.set(k, form);
@@ -688,6 +691,11 @@ export class Ontology {
 
   formByAlias(key: string): Form | undefined {
     return this.aliasExact.get(key);
+  }
+
+  /** The form whose own name, id or declared alias has this key („Eichel Ober“, „eichel-ober“ → Eichelober). */
+  formByName(key: string): Form | undefined {
+    return this.declaredNames.get(key);
   }
 
   /** All aliases that are a suffix of `word` (longest first). */

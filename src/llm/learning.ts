@@ -366,15 +366,33 @@ function words(text: string): Set<string> {
   return new Set(tokenize(text).filter((w) => !STOPWORDS.has(w)));
 }
 
-/** Does the text say nothing beyond the name („die Bibel“ for Bibel – but not „zehnbeiniger Gandalf“ for Gandalf)? */
+/**
+ * The part of a player's text that names the form – what follows a comma, semicolon, colon or a
+ * spaced dash says how it attacks („Haus, stürzt auf den Gegner ein“ → „Haus“).
+ */
+export function formPart(text: string): string {
+  const head = (text.split(/[,;:]|\s[–—-]\s/)[0] ?? "").trim();
+  return head === "" ? text.trim() : head;
+}
+
+/** Lookup key of the form's words without filler („der Eichel Ober“ → „eichelober“, as `lookupKey("Eichelober")`). */
+export function nameKey(text: string): string {
+  return [...words(formPart(text))].join("");
+}
+
+/**
+ * Does the text say nothing beyond the name („die Bibel“ for Bibel, „Eichel Ober“ for Eichelober – but not
+ * „zehnbeiniger Gandalf“ for Gandalf)? Only the form part counts, not how it attacks.
+ */
 export function saysOnlyName(text: string, name: string): boolean {
   const n = words(name);
-  return [...words(text)].every((w) => n.has(w));
+  const t = [...words(formPart(text))];
+  return t.every((w) => n.has(w)) || t.join("") === lookupKey(name);
 }
 
 /** What makes two learned forms the same thing: name, the lexicon form they vary, and how. */
 function sameThingKey(f: { readonly name: string; readonly base?: string | undefined; readonly mods?: readonly string[] | undefined }): string {
-  return `${normalize(f.name)}\u0000${f.base ?? ""}\u0000${(f.mods ?? []).map((m) => normalize(m)).join("|")}`;
+  return `${lookupKey(f.name)}\u0000${f.base ?? ""}\u0000${(f.mods ?? []).map((m) => normalize(m)).join("|")}`;
 }
 
 /** …and exactly the same shape – only such twins are folded on load (a ten-legged Gandalf is another Gandalf). */
@@ -400,7 +418,7 @@ export function namesakeOf(learned: ContentPack, form: Pick<Form, "name" | "base
  * „zehnbeiniger Gandalf“) and that name is taken already.
  */
 export function playerName(text: string): string {
-  const clean = text.replace(/[\p{C}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 40);
+  const clean = formPart(text).replace(/[\p{C}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 40);
   return clean.charAt(0).toLocaleUpperCase("de") + clean.slice(1);
 }
 
@@ -445,10 +463,13 @@ export function mergeNamesakes(pack: ContentPack): ContentPack {
   }
   // repair: a wording that says more than the name („zehnbeiniger gandalf“ on Gandalf) belongs to another
   // form – earlier merges hung such aliases on the plain one. Its own first wording (the id) stays.
+  // A name that kept how the form attacks („Haus, stürzt auf den Gegner ein“) is cut back to the form's words.
   const repaired = forms.map((f) => {
     const own = f.id.startsWith("g:") ? f.id.slice(2) : f.id;
-    const keep = (f.aliases ?? []).filter((a) => slug(a) === own || saysOnlyName(a, f.name) || !isSuperset(words(a), words(f.name)));
-    return keep.length === (f.aliases ?? []).length ? f : { ...f, aliases: keep };
+    const name = formPart(f.name);
+    const keep = (f.aliases ?? []).filter((a) => slug(a) === own || saysOnlyName(a, name) || !isSuperset(words(a), words(name)));
+    if (keep.length === (f.aliases ?? []).length && name === f.name) return f;
+    return { ...f, name, aliases: keep };
   });
   const aliasesFixed = repaired.some((f, i) => f !== forms[i]);
   if (moved.size === 0 && !aliasesFixed) return pack;
