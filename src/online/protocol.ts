@@ -23,11 +23,18 @@ const ROOM_PATTERN = new RegExp(`^[${ROOM_ALPHABET}]{${String(ROOM_CODE_LENGTH)}
 export type ClientMsg =
   /** Open a room. With `name2`, both seats belong to this client (one device, server-side Claude). */
   | { readonly t: "create"; readonly name: string; readonly name2?: string; readonly code?: string }
+  /**
+   * Enter a room by code: the seat of the player with this name if nobody holds it (their token
+   * got lost), else the free seat, else a seat nobody came back to for `seatFreeAfterMs`.
+   */
   | { readonly t: "join"; readonly room: string; readonly name: string; readonly code?: string }
   /** Enter a room only to watch – no seat, no moves. */
   | { readonly t: "watch"; readonly room: string; readonly code?: string }
-  /** Reconnect with the seat token from `welcome`. */
-  | { readonly t: "resume"; readonly room: string; readonly token: string }
+  /**
+   * Reconnect with the seat token from `welcome`. `ifAway`: only if no other connection holds
+   * the seat right now (a fresh tab trying a remembered duel – answered with `seated` otherwise).
+   */
+  | { readonly t: "resume"; readonly room: string; readonly token: string; readonly ifAway?: boolean }
   | { readonly t: "move"; readonly text: string }
   /** Give up (the engine's `pass`). */
   | { readonly t: "pass" }
@@ -155,7 +162,8 @@ export interface PackDelta {
   readonly notes?: readonly NoteSpec[];
 }
 
-export type ErrorCode = "access" | "noroom" | "full" | "limit" | "bad" | "turn" | "busy" | "claude";
+/** `seated`: a `resume` with `ifAway` found the seat held by another connection. */
+export type ErrorCode = "access" | "noroom" | "full" | "seated" | "limit" | "bad" | "turn" | "busy" | "claude";
 
 export type ServerMsg =
   | {
@@ -247,7 +255,8 @@ export function parseClientMsg(raw: string): ClientMsg | undefined {
     case "resume": {
       const room = normalizeRoom(m["room"]);
       const token = str(m["token"], 64);
-      return room === undefined || token === undefined ? undefined : { t: "resume", room, token };
+      if (room === undefined || token === undefined) return undefined;
+      return { t: "resume", room, token, ...(m["ifAway"] === true ? { ifAway: true } : {}) };
     }
     case "move": {
       const text = str(m["text"], 400)?.replace(/[\p{C}]/gu, "").trim();

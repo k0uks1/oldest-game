@@ -396,7 +396,8 @@ export function startServer(opts: ServerOptions): RunningServer {
       });
     });
   });
-  // Heartbeat: dead connections (phone went to sleep) are dropped, so seats show "offline".
+  // Heartbeat: dead connections (phone went to sleep, tab killed) are dropped within 30 s, so seats
+  // show "offline" and a player who lost their token can take their seat back by name.
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) {
       if (alive.get(ws) !== true) {
@@ -406,7 +407,7 @@ export function startServer(opts: ServerOptions): RunningServer {
       alive.set(ws, false);
       ws.ping();
     }
-  }, 30_000);
+  }, 15_000);
   const sweeper = setInterval(() => {
     theHub.sweep();
   }, 60_000);

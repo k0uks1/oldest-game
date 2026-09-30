@@ -1,55 +1,38 @@
 /**
  * Browser side of an online duel: one WebSocket to the game server, reconnecting on its own.
- * The seat token lives in sessionStorage – per tab, so two tabs are two players, and a reload
- * (or a phone waking up) returns to the same seat.
+ * Every duel it enters is remembered (`sessions.ts`), so a reload, a closed tab or a browser
+ * restart comes back to the same seat. One link = one duel; several duels are several links.
  */
-import { WS_PATH, type ClientMsg, type ServerMsg } from "./protocol.ts";
+import type { PlayerId } from "../engine/types.ts";
+import { WS_PATH, type ClientMsg, type SeatInfo, type ServerMsg } from "./protocol.ts";
+import { forgetSession, rememberSession, setTabSeat, type Seat } from "./sessions.ts";
 
-const KEY = "oldest-game:online";
-
-export interface Seat {
-  readonly room: string;
-  readonly token: string;
-}
-
-export function savedSeat(): Seat | null {
-  try {
-    const raw = sessionStorage.getItem(KEY);
-    if (raw === null) return null;
-    const o = JSON.parse(raw) as Partial<Seat>;
-    return typeof o.room === "string" && typeof o.token === "string" ? { room: o.room, token: o.token } : null;
-  } catch {
-    return null;
-  }
-}
-
-function storeSeat(seat: Seat | null): void {
-  try {
-    if (seat === null) sessionStorage.removeItem(KEY);
-    else sessionStorage.setItem(KEY, JSON.stringify(seat));
-  } catch {
-    /* private mode – reconnect then only works while the tab lives */
-  }
-}
+/** How a link starts: a first message (create / join / watch), or back to a remembered seat. */
+export type LinkStart = { readonly hello: ClientMsg } | { readonly resume: Seat; readonly ifAway?: boolean };
 
 export type LinkStatus = "connecting" | "open" | "lost";
 
 export class OnlineLink {
   private ws: WebSocket | null = null;
+  private hello: ClientMsg | null;
   private seat: Seat | null;
+  /** Only for the very first try of a remembered seat – once welcomed, it is ours. */
+  private ifAway: boolean;
   private attempts = 0;
   private stopped = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private seats: readonly PlayerId[] = [];
+  private players: readonly [SeatInfo | null, SeatInfo | null] = [null, null];
+  private over = false;
 
-  /**
-   * @param hello first message (create / join) – or null to resume the saved seat.
-   */
   constructor(
-    private hello: ClientMsg | null,
+    start: LinkStart,
     private readonly onMessage: (msg: ServerMsg) => void,
     private readonly onStatus: (s: LinkStatus) => void,
   ) {
-    this.seat = hello === null ? savedSeat() : null;
+    this.hello = "hello" in start ? start.hello : null;
+    this.seat = "resume" in start ? start.resume : null;
+    this.ifAway = "resume" in start && start.ifAway === true;
     this.connect();
   }
 
@@ -63,12 +46,23 @@ export class OnlineLink {
     return true;
   }
 
-  /** Leave for good (new local game, room closed). */
-  close(): void {
+  /** Stop. `forget`: leave the duel for good (else it stays offered to go back to). */
+  close(forget = true): void {
     this.stopped = true;
     if (this.timer !== undefined) clearTimeout(this.timer);
-    storeSeat(null);
+    if (this.seat !== null) {
+      if (forget) forgetSession(this.seat.room);
+      else setTabSeat(null);
+    }
     this.ws?.close();
+  }
+
+  private remember(): void {
+    if (this.seat === null) return;
+    const name = (p: PlayerId): string => this.players[p]?.name ?? "";
+    const mine = this.seats.map(name).filter((n) => n !== "");
+    const others = ([0, 1] as const).filter((p) => !this.seats.includes(p)).map(name).filter((n) => n !== "");
+    rememberSession({ ...this.seat, seats: this.seats, me: mine.join(" & "), foe: others.join(" & "), seen: Date.now(), over: this.over });
   }
 
   private connect(): void {
@@ -80,7 +74,7 @@ export class OnlineLink {
     ws.onopen = () => {
       this.attempts = 0;
       this.onStatus("open");
-      if (this.seat !== null) this.send({ t: "resume", room: this.seat.room, token: this.seat.token });
+      if (this.seat !== null) this.send({ t: "resume", room: this.seat.room, token: this.seat.token, ...(this.ifAway ? { ifAway: true } : {}) });
       else if (this.hello !== null) this.send(this.hello);
     };
     ws.onmessage = (e) => {
@@ -94,13 +88,37 @@ export class OnlineLink {
       if (msg.t === "welcome") {
         this.seat = { room: msg.room, token: msg.token };
         this.hello = null;
-        storeSeat(this.seat);
+        this.ifAway = false;
+        this.seats = msg.seats;
+        this.players = msg.players;
+        this.over = msg.state?.phase === "finished";
+        setTabSeat(this.seat);
+        this.remember();
       }
-      if (msg.t === "error" && (msg.code === "noroom" || msg.code === "access" || msg.code === "full")) {
-        // Nothing to come back to.
-        this.seat = null;
-        this.hello = null;
-        this.close();
+      // keep the remembered duel fresh while it lasts
+      if (msg.t === "presence") {
+        this.players = msg.players;
+        this.remember();
+      }
+      if (msg.t === "start" || msg.t === "turn" || msg.t === "resigned") {
+        const state = msg.t === "turn" ? msg.turn.state : msg.state;
+        this.players = [
+          { name: state.players[0].name, online: true },
+          { name: state.players[1].name, online: true },
+        ];
+        this.over = state.phase === "finished";
+        this.remember();
+      }
+      if (msg.t === "error") {
+        if (msg.code === "noroom") {
+          // Nothing to come back to.
+          this.close(true);
+          this.seat = null;
+        } else if (msg.code === "access" || msg.code === "full" || msg.code === "seated") {
+          // Not in (yet): stop trying, but a remembered seat stays remembered.
+          this.close(false);
+          this.seat = null;
+        }
       }
       this.onMessage(msg);
     };

@@ -183,6 +183,89 @@ describe("online rooms (authoritative server)", () => {
     assert.deepEqual(b.last("presence")?.players.map((p) => p?.online), [true, true]);
   });
 
+  it("lost token: joining by code under the same name takes the seat back", async () => {
+    const { hub } = setup();
+    const { a, b, code, ca, cb } = openRoom(hub);
+    ca.receive(JSON.stringify({ t: "move", text: "Ritter" }));
+    await settle();
+    const oldToken = b.last("welcome")?.token;
+    assert.ok(oldToken);
+    // still connected: the name alone does not take a seat away
+    const early = new FakePeer("10.0.0.9");
+    hub.attach(early)?.receive(JSON.stringify({ t: "join", room: code, name: "Choronzon" }));
+    assert.equal(early.last("error")?.code, "full");
+    assert.match(early.last("error")?.message ?? "", /noch verbunden/);
+    cb.closed();
+    // tab closed, token gone – the guest comes back by code and name (case does not matter)
+    const b2 = new FakePeer("10.0.0.2");
+    hub.attach(b2)?.receive(JSON.stringify({ t: "join", room: code, name: "choronzon" }));
+    const w = b2.last("welcome");
+    assert.ok(w);
+    assert.deepEqual(w.seats, [1]);
+    assert.notEqual(w.token, oldToken, "a fresh token");
+    assert.equal(w.state?.history.length, 1, "the duel goes on where it was");
+    assert.deepEqual(a.last("presence")?.players.map((p) => p?.online), [true, true]);
+    const stale = new FakePeer("10.0.0.2");
+    hub.attach(stale)?.receive(JSON.stringify({ t: "resume", room: code, token: oldToken }));
+    assert.equal(stale.last("error")?.code, "noroom", "the lost token is dead");
+  });
+
+  it("lost token: the host gets seat 0 back, also while still waiting", () => {
+    const { hub } = setup();
+    const a = new FakePeer();
+    const ca = hub.attach(a);
+    ca?.receive(JSON.stringify({ t: "create", name: "Morpheus" }));
+    const code = a.last("welcome")?.room ?? assert.fail();
+    ca?.closed();
+    const a2 = new FakePeer();
+    hub.attach(a2)?.receive(JSON.stringify({ t: "join", room: code, name: "Morpheus" }));
+    const w = a2.last("welcome");
+    assert.deepEqual(w?.seats, [0]);
+    assert.equal(w.state, null, "still waiting for the second player");
+  });
+
+  it("a seat nobody came back to is free for anyone with the code after a while", () => {
+    let now = 1_000_000;
+    const { hub } = setup({ now: () => now });
+    const { a, code, cb } = openRoom(hub);
+    cb.closed();
+    const eve = new FakePeer("9.9.9.9");
+    const ce = hub.attach(eve);
+    ce?.receive(JSON.stringify({ t: "join", room: code, name: "Eve" }));
+    assert.equal(eve.last("error")?.code, "full", "not yet");
+    now += hub.limits.seatFreeAfterMs;
+    ce?.receive(JSON.stringify({ t: "join", room: code, name: "Eve" }));
+    const w = eve.last("welcome");
+    assert.deepEqual(w?.seats, [1]);
+    assert.equal(w.players[1]?.name, "Choronzon", "plays on under the seat's name");
+    assert.deepEqual(a.last("presence")?.players.map((p) => p?.online), [true, true]);
+  });
+
+  it("one device: coming back by name takes both seats", () => {
+    const { hub } = setup();
+    const p = new FakePeer();
+    const c = hub.attach(p);
+    c?.receive(JSON.stringify({ t: "create", name: "Anna", name2: "Ben" }));
+    const code = p.last("welcome")?.room ?? assert.fail();
+    c?.closed();
+    const p2 = new FakePeer();
+    hub.attach(p2)?.receive(JSON.stringify({ t: "join", room: code, name: "Ben" }));
+    assert.deepEqual(p2.last("welcome")?.seats, [0, 1]);
+  });
+
+  it("resume ifAway leaves a seat alone that another tab still holds", () => {
+    const { hub } = setup();
+    const { a, code, ca } = openRoom(hub);
+    const token = a.last("welcome")?.token ?? assert.fail();
+    const tab2 = new FakePeer();
+    const c2 = hub.attach(tab2);
+    c2?.receive(JSON.stringify({ t: "resume", room: code, token, ifAway: true }));
+    assert.equal(tab2.last("error")?.code, "seated");
+    ca.closed();
+    c2?.receive(JSON.stringify({ t: "resume", room: code, token, ifAway: true }));
+    assert.deepEqual(tab2.last("welcome")?.seats, [0]);
+  });
+
   it("one device: both seats, and a full room stays closed", async () => {
     const { hub } = setup();
     const p = new FakePeer();
