@@ -6,7 +6,7 @@ import type { CheckStep, CounterCheck, Form, GameConfig, Scale } from "./types.t
 
 export const DEFAULT_CONFIG: GameConfig = {
   startWille: 30,
-  maxWille: 50,
+  maxWille: 40,
   regen: 3,
   maxOpeningScale: 3,
   maxScaleJump: 2,

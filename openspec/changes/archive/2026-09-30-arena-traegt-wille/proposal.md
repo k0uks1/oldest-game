@@ -8,6 +8,7 @@ Die Eskalation zwingt zu Größe (Stufe 7 in der letzten Runde), die Kosten best
 
 - **„Die Arena trägt“:** Den Anteil des Preises, den die Mindeststufe der Arena jedem aufzwingt, zahlt niemand. Abgezogen wird der Grundpreis der Mindeststufe minus 1 (nie mehr als der eigene Grundpreis der Gestalt), mindestens 1 Wille bleibt. Größe über die Mindeststufe hinaus, Overkill, Mechanismen, Immunitäten kosten wie bisher; Fehlversuche kosten die Hälfte des (jetzt kleineren) Preises plus Strafe.
 - Vor der ersten Eskalation (Mindeststufe 1) ändert sich nichts.
+- **Wille-Maximum 40 statt 50**, damit niemand übermäßig hortet (Feinabstimmung, siehe `design.md`).
 
 ## Capabilities
 
@@ -16,6 +17,6 @@ Die Eskalation zwingt zu Größe (Stufe 7 in der letzten Runde), die Kosten best
 
 ## Impact
 
-- `src/engine/cost.ts` (`arenaShare`), `src/engine/game.ts` (`moveCost`, `evaluateForm` nutzt es).
+- `src/engine/rules.ts` (`maxWille` 40), `src/engine/cost.ts` (`arenaShare`), `src/engine/game.ts` (`moveCost`, `evaluateForm` nutzt es).
 - Tests: `tests/game.test.ts` (Anteil, später Zug bezahlbar, Schlagabtausch bis zur letzten Runde).
 - Kerninvarianten unberührt: die Engine bleibt rein und deterministisch, Regeln referenzieren weiter keine Gestalten.
