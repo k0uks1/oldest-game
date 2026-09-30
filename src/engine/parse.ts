@@ -67,9 +67,41 @@ export function suggest(onto: Ontology, input: string, limit = 5): string[] {
  * The last phrase naming a lexicon entry is the head; everything else is
  * read as modifiers (adjectives, compound prefixes, other nouns as elements).
  */
+/**
+ * The keys a name may be meant by: as written, without a leading article, without any filler –
+ * „ein Zeitalter der Finsternis“, „Flederm aus“ and „Eichel-Ober“ each meet their form's `lookupKey`.
+ */
+export function nameKeys(text: string): string[] {
+  const tokens = tokenize(text);
+  let lead = 0;
+  while (lead < tokens.length - 1 && STOPWORDS.has(tokens[lead] ?? "")) lead++;
+  return [...new Set([tokens.join(""), tokens.slice(lead).join(""), tokens.filter((t) => !STOPWORDS.has(t)).join("")])].filter((k) => k !== "");
+}
+
+/** Do two names mean the same, however spelt („der Rost“ and „Rost“, „Eichel Ober“ and „Eichelober“)? */
+export function sameName(a: string, b: string): boolean {
+  const kb = nameKeys(b);
+  return nameKeys(a).some((k) => kb.includes(k));
+}
+
+/**
+ * The form a text names outright: its own name, id or declared alias, however spelt – joined, spaced,
+ * hyphenated, any case, with or without an article („ein Zeitalter der Finsternis“, „Eichel-Ober“).
+ */
+export function namedForm(onto: Ontology, text: string): Form | undefined {
+  for (const k of nameKeys(text)) {
+    const f = onto.formByName(k);
+    if (f !== undefined) return f;
+  }
+  return undefined;
+}
+
 export function parseForm(onto: Ontology, input: string): ParseResult {
   const tokens = tokenize(input).filter((t) => !STOPWORDS.has(t));
   if (tokens.length === 0) return { ok: false, error: "Beschreibe eine Gestalt.", suggestions: [] };
+  // 0. the whole input is a form's own name or alias, however spelt („Zeitalter der Finsternis“, „Eichel Ober“)
+  const named = namedForm(onto, input);
+  if (named !== undefined) return { ok: true, form: named, base: named, modifiers: [], ignored: [] };
 
   let head: HeadHit | undefined;
   let headStart = -1;

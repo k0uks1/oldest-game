@@ -1,6 +1,6 @@
 import { Ontology, OntologyError, lookupKey } from "../engine/ontology/ontology.ts";
 import { parsePack, type ContentPack, type FormSpec, type NoteSpec, type QualitySpec, type RulingSpec, type TagSpec, type VerbSpec } from "../engine/ontology/pack.ts";
-import { STOPWORDS } from "../engine/parse.ts";
+import { STOPWORDS, sameName } from "../engine/parse.ts";
 import { findCounters } from "../engine/rules.ts";
 import { normalize, tokenize } from "../engine/text.ts";
 import type { Form } from "../engine/types.ts";
@@ -375,11 +375,6 @@ export function formPart(text: string): string {
   return head === "" ? text.trim() : head;
 }
 
-/** Lookup key of the form's words without filler („der Eichel Ober“ → „eichelober“, as `lookupKey("Eichelober")`). */
-export function nameKey(text: string): string {
-  return [...words(formPart(text))].join("");
-}
-
 /**
  * Does the text say nothing beyond the name („die Bibel“ for Bibel, „Eichel Ober“ for Eichelober – but not
  * „zehnbeiniger Gandalf“ for Gandalf)? Only the form part counts, not how it attacks.
@@ -387,7 +382,7 @@ export function nameKey(text: string): string {
 export function saysOnlyName(text: string, name: string): boolean {
   const n = words(name);
   const t = [...words(formPart(text))];
-  return t.every((w) => n.has(w)) || t.join("") === lookupKey(name);
+  return t.every((w) => n.has(w)) || sameName(formPart(text), name);
 }
 
 /** What makes two learned forms the same thing: name, the lexicon form they vary, and how. */

@@ -11,13 +11,13 @@ import { attempt, type AttemptOutcome } from "../engine/attempt.ts";
 import { currentTarget } from "../engine/game.ts";
 import { Ontology, lookupKey } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
-import { parseForm } from "../engine/parse.ts";
+import { namedForm, parseForm, sameName } from "../engine/parse.ts";
 import { validPixelArt } from "../engine/pixelart.ts";
 import { reaches } from "../engine/rules.ts";
 import { describeInsight, learnInsights } from "./insight.ts";
 import type { AnimMove, Form, GameState, PlayerId } from "../engine/types.ts";
 import { isClaudeReady, type LlmSettings } from "../llm/client.ts";
-import { addAlias, addNote, addRuling, amend, cleanNote, findLearned, formPart, learn, nameKey, namesakeOf, notesAbout, playerName, saysOnlyName, type Amendment } from "../llm/learning.ts";
+import { addAlias, addNote, addRuling, amend, cleanNote, findLearned, formPart, learn, namesakeOf, notesAbout, playerName, saysOnlyName, type Amendment } from "../llm/learning.ts";
 import { judgeWithClaude } from "../llm/judge.ts";
 import { movesWithClaude } from "../llm/moves.ts";
 import { loreWithClaude, narrateFailureWithClaude, narrateWithClaude } from "../llm/narrator.ts";
@@ -96,8 +96,8 @@ export class Resolver {
     return !this.host.debug() && isClaudeReady(this.host.llm());
   }
 
-  /** Text → form (+ what is new about it). Rejections carry a player-facing reason. */
-  private async classify(state: GameState, text: string): Promise<
+  /** Text → form (+ what is new about it). Rejections carry a player-facing reason. Public for tests. */
+  async classify(state: GameState, text: string): Promise<
     { readonly ok: true; readonly form: Form; readonly verb: string | null; readonly novelty: Novelty } | { readonly ok: false; readonly reason: string }
   > {
     if (!this.useClaude()) {
@@ -109,7 +109,7 @@ export class Resolver {
     const known = findLearned(this.onto, text);
     if (known !== undefined) return { ok: true, form: known, verb: null, novelty: { kind: "remembered", by: this.learnedSpec(known.id)?.discoveredBy ?? null } };
     // A lexicon form by its own name or alias, however spelt („Eichel Ober“, „Eichel-Ober“, „der Eichelober“): the original.
-    const named = text === formPart(text) ? this.onto.formByName(nameKey(text)) : undefined;
+    const named = text.trim() === formPart(text) ? namedForm(this.onto, text) : undefined;
     if (named !== undefined && !named.id.startsWith("g:")) return { ok: true, form: named, verb: null, novelty: null };
     const r = await parseWithClaude(this.onto, this.host.llm(), text);
     if (r === undefined) return { ok: false, reason: "Diese Gestalt lässt sich nicht fassen. Beschreibe sie anders." };
@@ -117,7 +117,7 @@ export class Resolver {
     // play the original. The player's own name and variations always stay theirs.
     // Spelling does not count („Eichel Ober“ is Eichelober), and neither does what follows the form's name („Haus, stürzt
     // auf den Gegner ein“ is the house, attacking): whatever Claude read into such words is the move, not a new form.
-    const plain = r.base !== null && lookupKey(r.form.name) === lookupKey(r.base.name);
+    const plain = r.base !== null && sameName(r.form.name, r.base.name);
     if (plain && saysOnlyName(text, r.base.name)) return { ok: true, form: r.base, verb: r.intendedVerb, novelty: null };
     if (plain && (r.form.mods ?? []).length === 0 && r.delta.tags.length === 0 && r.delta.verbs.length === 0 && (r.delta.qualities ?? []).length === 0 && sameShape(r.form, r.base)) {
       return { ok: true, form: r.base, verb: r.intendedVerb, novelty: null };
