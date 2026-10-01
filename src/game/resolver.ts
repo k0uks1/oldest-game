@@ -11,7 +11,7 @@ import { attempt, type AttemptOutcome } from "../engine/attempt.ts";
 import { currentTarget } from "../engine/game.ts";
 import { Ontology, lookupKey } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
-import { namedForm, parseForm, sameName } from "../engine/parse.ts";
+import { namedForm, nearlyNamedForm, parseForm, sameName } from "../engine/parse.ts";
 import { validPixelArt } from "../engine/pixelart.ts";
 import { reaches } from "../engine/rules.ts";
 import { describeInsight, learnInsights } from "./insight.ts";
@@ -105,12 +105,16 @@ export class Resolver {
       if (!r.ok) return { ok: false, reason: `${r.error}${r.suggestions.length > 0 ? ` Meintest du: ${r.suggestions.slice(0, 3).join(", ")}?` : ""}` };
       return { ok: true, form: r.form, verb: null, novelty: null };
     }
+    // A lexicon form by its own name or alias, however spelt („Eichel Ober“, „Eichel-Ober“, „der Eichelober“) or with a
+    // typo in a long name („Johny Gnadenlos“): the original – before anything learned, so an invented twin from before the
+    // lexicon knew the name (a „Johnny Gnadenlos“ Claude made up) never stands in for it again.
+    const named = namedForm(this.onto, text);
+    if (named !== undefined && !named.id.startsWith("g:")) return { ok: true, form: named, verb: null, novelty: null };
+    const nearly = nearlyNamedForm(this.onto, text);
+    if (nearly !== undefined) return { ok: true, form: nearly, verb: null, novelty: null };
     // Already learned this exact phrase? Then it is the same form as last time.
     const known = findLearned(this.onto, text);
     if (known !== undefined) return { ok: true, form: known, verb: null, novelty: { kind: "remembered", by: this.learnedSpec(known.id)?.discoveredBy ?? null } };
-    // A lexicon form by its own name or alias, however spelt („Eichel Ober“, „Eichel-Ober“, „der Eichelober“): the original.
-    const named = namedForm(this.onto, text);
-    if (named !== undefined && !named.id.startsWith("g:")) return { ok: true, form: named, verb: null, novelty: null };
     const r = await parseWithClaude(this.onto, this.host.llm(), text);
     if (r === undefined) return { ok: false, reason: "Diese Gestalt lässt sich nicht fassen. Beschreibe sie anders." };
     // A plain lexicon entry (no changes, nothing new, not even another name) is not worth remembering –
