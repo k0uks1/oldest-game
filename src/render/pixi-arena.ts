@@ -196,6 +196,7 @@ export class PixiArena extends ArenaScene {
     if (r === null || t === null) return;
     if (this.shownBackdrop !== this.backdropVersion) {
       this.backdropTex.source.update();
+      this.sources.get(this.holes)?.source.update();
       this.shownBackdrop = this.backdropVersion;
     }
     const sx = Math.round((this.rand() - 0.5) * this.shake);
