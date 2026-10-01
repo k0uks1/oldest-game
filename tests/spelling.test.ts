@@ -273,7 +273,7 @@ describe("Tippfehler in langen Namen treffen die Gestalt – nie eine andere", (
   });
 
   it("Johnny Gnadenlos, Eichelober, Martin Luther – as players mistype them", () => {
-    for (const [text, id] of [["Johny Gnadenlos", "johnny_gnadenlos"], ["Jhonny Gnadenlos", "johnny_gnadenlos"], ["Johnny Gnadelos", "johnny_gnadenlos"], ["Johnnie Gnadenlos", "johnny_gnadenlos"], ["Eichel Oberr", "eichelober"], ["Eichelobr", "eichelober"], ["Martin Lutter", "martin_luther"]] as const) {
+    for (const [text, id] of [["Johny Gnadenlos", "johnny_gnadenlos"], ["Jhonny Gnadenlos", "johnny_gnadenlos"], ["Johnny Gnadelos", "johnny_gnadenlos"], ["Johnnie Gnadenlos", "johnny_gnadenlos"], ["Jonny Gnadenloß", "johnny_gnadenlos"], ["Jony Gnadenloß", "johnny_gnadenlos"], ["Eichel Oberr", "eichelober"], ["Eichelobr", "eichelober"], ["Martin Lutter", "martin_luther"]] as const) {
       assert.equal(parseForm(onto, text).ok && (parseForm(onto, text) as { form: { id: string } }).form.id, id, text);
       assert.equal(nearlyNamedForm(onto, text)?.id, id, text);
     }
