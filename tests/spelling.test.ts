@@ -11,7 +11,7 @@ import { CORE_PACK_RAW, loadPack } from "../src/content/index.ts";
 import { createGame } from "../src/engine/game.ts";
 import { Ontology, lookupKey } from "../src/engine/ontology/ontology.ts";
 import type { FormSpec } from "../src/engine/ontology/pack.ts";
-import { STOPWORDS, namedForm, parseForm } from "../src/engine/parse.ts";
+import { STOPWORDS, namedForm, nearlyNamedForm, parseForm } from "../src/engine/parse.ts";
 import { hash32, tokenize } from "../src/engine/text.ts";
 import { Resolver } from "../src/game/resolver.ts";
 import { DEFAULT_SETTINGS } from "../src/llm/client.ts";
@@ -234,6 +234,78 @@ describe("Schreibweise macht keine neue Gestalt – für jede Gestalt des Lexiko
       const c = await r.classify(state, text);
       assert.ok(c.ok, text);
       assert.equal(c.form.name, words, text);
+    }
+  });
+});
+
+/** A typo in a name, picked from the name itself: a letter dropped, doubled or two neighbours swapped (never the first). */
+function typo(name: string): string {
+  const seed = hash32(name);
+  const at = 1 + (seed % (name.length - 2));
+  const kind = (seed >>> 4) % 3;
+  if (kind === 0) return name.slice(0, at) + name.slice(at + 1);
+  if (kind === 1) return name.slice(0, at) + name.charAt(at) + name.slice(at);
+  return name.slice(0, at) + name.charAt(at + 1) + name.charAt(at) + name.slice(at + 2);
+}
+
+describe("Tippfehler in langen Namen treffen die Gestalt – nie eine andere", () => {
+  const long = forms.filter((f) => lookupKey(f.name).length >= 8);
+
+  it("a typo in a long name is that form, without asking Claude – and never another lexicon form", async () => {
+    const claude = fakeClaude(() => ({}));
+    const r = resolver();
+    const state = createGame(["A", "B"]);
+    const other: string[] = [];
+    let hit = 0;
+    for (const f of long) {
+      const text = typo(f.name);
+      if (namedForm(onto, text) !== undefined) continue; // the typo is another real name
+      const n = nearlyNamedForm(onto, text);
+      if (n === undefined) continue; // two forms just as close: Claude decides
+      if (n.id !== f.id) other.push(`„${text}“ → ${n.id} (gemeint ${f.id})`);
+      else hit++;
+      const c = await r.classify(state, text);
+      assert.ok(c.ok && c.form.id === n.id, text);
+    }
+    assert.deepEqual(other.slice(0, 20), []);
+    assert.ok(hit > long.length * 0.9, `${String(hit)} of ${String(long.length)}`);
+    assert.equal(claude.calls, 0);
+  });
+
+  it("Johnny Gnadenlos, Eichelober, Martin Luther – as players mistype them", () => {
+    for (const [text, id] of [["Johny Gnadenlos", "johnny_gnadenlos"], ["Jhonny Gnadenlos", "johnny_gnadenlos"], ["Johnny Gnadelos", "johnny_gnadenlos"], ["Johnnie Gnadenlos", "johnny_gnadenlos"], ["Jonny Gnadenloß", "johnny_gnadenlos"], ["Jony Gnadenloß", "johnny_gnadenlos"], ["Eichel Oberr", "eichelober"], ["Eichelobr", "eichelober"], ["Martin Lutter", "martin_luther"]] as const) {
+      assert.equal(parseForm(onto, text).ok && (parseForm(onto, text) as { form: { id: string } }).form.id, id, text);
+      assert.equal(nearlyNamedForm(onto, text)?.id, id, text);
+    }
+  });
+
+  it("an added ending is another word, not a typo: „…in“, „…en“ stay with Claude", () => {
+    // forms whose other names carry such an ending already („Zahnärztin“ for the Zahnarzt) are named by them
+    const stemmed = (f: FormSpec): boolean => (f.aliases ?? []).some((a) => lookupKey(a).length > lookupKey(f.name).length);
+    for (const f of long.filter((x, i) => i % 9 === 0 && !stemmed(x))) {
+      for (const ending of ["in", "en", "innen"]) {
+        if (namedForm(onto, `${f.name}${ending}`) !== undefined) continue; // the lexicon names it („Gladiatorin“)
+        const n = nearlyNamedForm(onto, `${f.name}${ending}`);
+        assert.ok(n?.id !== f.id, `„${f.name}${ending}“ is not ${f.id}`);
+      }
+    }
+  });
+
+  it("an invented twin from before the lexicon knew the name never stands in for the original", async () => {
+    fakeClaude(() => ({}));
+    const johnny = core.forms.find((f) => f.id === "johnny_gnadenlos") ?? assert.fail();
+    const twin: FormSpec = { ...johnny, id: "g:johnny_gnadenlos", name: "Johnny Gnadenlos", aliases: ["johnny gnadenlos", "johny gnadenlos", "johnny gnadenlos!"] };
+    const learned = { ...emptyLearnedPack(), forms: [twin] };
+    const r = new Resolver(Ontology.compile([core, learned]), [core], learned, {
+      llm: () => ({ ...DEFAULT_SETTINGS, proxyUrl: "/api/claude" }),
+      debug: () => false,
+      saveLearned: () => undefined,
+      today: () => "2026-10-01",
+    });
+    const state = createGame(["A", "B"]);
+    for (const text of ["Johnny Gnadenlos", "johnny gnadenlos!", "Johny Gnadenlos"]) {
+      const c = await r.classify(state, text);
+      assert.ok(c.ok && c.form.id === "johnny_gnadenlos", `„${text}“ → ${c.ok ? c.form.id : c.reason}`);
     }
   });
 });

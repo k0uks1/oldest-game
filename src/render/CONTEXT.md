@@ -63,7 +63,8 @@ fires a bullet. **Rooms** (`content/core/rooms.json`, `render/rooms/<id>.png` + 
 (edit_with_text, full size) and animated at half size (animate-with-text-v3 is capped at 256 px). Only forms of scale ≥
 `ROOM_MIN_SCALE` (4) change the room – a match lights nothing, a dragon sets it on fire; an arena field a big form brought
 keeps its room while it lasts (`latched`), otherwise the newest big form's properties set the mood. Both go through
-`ImageDraw` (backdrop / front layer, both renderers). Missing pictures fall back to the drawn particles / the plain room.
+`ImageDraw` (backdrop / front layer, both renderers). The crumbled wall stays crumbled in every room: the open bricks (`holes`, the void only) are laid
+over each painted room state with its alpha. Missing pictures fall back to the drawn particles / the plain room.
 Animations use `animate-pixminimax` (short queue, 1 generation at 64 px); Tier 2 allows 11 PixelLab jobs at once.
 
 ## Sprites from parts ("Bauplan", `render/look.ts`)

@@ -11,7 +11,9 @@ the game reducer applies cost, echo and escalation. The LLM never decides here (
 - `attempt.ts` – player-facing move without foreknowledge: success / failure (costs Wille) / rejected
 - `cost.ts` – Wille cost, overkill surcharge, underdog refund, eleganz
 - `parse.ts` – mechanical parser (DEBUG ONLY in the game; used for anchors & tests). `namedForm`/`sameName`: a form named
-  outright, however spelt – shared with the live path (`Resolver.classify`), checked for every lexicon form in `tests/spelling.test.ts`
+  outright, however spelt – shared with the live path (`Resolver.classify`), checked for every lexicon form in `tests/spelling.test.ts`;
+  `nearlyNamedForm`: a typo in a long name (one edit, a swapped pair counts as one; two from 12 letters; same first letter;
+  never just a German ending – „Zwergkönigin“ is no typo; unique; lexicon only, via the trigram index)
 - `text.ts` – `hash32` / `rng` for seeded randomness
 
 ## Core invariants here (numbering as in `AGENTS.md`)

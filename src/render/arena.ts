@@ -432,6 +432,11 @@ export abstract class ArenaSim {
   /** Water drops falling from the vault (where the stage says it drips). */
   protected readonly drops: { x: number; y: number; vy: number; readonly land: number }[] = [];
 
+  /**
+   * Only the open bricks (the void showing through), transparent elsewhere – laid over the painted room states, which
+   * would otherwise cover the crumbled wall: the decay stays when the room changes. Repainted with the backdrop.
+   */
+  protected readonly holes: HTMLCanvasElement;
   /** Bumped whenever the backdrop canvas was repainted (bricks fell) – renderers re-upload. */
   protected backdropVersion = 0;
 
@@ -452,6 +457,7 @@ export abstract class ArenaSim {
     this.starfield = paintStarfield();
     this.stars = scatterStars(this.bricks);
     this.backdrop = canvas(WIDTH, HEIGHT);
+    this.holes = canvas(WIDTH, HEIGHT);
     ctx2d(this.backdrop).drawImage(this.background, 0, 0);
     void this.loadScenery();
     void this.loadEffects();
@@ -1763,11 +1769,14 @@ export abstract class ArenaSim {
   private repaintBackdrop(): void {
     const ctx = ctx2d(this.backdrop);
     ctx.drawImage(this.background, 0, 0);
+    const holes = ctx2d(this.holes);
+    holes.clearRect(0, 0, WIDTH, HEIGHT);
     let n = 0;
     for (const [i, br] of this.bricks.entries()) {
       if (this.open[i] !== 1) continue;
       n++;
       openBricks(ctx, this.starfield, br);
+      openBricks(holes, this.starfield, br);
     }
     this.openBricks = n;
     this.backdropVersion++;
@@ -2174,6 +2183,8 @@ export abstract class ArenaSim {
       // the loop (made from this very still) when there is one – the still alone otherwise
       const frame = r.frames.length === 0 || this.reducedMotion ? undefined : r.frames[Math.floor(this.time * 7) % r.frames.length];
       out.push({ image: frame ?? r.still, x: 0, y: 0, w: WIDTH, h: HEIGHT, flip: false, alpha: a, glow: 0, layer: "backdrop" });
+      // the crumbled wall stays crumbled in every room: the void shows through the painted wall as well
+      if (this.openBricks > 0) out.push({ image: this.holes, x: 0, y: 0, w: WIDTH, h: HEIGHT, flip: false, alpha: a, glow: 0, layer: "backdrop" });
     }
     for (const p of this.plays) {
       const n = p.sheet.frames.length;

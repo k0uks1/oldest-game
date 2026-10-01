@@ -110,11 +110,54 @@ export function namedForm(onto: Ontology, text: string): Form | undefined {
   return undefined;
 }
 
+/**
+ * The form a text names with a typo („Johny Gnadenlos“, „Eichel Oberr“, „Martin Lutter“): a whole declared name or alias
+ * within one edit – a swap of two neighbouring letters counts as one – (two from 12 letters on), long names only (8+ letters, 7 typed when one was dropped – short words are too close to each
+ * other: „Spinne“ ≠ „Spinner“), same first letter, no added ending („Zwergkönigin“ is not „Zwergkönig“), and only when exactly one form is that close. Lexicon forms only – an
+ * invented form is never guessed at. Uses the trigram index, never a scan over all forms.
+ */
+/** German endings that make another word of the same stem („Zwergkönigin“, „Gladiatoren“, „Hexenmeisterinnen“). */
+const ENDINGS: ReadonlySet<string> = new Set(["", "e", "n", "s", "en", "er", "es", "in", "ern", "innen"]);
+
+/** The two differ only in such an ending – another word, not a typo. */
+function isEnding(a: string, b: string): boolean {
+  let i = 0;
+  while (i < a.length && i < b.length && a.charAt(i) === b.charAt(i)) i++;
+  const [ta, tb] = [a.slice(i), b.slice(i)];
+  // a key held down („Feuerwehrmannn“) is a typo, even when the extra letter looks like an ending
+  if (ta.length + tb.length === 1 && (ta + tb) === a.charAt(i - 1)) return false;
+  return i >= 4 && ENDINGS.has(ta) && ENDINGS.has(tb);
+}
+
+/** The two differ by one pair of neighbouring letters swapped („Skoprion“, „Mniotaurus“) – one slip of the fingers. */
+function isSwap(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let i = 0;
+  while (i < a.length && a.charAt(i) === b.charAt(i)) i++;
+  return i < a.length - 1 && a.charAt(i) === b.charAt(i + 1) && a.charAt(i + 1) === b.charAt(i) && a.slice(i + 2) === b.slice(i + 2);
+}
+
+export function nearlyNamedForm(onto: Ontology, text: string): Form | undefined {
+  for (const k of nameKeys(text)) {
+    if (k.length < 7) continue;
+    const hits = onto
+      .fuzzyForms(k, 2, 8)
+      .map((h) => (h.distance === 2 && isSwap(h.key, k) ? { ...h, distance: 1 } : h))
+      .filter((h) => h.distance <= (k.length >= 12 ? 2 : 1))
+      .filter((h) => Math.max(h.key.length, k.length) >= 8 && h.key.startsWith(k.charAt(0)) && !h.value.id.startsWith("g:") && onto.formByName(h.key) === h.value && !isEnding(h.key, k));
+    const best = Math.min(...hits.map((h) => h.distance));
+    const forms = new Set(hits.filter((h) => h.distance === best).map((h) => h.value));
+    const [only] = forms;
+    if (forms.size === 1 && only !== undefined) return only;
+  }
+  return undefined;
+}
+
 export function parseForm(onto: Ontology, input: string): ParseResult {
   const tokens = tokenize(input).filter((t) => !STOPWORDS.has(t));
   if (tokens.length === 0) return { ok: false, error: "Beschreibe eine Gestalt.", suggestions: [] };
   // 0. the whole input is a form's own name or alias, however spelt („Zeitalter der Finsternis“, „Eichel Ober“)
-  const named = namedForm(onto, input);
+  const named = namedForm(onto, input) ?? nearlyNamedForm(onto, input);
   if (named !== undefined) return { ok: true, form: named, base: named, modifiers: [], ignored: [] };
 
   let head: HeadHit | undefined;

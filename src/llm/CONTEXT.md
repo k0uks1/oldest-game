@@ -41,7 +41,9 @@ content through validation. Client, parser (text → Form), narrator, referee, j
    beyond it („zehnbeiniger Gandalf“) make another form, named in the player's words if Claude's name is taken
    (`playerName`). Spelling never makes another form: a lexicon form typed by its name or a declared alias in any
    spelling („Eichel Ober“, „eichel-ober“, „ein Zeitalter der Finsternis“ – `namedForm` → `Ontology.formByName`; the
-   debug parser uses the same) is played without asking Claude, and a Claude answer whose name only differs in spelling
+   debug parser uses the same) or with a typo in a long name („Johny Gnadenlos“, „Martin Lutter“ – `nearlyNamedForm`) is
+   played without asking Claude, and before anything learned (an invented twin from before the lexicon knew the name never
+   stands in for it), and a Claude answer whose name only differs in spelling
    from its base is the base. Only words that *open* a phrase may drop („der“, „ich bin ein“); particles and every word
    inside a name belong to it („Hänsel und Gretel“, „… von und zu Hohenstein“ – `nameTokens`). What follows a comma,
    colon or spaced dash says how the form attacks (`formPart`) – but only once the words before it hold the whole name;
