@@ -576,3 +576,12 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Drei Stücke statt einem** | Jedes Duell bekommt eins: *Gewölbe* (das alte, luftiger: das Arpeggio echot, der Bass kommt erst mit der Eskalation), *Nebelsee* (D-dorisch, langsam – ein Chor ohne Worte, Kalimba-Töne, die von links nach rechts nachhallen, ein Herzschlag erst, wenn es ernst wird) und *Schicksal* (E-phrygisch – ein tiefes Ostinato, das nicht loslässt, eine Glocke, die schlägt, Pauken im 3-3-2). | `TRACKS`, `trackFor` |
 | **Ein Raum, den man hört** | Längerer Hall, ein Stereo-Echo, das hin und her wandert, und ein leises Rauschen der Luft im Gewölbe; Tropfen und Zugluft wandern durch das Stereobild. | `Music.attach`, `roomTone` |
 | **Echte Klänge, wo es körperlich wird** | Klinge, Hieb, dumpfer Aufprall, Buchseite (Menü), knarrende Kerkertür (ein neues Duell), Totenglocke (Spielende), Explosion – CC0-Aufnahmen von Kenney, mehrere Takes je Klang und jedes Mal ein wenig schneller oder langsamer, damit nichts mechanisch klingt. Die Magie bleibt Synthesizer. 83 KB für alles. | `ui/sfx/`, `Sound.sample` |
+
+## Birthday Boy Kilian (Geburtstagsüberraschung)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Birthday Boy Kilian** | „Kilian“, „Birthday Boy“ oder „Geburtstagskind“ beschwört ihn: Partyhut, Sonnenbrille, Schnurrbart, das rote Buch. Er **enteignet** (neu: gegen alles Gierige und Gold), **befreit** und **entlarvt**; Langeweile ist seine Schwäche. Er kommt mit Ballons, Konfetti und einem Ständchen. | `forms/charaktere.json`, `render/birthday.ts` |
+| **„Proletarier aller Länder!“** | Seine Signatur: Er liest vor, Seiten flattern zum Gegner, dann wirft er das ganze Buch. | `ArenaSim.kapital` |
+| **Partyhalle** | Bücherregale, Wimpelketten, Ballons, Torte – rollt ein, sobald er steht. | `rooms.json` `geburtstag` |
+| **Sein Tag** | An seinem Geburtstag ist die Arena den ganzen Tag die Partyhalle, jede Gestalt trägt einen Partyhut (auf ihrem höchsten Punkt), und das erste Duell beginnt mit Konfetti und Ständchen. `?party` zeigt es an jedem Tag. | `BIRTHDAY`, `setParty`, `partyHats` |

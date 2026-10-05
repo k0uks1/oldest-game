@@ -14,7 +14,7 @@ import { displaySize, renderGlow, renderSprite, type PixelImage } from "./sprite
 import { ISO } from "./stage-iso.ts";
 import { acornImage, signatureFor, tattooImage, type Signature } from "./eichel.ts";
 import { JOHNNY_NAME, NOTE_COLORS, noteImage } from "./johnny.ts";
-import { balloonImage, BIRTHDAY_NAME, bookImage, pageImage } from "./birthday.ts";
+import { balloonImage, BIRTHDAY_NAME, bookImage, hatImage, isBirthdayBoy, pageImage } from "./birthday.ts";
 import { FLOOR_Y, GROUND_Y, HEIGHT, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
 
 export { FLOOR_Y, GROUND_Y, HEIGHT, TORCH_X, WIDTH } from "./stage.ts";
@@ -34,6 +34,9 @@ export type ArenaCue = "summon" | "reveal" | "strike" | "impact" | "fizzle" | "d
 
 /** Special spectacles for a few forms – pure show, no rules involved. */
 export type EasterEgg = "nuke" | "meteor" | "rainbow" | "confetti" | "vortex" | "tattoo" | "eicheln" | "johnny" | "birthday";
+
+/** The birthday party hall (`rooms.json`). */
+const PARTY_ROOM = "geburtstag";
 
 const EGG_PATTERNS: readonly (readonly [RegExp, EasterEgg])[] = [
   // the Birthday Boy arrives with balloons and confetti
@@ -390,6 +393,10 @@ export abstract class ArenaSim {
   /** Painted attack animations (bundled strips, decoded once) and the ones playing now. */
   private readonly sheets = new Map<string, Sheet>();
   private readonly plays: EffectPlay[] = [];
+  /** His birthday: the party hall all day, a party hat on every figure. */
+  private party = false;
+  private readonly hats: [HTMLCanvasElement | undefined, HTMLCanvasElement | undefined] = [undefined, undefined];
+  private readonly crowns = new WeakMap<HTMLCanvasElement, { u: number; v: number }>();
   /** Painted room states: a still and (optionally) its animation loop, faded in and out. */
   private readonly rooms = new Map<string, { still: HTMLCanvasElement; frames: readonly HTMLCanvasElement[] }>();
   private readonly roomFade = new Map<string, number>();
@@ -1870,7 +1877,8 @@ export abstract class ArenaSim {
       // a field a big form brought keeps its room while it lasts (the fire burns on after the dragon)
       for (const id of this.latched) if (!fields.includes(id)) this.latched.delete(id);
       for (const id of fields) if (forms.some((f) => f.scale >= ROOM_MIN_SCALE && carriesField(this.onto, f, id))) this.latched.add(id);
-      this.room = chooseRoom(this.onto, fields, forms, (id) => this.rooms.has(id), this.latched)?.id ?? null;
+      // on his birthday the whole arena is the party hall
+      this.room = this.party && this.rooms.has(PARTY_ROOM) ? PARTY_ROOM : (chooseRoom(this.onto, fields, forms, (id) => this.rooms.has(id), this.latched)?.id ?? null);
     }
     // the Eichel-Arena rolls in at once, the other moods take their time
     const speed = this.reducedMotion ? 10 : this.room === "eichel" ? 3 : 0.7;
@@ -2276,7 +2284,57 @@ export abstract class ArenaSim {
       const alpha = p.fade <= 0 ? 1 : Math.max(0, Math.min(1, p.life / p.fade, (p.max - p.life) / p.fade));
       out.push({ image: p.image, x: Math.round(p.x - p.w / 2), y: Math.round(p.y - p.h / 2), w: p.w, h: p.h, flip: p.flip, alpha, glow: p.glow, layer: "front" });
     }
+    if (this.party) out.push(...this.partyHats());
     return out;
+  }
+
+  /** On his birthday: a party hat on the highest point of every figure (he brings his own). */
+  private partyHats(): ImageDraw[] {
+    const out: ImageDraw[] = [];
+    for (const side of [0, 1] as const) {
+      const f = this.fighters[side];
+      if (f === null || f.alpha <= 0 || f.appear < 1 || isBirthdayBoy(f.form.name)) continue;
+      const rect = this.fighterRect(side, f);
+      const top = this.crownOf(f.sprite.image);
+      const mirrored = (side === 1) !== (f.facing === -1);
+      const u = mirrored ? 1 - top.u : top.u;
+      const w = Math.max(11, Math.min(22, Math.round(rect.w * 0.26)));
+      const h = Math.round((w * 12) / 9);
+      this.hats[side] ??= toCanvas(hatImage(f.seed));
+      out.push({ image: this.hats[side], x: Math.round(rect.x + u * rect.w - w / 2), y: Math.round(rect.y + top.v * rect.h - h + 2), w, h, flip: false, alpha: f.alpha * (1 - f.stone), glow: 0, layer: "front" });
+    }
+    return out;
+  }
+
+  /** Where a sprite is highest: the middle of its topmost solid row, as fractions of its size (cached per canvas). */
+  private crownOf(img: HTMLCanvasElement): { u: number; v: number } {
+    const known = this.crowns.get(img);
+    if (known !== undefined) return known;
+    let crown = { u: 0.5, v: 0 };
+    const g = img.getContext("2d");
+    if (g !== null && img.width > 0 && img.height > 0) {
+      const { data } = g.getImageData(0, 0, img.width, img.height);
+      search: for (let y = 0; y < img.height; y++) {
+        let first = -1;
+        let last = -1;
+        for (let x = 0; x < img.width; x++) {
+          if ((data[(y * img.width + x) * 4 + 3] ?? 0) < 128) continue;
+          if (first < 0) first = x;
+          last = x;
+        }
+        if (first >= 0) {
+          crown = { u: (first + last + 1) / 2 / img.width, v: y / img.height };
+          break search;
+        }
+      }
+    }
+    this.crowns.set(img, crown);
+    return crown;
+  }
+
+  /** On his birthday: the party hall and a hat for everyone. */
+  setParty(on: boolean): void {
+    this.party = on;
   }
 
   /**

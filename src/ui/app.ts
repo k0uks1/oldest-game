@@ -559,9 +559,15 @@ export class App {
     if (side !== undefined) this.bubble(side, `♪ ${BIRTHDAY_SONG.line}`, seconds * 1000);
   }
 
+  /** His birthday – or `?party` to see it any day. */
+  private partyDay(): boolean {
+    return isBirthday(new Date()) || (typeof location !== "undefined" && new URLSearchParams(location.search).has("party"));
+  }
+
   /** On his birthday, the first duel of the page opens with a party: confetti, balloons, the song. */
   private partyOnce(): void {
-    if (this.partied || !isBirthday(new Date())) return;
+    this.arena.setParty(this.partyDay());
+    if (this.partied || !this.partyDay()) return;
     this.partied = true;
     setTimeout(() => {
       void this.arena.easterEgg("birthday", 0);

@@ -84,6 +84,22 @@ const BALLOON: Grid = [
   "...s...",
 ];
 
+/** A striped paper party hat with a pompom, 9×12. */
+const HAT: Grid = [
+  "....h....",
+  "...hYh...",
+  "....k....",
+  "...kRk...",
+  "...kYk...",
+  "..kRRRk..",
+  "..kYYYk..",
+  ".kRRRRRk.",
+  ".kYYYYYk.",
+  "kRRRRRRRk",
+  "kYYYYYYYk",
+  "kkkkkkkkk",
+];
+
 const COLORS: Readonly<Record<string, readonly [number, number, number]>> = {
   k: [0x3a, 0x0c, 0x0c],
   R: [0xd8, 0x28, 0x28],
@@ -136,4 +152,16 @@ export function balloonImage(k: number): PixelImage {
   const base = BALLOON_COLORS[((k % BALLOON_COLORS.length) + BALLOON_COLORS.length) % BALLOON_COLORS.length] ?? [0xff, 0x5a, 0x6a];
   const dark: readonly [number, number, number] = [Math.round(base[0] * 0.6), Math.round(base[1] * 0.6), Math.round(base[2] * 0.6)];
   return gridImage(BALLOON, { ...COLORS, B: base, b: dark });
+}
+
+/** The party hat every figure wears on his birthday (`k` picks the colours). */
+export function hatImage(k: number): PixelImage {
+  const pairs: readonly (readonly [readonly [number, number, number], readonly [number, number, number]])[] = [
+    [[0xe8, 0x3a, 0x4a], [0xf8, 0xd8, 0x4a]],
+    [[0x3a, 0x8a, 0xe8], [0xf8, 0xf0, 0xe0]],
+    [[0x4a, 0xb8, 0x5a], [0xf8, 0x8a, 0xc8]],
+    [[0x9a, 0x5a, 0xe8], [0x6a, 0xe0, 0xe8]],
+  ];
+  const [a, b] = pairs[((k % pairs.length) + pairs.length) % pairs.length] ?? [[0xe8, 0x3a, 0x4a], [0xf8, 0xd8, 0x4a]];
+  return gridImage(HAT, { ...COLORS, k: [0x2a, 0x18, 0x30], R: a, Y: b });
 }
