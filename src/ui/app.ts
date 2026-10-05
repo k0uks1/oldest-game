@@ -30,6 +30,7 @@ import { clear, h } from "./dom.ts";
 import { OnlineLink, type LinkStart, type LinkStatus } from "../online/link.ts";
 import { arenaMatches, Playback } from "../online/playback.ts";
 import { findSession, listSessions, tabSeat, type Session } from "../online/sessions.ts";
+import { whyLines } from "../game/why.ts";
 import { applyPackDelta, normalizeRoom, type ChronicleEntry, type SeatInfo, type ServerMsg } from "../online/protocol.ts";
 import { Music } from "./music.ts";
 import { addReport, clearReports, loadReports, reportsText } from "./reports.ts";
@@ -685,12 +686,10 @@ export class App {
       this.sound.parrot(`${form.name}? ${form.name}!`);
       await sleep(1600);
     }
-    let why: readonly string[] = [];
+    const why = whyLines(outcome, this.state.config.discoveryEleganz);
     if (outcome.kind === "success") {
       const move = outcome.move;
       this.retry = false;
-      why = move.check?.steps.map((st) => st.text) ?? ["Eröffnung."];
-      if (move.discovery) why = [...why, `Einfallsreichtum: +${String(this.state.config.discoveryEleganz)} Eleganz für eine nie gesehene Gestalt.`];
       if (move.verb === ESCAPE) {
         const target = this.state.history.at(-2)?.form;
         const threat = target === undefined ? undefined : this.onto.compileForm(target).verbs.find((v) => ["gewalt", "element", "leben"].includes(this.onto.verbs.get(v)?.spec.family ?? ""));
@@ -724,7 +723,6 @@ export class App {
     } else {
       this.retry = true;
       const f = outcome.failure;
-      why = [...(f.closest?.check.steps.map((st) => st.text) ?? []), f.reason].filter((t, i, a) => a.indexOf(t) === i);
       const verb = f.closest?.verb;
       const answer = this.onto.compileForm(f.target).verbs.find((v) => reaches(this.onto, v, f.form));
       await this.arena.fizzle(actor, verb === undefined ? "slash" : this.styleOf(verb), answer === undefined ? null : this.styleOf(answer), verb === undefined ? undefined : this.effectOf(form, verb));
@@ -1386,7 +1384,7 @@ export class App {
     this.music.restart(state.players[0].name.length * 31 + state.players[1].name.length);
     this.lastWille = [state.players[0].wille, state.players[1].wille];
     clear(this.els.chronicle);
-    for (const e of chronicle) this.addChronicle(e.actor, e.name, e.text, e.failed, [], e.discovery);
+    for (const e of chronicle) this.addChronicle(e.actor, e.name, e.text, e.failed, e.why ?? [], e.discovery);
     // The arena follows once whatever still plays is over (it may have been cut off mid-turn).
     void this.playback.adopt(seq, chronicle.length, () => this.settleArena());
     this.hideCaption();
