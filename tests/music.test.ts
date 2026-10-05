@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { catchUp } from "../src/ui/music.ts";
+import { catchUp, chordAt, TRACKS, trackFor } from "../src/ui/music.ts";
 
 describe("Musik nach einer Pause", () => {
   const s16 = 0.2;
@@ -20,5 +20,22 @@ describe("Musik nach einer Pause", () => {
     const skipped = r.step - 50;
     assert.ok(Math.abs(r.nextTime - (10 + skipped * s16)) < 1e-9, "on the grid");
     assert.equal(skipped, Math.ceil((73.37 + 0.02 - 10) / s16));
+  });
+});
+
+describe("Musik: drei Stücke", () => {
+  it("every duel seed picks one of the pieces, and the seeds spread over all of them", () => {
+    const seen = new Set(Array.from({ length: 30 }, (_, i) => trackFor(i * 31 + 7).id));
+    assert.deepEqual([...seen].sort(), TRACKS.map((t) => t.id).sort());
+    assert.equal(trackFor(-5).id, trackFor(-5).id, "negative seeds work too");
+  });
+
+  it("the chord changes by the bar and the progression moves on every eight bars", () => {
+    for (const track of TRACKS) {
+      assert.equal(chordAt(track, 0), chordAt(track, 15), `${track.title}: one chord per bar`);
+      const firstSection = [0, 1, 2, 3].map((b) => chordAt(track, b * 16));
+      const later = [0, 1, 2, 3].map((b) => chordAt(track, (16 + b) * 16));
+      assert.notDeepEqual(firstSection, later, `${track.title}: the third section differs from the first`);
+    }
   });
 });

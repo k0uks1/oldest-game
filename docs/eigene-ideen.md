@@ -568,3 +568,11 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Lichtreifen statt Pentagramm** | Die Beschwörung lieh sich Pentagramm und Runenkreis der Arena – das wirkte wie zwei Animationen übereinander. Jetzt steigen drei Lichtreifen an der werdenden Gestalt hoch und werden enger, Funken kreisen hinein; die Reifen umschließen die Gestalt (hintere Hälfte dahinter, vordere davor). Alles bleibt dicht an der Figur, die Flammen sind etwas niedriger. Der Runenkreis lädt sich nur noch auf, während Claude nachdenkt. | `drawHoops` |
 | **„Warum?“ überlebt den Reconnect** | Online baute die Seite die Chronik beim Betreten und nach jedem Verbindungsabriss aus den Daten des Servers neu auf – der kannte nur Name und Text, die Begründung der Engine fehlte dann. Jetzt speichert der Server sie mit. | `whyLines`, `ChronicleEntry.why` |
 | **Echte Flut** | Der Flutraum war eher ein tropfender Keller; neu gemalt steht der Boden klar unter Wasser, aus den Wänden strömt es. | `rooms.json` |
+
+## Musik und Klang (Wunsch: „atmosphärischer, 1–2 neue Stücke, copyright-freie Soundeffekte“)
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Drei Stücke statt einem** | Jedes Duell bekommt eins: *Gewölbe* (das alte, luftiger: das Arpeggio echot, der Bass kommt erst mit der Eskalation), *Nebelsee* (D-dorisch, langsam – ein Chor ohne Worte, Kalimba-Töne, die von links nach rechts nachhallen, ein Herzschlag erst, wenn es ernst wird) und *Schicksal* (E-phrygisch – ein tiefes Ostinato, das nicht loslässt, eine Glocke, die schlägt, Pauken im 3-3-2). | `TRACKS`, `trackFor` |
+| **Ein Raum, den man hört** | Längerer Hall, ein Stereo-Echo, das hin und her wandert, und ein leises Rauschen der Luft im Gewölbe; Tropfen und Zugluft wandern durch das Stereobild. | `Music.attach`, `roomTone` |
+| **Echte Klänge, wo es körperlich wird** | Klinge, Hieb, dumpfer Aufprall, Buchseite (Menü), knarrende Kerkertür (ein neues Duell), Totenglocke (Spielende), Explosion – CC0-Aufnahmen von Kenney, mehrere Takes je Klang und jedes Mal ein wenig schneller oder langsamer, damit nichts mechanisch klingt. Die Magie bleibt Synthesizer. 83 KB für alles. | `ui/sfx/`, `Sound.sample` |

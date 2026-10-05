@@ -556,6 +556,7 @@ export class App {
     this.retry = false;
     this.discoveries = [];
     this.music.restart(names.join("").length * 31 + Date.now() % 997);
+    this.sound.play("door");
     this.lastWille = [this.state.players[0].wille, this.state.players[1].wille];
     clear(this.els.chronicle);
     this.hideCaption();
@@ -1382,6 +1383,7 @@ export class App {
     this.epilogue = epilogue;
     this.discoveries = chronicle.filter((e) => e.discovery).map((e) => ({ name: e.name, player: e.actor }));
     this.music.restart(state.players[0].name.length * 31 + state.players[1].name.length);
+    if (state.history.length === 0 && state.usedFormIds.length === 0) this.sound.play("door");
     this.lastWille = [state.players[0].wille, state.players[1].wille];
     clear(this.els.chronicle);
     for (const e of chronicle) this.addChronicle(e.actor, e.name, e.text, e.failed, e.why ?? [], e.discovery);
