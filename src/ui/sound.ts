@@ -1,17 +1,31 @@
 /**
- * Tiny WebAudio synthesiser – every sound is generated, no audio files.
- * Quiet by design: a low drone, bells, a thump. Starts only after a user gesture
+ * Tiny WebAudio sound: a synthesiser for the magic (drones, bells, shimmer) and a handful of real recordings for
+ * what is physical – a blade, a blow, a creaking door, a bell (CC0, `ui/sfx/`, bundled; several takes of each,
+ * played a little faster or slower every time so nothing repeats). Quiet by design. Starts only after a user gesture
  * (the first Enter), can be muted from the sigil menu (remembered per browser).
  */
+import { SFX } from "./sfx/index.ts";
 
 const MUTE_KEY = "oldest-game:mute";
 
-export type Cue = "summon" | "reveal" | "strike" | "impact" | "fizzle" | "discovery" | "menu" | "end" | "boom";
+export type Cue = "summon" | "reveal" | "strike" | "impact" | "fizzle" | "discovery" | "menu" | "end" | "boom" | "door";
+
+/** Decode a bundled `data:` URL without fetch (works in sandboxed previews too). */
+function dataBytes(url: string): ArrayBuffer | null {
+  const comma = url.indexOf(",");
+  if (!url.startsWith("data:") || comma < 0) return null;
+  const bin = atob(url.slice(comma + 1));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
 
 export class Sound {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
+  /** The recordings by group (`hit` → its takes), filled once decoded. */
+  private readonly samples = new Map<string, AudioBuffer[]>();
   muted: boolean;
 
   constructor() {
@@ -87,6 +101,43 @@ export class Sound {
     this.ctx = ctx;
     this.master = master;
     this.noiseBuffer = buf;
+    this.loadSamples(ctx);
+  }
+
+  /** Decode the bundled recordings in the background; until then (or if one fails) the synth plays alone. */
+  private loadSamples(ctx: AudioContext): void {
+    for (const [name, url] of Object.entries(SFX)) {
+      const bytes = dataBytes(url);
+      if (bytes === null) continue;
+      const group = name.replace(/-\d+$/, "");
+      ctx
+        .decodeAudioData(bytes)
+        .then((buffer) => {
+          this.samples.set(group, [...(this.samples.get(group) ?? []), buffer]);
+        })
+        .catch(() => {
+          /* undecodable here – the synth covers it */
+        });
+    }
+  }
+
+  /** One take of a recording, a touch faster or slower each time. Returns whether there was one. */
+  private sample(group: string, t: number, vol: number, spread = 0.08): boolean {
+    const ctx = this.ctx;
+    const master = this.master;
+    const takes = this.samples.get(group);
+    if (ctx === null || master === null || takes === undefined || takes.length === 0) return false;
+    const buffer = takes[Math.floor(Math.random() * takes.length)];
+    if (buffer === undefined) return false;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.playbackRate.value = 1 + (Math.random() - 0.5) * spread;
+    const g = ctx.createGain();
+    g.gain.value = vol;
+    src.connect(g);
+    g.connect(master);
+    src.start(t);
+    return true;
   }
 
   play(cue: Cue): void {
@@ -100,33 +151,47 @@ export class Sound {
         this.noise(t, 1.1, 0.12, 800, 3000);
         break;
       case "reveal":
-        for (const [i, f] of [440, 554.4, 659.3].entries()) this.bell(f, t + i * 0.04, 1.8, 0.2);
+        this.sample("chime", t, 0.45, 0.04);
+        for (const [i, f] of [440, 554.4, 659.3].entries()) this.bell(f, t + i * 0.04, 1.8, 0.14);
         break;
       case "strike":
-        this.noise(t, 0.35, 0.3, 400, 4000);
+        // a blade through the air – the hiss alone where the recording is missing
+        if (!this.sample("slash", t, 0.7)) this.noise(t, 0.35, 0.3, 400, 4000);
         break;
       case "impact":
-        this.tone(70, t, 0.6, 0.9, "sine", 0, 32);
-        this.noise(t, 0.4, 0.4, 100, 900);
+        // the blow itself, under it the deep thump that makes it heavy
+        this.sample("hit", t, 0.95);
+        this.tone(70, t, 0.6, 0.7, "sine", 0, 32);
+        this.noise(t, 0.4, 0.25, 100, 900);
         break;
       case "fizzle":
+        this.sample("thud", t, 0.55);
         for (const [i, f] of [1318.5, 1174.7, 987.8, 880].entries()) this.bell(f, t + i * 0.07, 0.5, 0.08);
         this.noise(t, 0.3, 0.1, 3000, 9000);
         break;
       case "discovery":
-        for (const [i, f] of [523.3, 659.3, 784, 1046.5, 1318.5].entries()) this.bell(f, t + i * 0.09, 2.2, 0.14);
+        this.sample("discovery", t, 0.35, 0.02);
+        for (const [i, f] of [523.3, 659.3, 784, 1046.5, 1318.5].entries()) this.bell(f, t + 0.08 + i * 0.09, 2.2, 0.14);
         break;
       case "menu":
-        this.bell(880, t, 0.4, 0.05);
+        // a page turns in the grimoire
+        if (!this.sample("page", t, 0.6, 0.15)) this.bell(880, t, 0.4, 0.05);
+        break;
+      case "door":
+        // a new duel: somewhere a heavy door creaks open
+        this.sample("door", t, 0.55, 0.06);
         break;
       case "boom":
-        // a long, deep blast: sub drop + rumbling noise
+        // a long, deep blast: the recorded explosion over a sub drop and rumbling noise
+        this.sample("boom", t, 1, 0.04);
         this.tone(90, t, 2.5, 1.0, "sine", 0, 24);
-        this.noise(t, 2.8, 0.9, 60, 400);
-        this.noise(t + 0.05, 0.5, 0.6, 2000, 300);
+        this.noise(t, 2.8, 0.7, 60, 400);
+        this.noise(t + 0.05, 0.5, 0.5, 2000, 300);
         break;
       case "end":
-        for (const [i, f] of [220, 261.6, 329.6, 440].entries()) this.bell(f, t + i * 0.25, 3, 0.16);
+        // the bell tolls, the chord rings out
+        this.sample("bell", t, 0.8, 0.02);
+        for (const [i, f] of [220, 261.6, 329.6, 440].entries()) this.bell(f, t + 0.3 + i * 0.25, 3, 0.14);
         this.tone(55, t, 3.5, 0.3, "triangle");
         break;
     }
