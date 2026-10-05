@@ -14,6 +14,7 @@ import { displaySize, renderGlow, renderSprite, type PixelImage } from "./sprite
 import { ISO } from "./stage-iso.ts";
 import { acornImage, signatureFor, tattooImage, type Signature } from "./eichel.ts";
 import { JOHNNY_NAME, NOTE_COLORS, noteImage } from "./johnny.ts";
+import { balloonImage, BIRTHDAY_NAME, bookImage, pageImage } from "./birthday.ts";
 import { FLOOR_Y, GROUND_Y, HEIGHT, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
 
 export { FLOOR_Y, GROUND_Y, HEIGHT, TORCH_X, WIDTH } from "./stage.ts";
@@ -32,9 +33,11 @@ export type Side = 0 | 1;
 export type ArenaCue = "summon" | "reveal" | "strike" | "impact" | "fizzle" | "discovery" | "boom";
 
 /** Special spectacles for a few forms – pure show, no rules involved. */
-export type EasterEgg = "nuke" | "meteor" | "rainbow" | "confetti" | "vortex" | "tattoo" | "eicheln" | "johnny";
+export type EasterEgg = "nuke" | "meteor" | "rainbow" | "confetti" | "vortex" | "tattoo" | "eicheln" | "johnny" | "birthday";
 
 const EGG_PATTERNS: readonly (readonly [RegExp, EasterEgg])[] = [
+  // the Birthday Boy arrives with balloons and confetti
+  [BIRTHDAY_NAME, "birthday"],
   // the Eichel figures: the gang shows its tattoo, the Eichelober arrives in a shower of acorns
   [/eichel\s*-?\s*(ober\s*-?\s*)?(gang|bande)/i, "tattoo"],
   [/eichel\s*-?\s*ober/i, "eicheln"],
@@ -578,6 +581,20 @@ export abstract class ArenaSim {
         await wait(rm ? 100 : 900);
         return;
       }
+      case "birthday": {
+        // the Birthday Boy arrives: balloons float up around him, confetti rains, a ring of light where he lands
+        const colors = ["#ff6a6a", "#ffd86a", "#7dff6a", "#7fc6e8", "#c8a0ff", "#ff9ad0"];
+        for (let i = 0; i < 9; i++) {
+          this.props.push({ image: toCanvas(balloonImage(i)), x: x + (r() - 0.5) * 110, y: this.gy(side) - r() * 20, vx: (r() - 0.5) * 12, vy: -26 - r() * 22, life: -r() * 0.5, max: rm ? 0.8 : 4.5, gravity: -2, w: 7, h: 13, flip: false, fade: 0.3, glow: 0 });
+        }
+        for (let i = 0; i < 140; i++) {
+          this.particles.push({ x: x + (r() - 0.5) * 220, y: -5 - r() * 40, vx: (r() - 0.5) * 30, vy: 20 + r() * 40, life: -r() * 0.8, max: 3 + r() * 2, color: colors[i % colors.length] ?? "#ffffff", size: r() < 0.5 ? 2 : 1, gravity: 10, glow: false });
+        }
+        this.rings.push({ x, y: this.gy(side), r: 4, life: 0, max: 0.9, color: "#ffd86a" });
+        this.onCue?.("discovery");
+        await wait(rm ? 100 : 900);
+        return;
+      }
       case "eicheln": {
         // the Eichelober arrives: acorns rain around him, clouds puff up where he lands
         const { acorn } = this.eichelProps();
@@ -1069,6 +1086,7 @@ export abstract class ArenaSim {
     if (signature === "eichelkaese") await this.withSignatureMove(side, () => this.eichelkaese(side));
     else if (signature === "eichelhagel") await this.withSignatureMove(side, () => this.eichelhagel(side));
     else if (signature === "klassiker") await this.withSignatureMove(side, () => this.klassiker(side, signatureSeconds));
+    else if (signature === "kapital") await this.withSignatureMove(side, () => this.kapital(side));
     else await this.strike(side, style, false, effect);
     if (target === null) return;
     await this.suspense(other);
@@ -1989,6 +2007,61 @@ export abstract class ArenaSim {
       const a = r() * Math.PI * 2;
       this.props.push({ image: this.johnnyNote(), x: tx, y: ty, vx: Math.cos(a) * 90, vy: Math.sin(a) * 90 - 40, life: 0, max: 1, gravity: 120, w: 8, h: 11, flip: false, fade: 0.3, glow: 0.6 });
     }
+  }
+
+  /**
+   * "Das Kapital": the Birthday Boy reads from his red book – loose pages flutter over to the opponent, who reels a
+   * little more with every page – and then he throws the whole book: it spins over and lands with a thud.
+   */
+  private async kapital(side: Side): Promise<void> {
+    const attacker = this.fighters[side];
+    if (attacker === null) return;
+    const other: Side = side === 0 ? 1 : 0;
+    const target = this.fighters[other];
+    const dir = side === 0 ? 1 : -1;
+    const rm = this.reducedMotion;
+    const r = this.rand;
+    const tx = SIDE_X[other];
+    const th = target?.sprite.height ?? 40;
+    const ty = this.gy(other) - th / 2;
+    const page = toCanvas(pageImage());
+    const book = toCanvas(bookImage());
+    const hand = (): [number, number] => [SIDE_X[side] + attacker.offsetX + dir * attacker.sprite.width * 0.3, this.gy(side) + attacker.offsetY - attacker.sprite.height * 0.55];
+    // reading aloud: pages leave the book in arcs
+    const pages = rm ? 4 : 16;
+    for (let i = 0; i < pages; i++) {
+      const [hx, hy] = hand();
+      const flight = rm ? 0.2 : 0.7 + r() * 0.3;
+      const lift = 30 + r() * 30;
+      const ex = tx + (r() - 0.5) * 24;
+      const ey = ty + (r() - 0.5) * th * 0.6;
+      this.props.push({ image: page, x: hx, y: hy, vx: (ex - hx) / flight, vy: (ey - hy) / flight - lift, life: 0, max: flight, gravity: (2 * lift) / flight, w: 7, h: 9, flip: r() < 0.5, fade: 0.1, glow: 0.2 });
+      if (target !== null && i % 3 === 2) {
+        target.flash = 0.35;
+        target.offsetX = dir * (1 + i * 0.25);
+      }
+      if (i % 4 === 0) this.onCue?.("strike");
+      await wait(rm ? 40 : 110);
+    }
+    await wait(rm ? 60 : 500);
+    // the throw: the whole book, spinning in a high arc
+    await this.tween(rm ? 40 : 200, (t) => (attacker.offsetX = -dir * 5 * t));
+    const [hx, hy] = hand();
+    const flight = rm ? 0.2 : 0.6;
+    const lift = 70;
+    this.props.push({ image: book, x: hx, y: hy, vx: (tx - hx) / flight, vy: (ty - hy) / flight - lift, life: 0, max: flight, gravity: (2 * lift) / flight, w: 22, h: 26, flip: false, fade: 0, glow: 0.3, shatter: true });
+    attacker.offsetX = dir * 4;
+    await wait(flight * 1000);
+    this.onCue?.("impact");
+    this.shake = Math.max(this.shake, rm ? 0 : 5);
+    this.burst(tx, ty, "#d82828", 30);
+    for (let i = 0; i < 10; i++) this.props.push({ image: page, x: tx, y: ty, vx: (r() - 0.5) * 120, vy: -40 - r() * 60, life: 0, max: 1.2, gravity: 90, w: 7, h: 9, flip: r() < 0.5, fade: 0.4, glow: 0 });
+    if (target !== null) target.flash = 1;
+    const pushed = target?.offsetX ?? 0;
+    await this.tween(rm ? 40 : 250, (t) => {
+      attacker.offsetX = dir * 4 * (1 - t);
+      if (target !== null) target.offsetX = pushed * (1 - t);
+    });
   }
 
   private eichelProps(): { acorn: HTMLCanvasElement } {

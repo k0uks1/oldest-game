@@ -199,9 +199,10 @@ export class Sound {
 
   /**
    * Johnny Gnadenlos sings: a melody (MIDI note, beats; 0 = rest) as a squeaky toy-speaker voice –
-   * square wave an octave up with a little vibrato. Returns its length in seconds.
+   * square wave an octave up with a little vibrato. `warm` sings it softer (a birthday song: triangle wave, at pitch).
+   * Returns its length in seconds.
    */
-  song(notes: readonly (readonly [number, number])[], bpm: number): number {
+  song(notes: readonly (readonly [number, number])[], bpm: number, warm = false): number {
     const ctx = this.ctx;
     const master = this.master;
     const beat = 60 / bpm;
@@ -211,9 +212,9 @@ export class Sound {
     for (const [midi, beats] of notes) {
       const dur = beats * beat;
       if (midi > 0) {
-        const freq = 440 * 2 ** ((midi + 12 - 69) / 12);
+        const freq = 440 * 2 ** ((midi + (warm ? 0 : 12) - 69) / 12);
         const o = ctx.createOscillator();
-        o.type = "square";
+        o.type = warm ? "triangle" : "square";
         o.frequency.setValueAtTime(freq, t);
         const lfo = ctx.createOscillator();
         lfo.frequency.value = 6;
@@ -226,8 +227,9 @@ export class Sound {
         f.frequency.value = 2600;
         const g = ctx.createGain();
         g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.16, t + 0.02);
-        g.gain.setValueAtTime(0.16, t + dur * 0.75);
+        const vol = warm ? 0.3 : 0.16;
+        g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+        g.gain.setValueAtTime(vol, t + dur * 0.75);
         g.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.95);
         o.connect(f);
         f.connect(g);

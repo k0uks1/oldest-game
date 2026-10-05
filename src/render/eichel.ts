@@ -5,9 +5,10 @@
  */
 import type { PixelImage } from "./sprite.ts";
 import { JOHNNY_NAME } from "./johnny.ts";
+import { BIRTHDAY_NAME } from "./birthday.ts";
 
 /** A signature attack that replaces the ordinary strike. */
-export type Signature = "eichelkaese" | "eichelhagel" | "klassiker";
+export type Signature = "eichelkaese" | "eichelhagel" | "klassiker" | "kapital";
 
 /** The gang is checked first – "Eichelober-Gang" also contains "Eichelober". */
 const SIGNATURE_PATTERNS: readonly (readonly [RegExp, Signature])[] = [
@@ -15,6 +16,8 @@ const SIGNATURE_PATTERNS: readonly (readonly [RegExp, Signature])[] = [
   [/eichel\s*-?\s*ober|eichelk(ä|ae)se/i, "eichelkaese"],
   // Johnny Gnadenlos, the singing cactus (render/johnny.ts)
   [JOHNNY_NAME, "klassiker"],
+  // the Birthday Boy reads from his red book – and then throws it (render/birthday.ts)
+  [BIRTHDAY_NAME, "kapital"],
 ];
 
 /** Which signature attack (if any) a form's name asks for. */
@@ -27,6 +30,7 @@ export const SIGNATURE_CRY: Readonly<Record<Signature, string>> = {
   eichelkaese: "EICHELKÄSEATTACKE!",
   eichelhagel: "EICHELHAGEL!",
   klassiker: "DER KLASSIKER!",
+  kapital: "PROLETARIER ALLER LÄNDER!",
 };
 
 type Grid = readonly string[];

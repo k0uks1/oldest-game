@@ -25,6 +25,7 @@ import { Resolver, type Novelty, type PlayedOutcome, type Turn } from "../game/r
 import { attackOutcome, attackStyle, easterEggFor, type AttackStyle } from "../render/arena.ts";
 import { SIGNATURE_CRY, signatureFor } from "../render/eichel.ts";
 import { isJohnny, parrot, songCry, songFor } from "../render/johnny.ts";
+import { BIRTHDAY_CRY, BIRTHDAY_SONG, isBirthday, isBirthdayBoy } from "../render/birthday.ts";
 import { createArena, type Arena } from "../render/arenas.ts";
 import { clear, h } from "./dom.ts";
 import { OnlineLink, type LinkStart, type LinkStatus } from "../online/link.ts";
@@ -218,6 +219,8 @@ export class App {
   private playback = this.newPlayback();
   /** Start dialog: last tab, typed values (kept across a failed attempt), access code (memory only). */
   private startTab: StartTab = "local";
+  /** The birthday party has played on this page. */
+  private partied = false;
   private draft = { name0: rememberedName(), name1: "", room: "" };
   private accessCode = "";
   /** The server has welcomed us into the current room. */
@@ -549,6 +552,23 @@ export class App {
     this.arena.setOntology(onto);
   }
 
+  /** The birthday song, with a banner – and a speech bubble when the Birthday Boy himself stands in the arena. */
+  private serenade(side?: PlayerId): void {
+    this.flashBanner(BIRTHDAY_CRY, "info");
+    const seconds = this.sound.song(BIRTHDAY_SONG.notes, BIRTHDAY_SONG.bpm, true);
+    if (side !== undefined) this.bubble(side, `♪ ${BIRTHDAY_SONG.line}`, seconds * 1000);
+  }
+
+  /** On his birthday, the first duel of the page opens with a party: confetti, balloons, the song. */
+  private partyOnce(): void {
+    if (this.partied || !isBirthday(new Date())) return;
+    this.partied = true;
+    setTimeout(() => {
+      void this.arena.easterEgg("birthday", 0);
+      this.serenade();
+    }, 900);
+  }
+
   private newGame(names: [string, string]): void {
     this.state = createGame(names);
     this.anim.reset();
@@ -557,6 +577,7 @@ export class App {
     this.discoveries = [];
     this.music.restart(names.join("").length * 31 + Date.now() % 997);
     this.sound.play("door");
+    this.partyOnce();
     this.lastWille = [this.state.players[0].wille, this.state.players[1].wille];
     clear(this.els.chronicle);
     this.hideCaption();
@@ -666,6 +687,7 @@ export class App {
       await this.arena.reveal(actor);
     }
     const egg = easterEggFor(form.name);
+    if (isBirthdayBoy(form.name)) this.serenade(actor);
     if (egg !== null) await this.arena.easterEgg(egg, actor);
     if (discovery) {
       this.showSub(novelty.extra.length > 0 ? `✦ zum ersten Mal beschworen · ${novelty.extra.join(" · ")}` : "✦ zum ersten Mal beschworen", false);
@@ -1384,6 +1406,7 @@ export class App {
     this.discoveries = chronicle.filter((e) => e.discovery).map((e) => ({ name: e.name, player: e.actor }));
     this.music.restart(state.players[0].name.length * 31 + state.players[1].name.length);
     if (state.history.length === 0 && state.usedFormIds.length === 0) this.sound.play("door");
+    this.partyOnce();
     this.lastWille = [state.players[0].wille, state.players[1].wille];
     clear(this.els.chronicle);
     for (const e of chronicle) this.addChronicle(e.actor, e.name, e.text, e.failed, e.why ?? [], e.discovery);

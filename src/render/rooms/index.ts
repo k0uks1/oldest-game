@@ -15,6 +15,8 @@ import room_flut from "./flut.png";
 import room_flut_anim from "./flut-anim.png";
 import room_funken from "./funken.png";
 import room_funken_anim from "./funken-anim.png";
+import room_geburtstag from "./geburtstag.png";
+import room_geburtstag_anim from "./geburtstag-anim.png";
 import room_gift from "./gift.png";
 import room_gift_anim from "./gift-anim.png";
 import room_gruft from "./gruft.png";
@@ -49,6 +51,8 @@ export const ROOM_PICTURES: Readonly<Record<string, string>> = {
   "flut-anim": room_flut_anim,
   "funken": room_funken,
   "funken-anim": room_funken_anim,
+  "geburtstag": room_geburtstag,
+  "geburtstag-anim": room_geburtstag_anim,
   "gift": room_gift,
   "gift-anim": room_gift_anim,
   "gruft": room_gruft,
