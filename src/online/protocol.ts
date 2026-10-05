@@ -145,6 +145,8 @@ export interface ChronicleEntry {
   readonly failed: boolean;
   readonly discovery: boolean;
   readonly text: string;
+  /** The engine's reasons ("Warum?"), so a rebuilt chronicle can still show them (absent in rooms saved before). */
+  readonly why?: readonly string[];
 }
 
 /** Changed or new entries of the learned pack (the pack only grows online). */

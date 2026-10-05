@@ -16,6 +16,7 @@ import { createGame, pass } from "../src/engine/game.ts";
 import type { ContentPack } from "../src/engine/ontology/pack.ts";
 import type { AnimMove, Form, GameState, PlayerId } from "../src/engine/types.ts";
 import type { Resolver, Turn } from "../src/game/resolver.ts";
+import { whyLines } from "../src/game/why.ts";
 import {
   ANIMS_PER_PLAYER,
   isEmptyDelta,
@@ -648,6 +649,7 @@ export class OnlineHub {
       failed: turn.outcome.kind === "failure",
       discovery: turn.novelty?.kind === "discovery",
       text: "…",
+      why: whyLines(turn.outcome, turn.state.config.discoveryEleganz),
     };
     room.chronicle.push(entry);
     this.broadcast(room, { t: "turn", seq, turn });

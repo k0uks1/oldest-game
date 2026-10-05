@@ -560,3 +560,11 @@ Aufgeräumt dabei: Die Kulisse ist jetzt auf `stage.ts` (Typen, gemeinsame Helfe
 | **Tag „wörtlich“** | Johnnys vier Mechanismen greifen alles an, was gesprochen oder gesungen ist; Wort, Witz, Lüge, Fluch, Wiegenlied, Echo, Passwort, Versprechen und Papagei tragen den Tag. Schwäche: Wer lauter ist, übertönt ihn. | `tags.json`, `verbs.json` |
 | **Summen** | Solange Johnny in der Arena steht, steigt ab und zu eine Note aus seinem Topf. | `ArenaSim.emitHumming` |
 | **Martin Luther und „wortgewaltig“** | Auf Wunsch „Johnny schlägt wortstarke Figuren“: Luther steht im Lexikon (Thesen, „Hier stehe ich“), seine Schwäche sind seine eigenen Worte. Gegen Wortgewaltige plappert Johnny immer nach, statt zu singen. | `forms/charaktere.json`, `tags.json`, `ui/app.ts` (`MOCKING`) |
+
+## Beschwörung, Chronik, Flut
+
+| Idee | Was es tut | Wo |
+|---|---|---|
+| **Lichtreifen statt Pentagramm** | Die Beschwörung lieh sich Pentagramm und Runenkreis der Arena – das wirkte wie zwei Animationen übereinander. Jetzt steigen drei Lichtreifen an der werdenden Gestalt hoch und werden enger, Funken kreisen hinein; die Reifen umschließen die Gestalt (hintere Hälfte dahinter, vordere davor). Alles bleibt dicht an der Figur, die Flammen sind etwas niedriger. Der Runenkreis lädt sich nur noch auf, während Claude nachdenkt. | `drawHoops` |
+| **„Warum?“ überlebt den Reconnect** | Online baute die Seite die Chronik beim Betreten und nach jedem Verbindungsabriss aus den Daten des Servers neu auf – der kannte nur Name und Text, die Begründung der Engine fehlte dann. Jetzt speichert der Server sie mit. | `whyLines`, `ChronicleEntry.why` |
+| **Echte Flut** | Der Flutraum war eher ein tropfender Keller; neu gemalt steht der Boden klar unter Wasser, aus den Wänden strömt es. | `rooms.json` |

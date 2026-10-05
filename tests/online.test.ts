@@ -180,6 +180,7 @@ describe("online rooms (authoritative server)", () => {
     assert.equal(w.state?.history.length, 1);
     assert.equal(w.chronicle[0]?.name, "Ritter");
     assert.notEqual(w.chronicle[0].text, "…", "narration was stored");
+    assert.deepEqual(w.chronicle[0].why, ["Eröffnung."], "the reasons come back with the chronicle (Warum?)");
     assert.deepEqual(b.last("presence")?.players.map((p) => p?.online), [true, true]);
   });
 
