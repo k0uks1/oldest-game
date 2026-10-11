@@ -18,7 +18,7 @@ Der Server SHALL den Spielzustand und den Claude-Key halten und Züge mit demsel
 
 Ein Client SHALL mit Raumcode und Sitz-Token (`resume`) in einen noch offenen Raum zurückkehren und ein `welcome` mit aktuellem Zustand und Chronik erhalten. Der Browser SHALL sich jedes Duell (Raum und Token) in `localStorage` merken (14 Tage, mehrere Duelle) und das Duell des Tabs in `sessionStorage` – zwei Tabs sind zwei Spieler. Beim Laden SHALL der Client zuerst das Duell des Tabs, sonst das letzte nicht beendete gemerkte Duell wieder aufnehmen; Letzteres MUST NOT einem anderen Tab den Sitz wegnehmen (`resume` mit `ifAway`, Antwort `seated`).
 
-`welcome` und `start` SHALL die `seq` des letzten Zugs tragen, den ihr Zustand enthält. Der Client SHALL beim Übernehmen eines solchen Zustands Züge bis zu dieser `seq` nicht erneut abspielen, auf eine mit der Verbindung verlorene `narration` nicht länger warten und die Arena erst nach einer noch laufenden Animation auf den Zustand setzen (`src/online/playback.ts`); ein Fehler in einer Animation MUST NOT spätere Züge aufhalten.
+`welcome` und `start` SHALL die `seq` des letzten Zugs tragen, den ihr Zustand enthält. Der Client SHALL beim Übernehmen eines solchen Zustands Züge bis zu dieser `seq` nicht erneut abspielen, auf eine mit der Verbindung verlorene `narration` nicht länger warten und die Arena erst nach einer noch laufenden Animation auf den Zustand setzen (`src/online/playback.ts`); ein Fehler in einer Animation MUST NOT spätere Züge aufhalten. Kehrt ein Client (Spieler oder Zuschauer) in den Tab zurück, SHALL er die Arena nach den noch laufenden Zügen ebenso auf den Zustand setzen – die stehende Gestalt vollständig sichtbar, auch wenn die Verbindung nie abriss. Fehlt der Arena genau der letzte Zug (die beantwortete Gestalt steht noch allein), SHALL der Client diesen Zug kurz nachspielen; die beantwortete Gestalt MUST NOT verschwinden, bevor die neue erschienen ist und sie geschlagen hat.
 
 Ohne Token SHALL ein `join` per Raumcode den Sitz des Spielers mit demselben Namen übernehmen, sobald dieser Sitz keine Verbindung mehr hat; der alte Token MUST danach ungültig sein. Ein Sitz, der `seatFreeAfterMs` (5 min) ohne Verbindung ist, SHALL von jedem mit dem Raumcode übernommen werden können. Der Server SHALL tote Verbindungen per Heartbeat binnen 30 s erkennen.
 
@@ -29,6 +29,14 @@ Ohne Token SHALL ein `join` per Raumcode den Sitz des Spielers mit demselben Nam
 #### Scenario: Aus der App getappt und zurück
 - **WHEN** ein Spieler direkt nach einem Zug aus dem Browser tappt, die Verbindung vor der `narration` abreißt und er zurückkehrt
 - **THEN** zeigt die Arena die stehende Gestalt, und jede weitere Gestalt – eigene wie gegnerische – erscheint wieder
+
+#### Scenario: Zuschauer tappt raus und zurück
+- **WHEN** ein Zuschauer aus dem Browser tappt, während ein Zug spielt oder ein Bild für eine Gestalt ankommt, und zurückkehrt
+- **THEN** sind beide stehenden Gestalten wieder voll sichtbar
+
+#### Scenario: Gegner zieht, während man weg ist
+- **WHEN** ein Spieler oder Zuschauer weg ist, während der Gegner eine neue Gestalt spielt, deren Bild noch gemalt wird, und zurückkehrt
+- **THEN** bleibt die bisherige Gestalt stehen, während die neue beschworen wird, und verschwindet erst, wenn die neue sie schlägt
 
 #### Scenario: Browser geschlossen und wieder geöffnet
 - **WHEN** ein Spieler den Browser schließt und das Spiel später wieder öffnet, solange der Raum besteht

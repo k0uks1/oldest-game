@@ -141,6 +141,14 @@ describe("narration stays short", () => {
     assert.equal(b, "Der Drache speit Feuer über die Arena.");
     assert.ok(brief("x ".repeat(200), 150).length <= 152);
   });
+
+  it("a sentence that runs on ends at its last clause that fits – no „…“ mid-thought", async () => {
+    const { brief, NARRATION_MAX } = await import("../src/llm/narrator.ts");
+    const runOn = "Der Zerhacker hackt durch Thaddeus' zehn Tentakel wie durch feuchte Schnüre, während der Oktopus vergeblich zu fesseln versucht und zu Fleischfetzen zerfällt.";
+    assert.equal(brief(runOn, NARRATION_MAX), "Der Zerhacker hackt durch Thaddeus' zehn Tentakel wie durch feuchte Schnüre.");
+    // a comma inside a quotation is no place to end
+    assert.ok(!brief("„Weiche, Wurm, weiche“ – so ruft der Ritter und stürmt mit erhobenem Schwert gegen den Drachen an, der nur gähnt und ihn verschluckt.", 100).includes("„Weiche."));
+  });
 });
 
 describe("brief", () => {

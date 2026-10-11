@@ -94,9 +94,15 @@ export interface SpriteEntry {
   readonly art: boolean;
 }
 
+/**
+ * One form on stage. Updated in place, never swapped for a copy: an animation holds on to its
+ * fighter while it runs (a tween waits for frames – a hidden tab gets none for minutes), and a copy
+ * made meanwhile (picture arrived, brought to life) kept a half-revealed or faded state for good.
+ */
 export interface Fighter {
-  readonly form: Form;
-  readonly sprite: SpriteEntry;
+  form: Form;
+  /** Replaced when a picture arrives or an animation starts – renderers key their textures on it. */
+  sprite: SpriteEntry;
   /** 0..1 materialisation progress. */
   appear: number;
   /** 0 = unknown silhouette, 1 = fully revealed. */
@@ -693,6 +699,24 @@ export abstract class ArenaSim {
     this.props.length = 0;
   }
 
+  /**
+   * Between turns: whatever stands is at rest – fully there, revealed, upright, in its place. Puts
+   * right what an animation cut off (hidden tab, lost connection) left behind.
+   */
+  steady(): void {
+    for (const f of this.fighters) {
+      if (f === null) continue;
+      f.appear = 1;
+      f.reveal = 1;
+      f.alpha = 1;
+      f.offsetX = 0;
+      f.offsetY = 0;
+      f.facing = 1;
+      f.squash = 1;
+      f.stone = 0;
+    }
+  }
+
   /** Which form stands on each side (ids) – to check the arena against the game state. */
   shownForms(): readonly [string | null, string | null] {
     return [this.fighters[0]?.form.id ?? null, this.fighters[1]?.form.id ?? null];
@@ -712,7 +736,9 @@ export abstract class ArenaSim {
       const fresh = this.onto.formById(f.form.id) ?? f.form;
       if (artFor(fresh) === undefined) continue;
       const sprite = this.sprite(fresh);
-      this.fighters[side] = { ...f, form: fresh, sprite, flash: 0.8 };
+      f.form = fresh;
+      f.sprite = sprite;
+      f.flash = 0.8;
       this.rings.push({ x: SIDE_X[side], y: this.gy(side), r: 4, life: 0, max: 0.7, color: sprite.palette.glow });
     }
   }
@@ -956,9 +982,9 @@ export abstract class ArenaSim {
       return copy;
     };
     const live: SpriteEntry = { ...first, image: own(first.image), glow: own(first.glow), silhouette: own(first.silhouette), rim: own(first.rim), stone: own(first.stone) };
-    const next: Fighter = { ...f, sprite: live, anim: { frames: entries, fps, t: 0, shown: 0 } };
-    this.fighters[side] = next;
-    return next;
+    f.sprite = live;
+    f.anim = { frames: entries, fps, t: 0, shown: 0 };
+    return f;
   }
 
   /** One crop for a form's standard picture and all its animations, so switching between them never jumps. */

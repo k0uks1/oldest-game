@@ -18,8 +18,28 @@ export function brief(raw: string, maxChars: number): string {
   const first = (/^[^.!?…]+[.!?…]+/.exec(text) ?? [""])[0].trim();
   if (first !== "" && first.length <= maxChars) return first;
   const cut = text.slice(0, maxChars);
+  // a sentence that runs on: end it at its last clause that fits ("…, während …" goes) – reads whole
+  const clause = lastClauseEnd(cut);
+  if (clause > 40) return `${cut.slice(0, clause).trim()}.`;
   return `${cut.slice(0, cut.lastIndexOf(" ") > 40 ? cut.lastIndexOf(" ") : maxChars).trim()} …`;
 }
+
+/** Index of the last clause break (`,` `;` `:` or a dash) in `text` outside a quotation, or -1. */
+function lastClauseEnd(text: string): number {
+  for (let i = text.length - 1; i > 0; i--) {
+    const ch = text[i] ?? "";
+    const dash = (ch === "–" || ch === "—") && text[i - 1] === " ";
+    if (!dash && ch !== "," && ch !== ";" && ch !== ":") continue;
+    const before = text.slice(0, i);
+    const opened = (before.match(/[„»]/g) ?? []).length;
+    const closed = (before.match(/[“«]/g) ?? []).length;
+    if (opened === closed) return dash ? i - 1 : i;
+  }
+  return -1;
+}
+
+/** Longest narration line: about three lines on a phone. */
+export const NARRATION_MAX = 120;
 
 const OUTCOME_WORDS: Readonly<Record<string, string>> = {
   vertrieben: "in die Flucht geschlagen",
@@ -32,7 +52,7 @@ const OUTCOME_WORDS: Readonly<Record<string, string>> = {
 
 const SYSTEM = `Du bist der Erzähler von „The Oldest Game“, einem Duell der Vorstellungskraft in einer
 Dungeon-Arena, im Stil düsterer Fantasy-Comics. Du beschreibst in GENAU EINEM kurzen, bildhaften deutschen Satz
-(höchstens 16 Wörter – Kürze ist Würze) einen Zug, dessen Ausgang BEREITS FESTSTEHT. Erfinde keinen anderen Ausgang, keine
+(höchstens 14 Wörter, unter 100 Zeichen, ein Hauptsatz ohne angehängtes „während …“ – Kürze ist Würze) einen Zug, dessen Ausgang BEREITS FESTSTEHT. Erfinde keinen anderen Ausgang, keine
 Regeln und keine Zahlen. Keine Anführungszeichen um die ganze Antwort, kein Markdown.
 Regeln für den Satz:
 - Nenne BEIDE Gestalten und zeige, wie genau diese eine auf genau diese andere wirkt – nichts Austauschbares.
@@ -91,7 +111,7 @@ export async function narrateWithClaude(
           .join("\n");
   try {
     const r = await callClaude(settings, { system: SYSTEM, user: facts, maxTokens: 60, temperature: 0.8 });
-    const text = brief(r.text, 150);
+    const text = brief(r.text, NARRATION_MAX);
     return text === "" ? fallback : text;
   } catch {
     return fallback;
@@ -117,7 +137,7 @@ export async function narrateFailureWithClaude(
     .join("\n");
   try {
     const r = await callClaude(settings, { system: SYSTEM, user: facts, maxTokens: 60, temperature: 0.8 });
-    const text = brief(r.text, 150);
+    const text = brief(r.text, NARRATION_MAX);
     return text === "" ? fallback : text;
   } catch {
     return fallback;

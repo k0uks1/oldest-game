@@ -2,7 +2,7 @@ import { APP_VERSION } from "../version.ts";
 import { arenaMinScale, createGame, currentTarget, pass, roundNumber } from "../engine/game.ts";
 import { activeFields } from "../engine/fields.ts";
 import { ESCAPE, reaches } from "../engine/rules.ts";
-import type { AnimMove, CounterCheck, Form, GameState, PlayerId } from "../engine/types.ts";
+import type { AnimMove, CounterCheck, Form, GameState, Move, PlayerId } from "../engine/types.ts";
 import {
   fetchHealth,
   localProxyOf,
@@ -17,7 +17,7 @@ import {
 } from "../llm/client.ts";
 import { browserStore, serverStore, type LearnedStore } from "../llm/learned-store.ts";
 import { emptyLearnedPack, NOTE_MAX_CHARS, reconcileLearned } from "../llm/learning.ts";
-import { brief, narrateEpilogueWithClaude } from "../llm/narrator.ts";
+import { brief, NARRATION_MAX, narrateEpilogueWithClaude } from "../llm/narrator.ts";
 import type { Ontology } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
 import { narrateEnd } from "../narrate/offline.ts";
@@ -29,7 +29,7 @@ import { BIRTHDAY_CRY, BIRTHDAY_SONG, isBirthdayBoy, partyOn } from "../render/b
 import { createArena, type Arena } from "../render/arenas.ts";
 import { clear, h } from "./dom.ts";
 import { OnlineLink, type LinkStart, type LinkStatus } from "../online/link.ts";
-import { arenaMatches, Playback } from "../online/playback.ts";
+import { arenaMatches, missedTurn, Playback } from "../online/playback.ts";
 import { findSession, listSessions, tabSeat, type Session } from "../online/sessions.ts";
 import { whyLines } from "../game/why.ts";
 import { applyPackDelta, normalizeRoom, type ChronicleEntry, type SeatInfo, type ServerMsg } from "../online/protocol.ts";
@@ -352,6 +352,11 @@ export class App {
       if (!document.hidden) this.sound.wake();
     };
     document.addEventListener("visibilitychange", wake);
+    // back in the tab online (a watcher's socket often survives, so no welcome puts it right): once the
+    // turns that waited for frames have played, the arena shows exactly what the game holds
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && this.online !== null && this.joined) void this.playback.run(() => this.settleArena());
+    });
     window.addEventListener("pageshow", wake);
     window.addEventListener("focus", wake);
     for (const ev of ["pointerdown", "keydown", "touchend"] as const) document.addEventListener(ev, wake, { capture: true, passive: true });
@@ -720,10 +725,8 @@ export class App {
       const move = outcome.move;
       this.retry = false;
       if (move.verb === ESCAPE) {
-        const target = this.state.history.at(-2)?.form;
-        const threat = target === undefined ? undefined : this.onto.compileForm(target).verbs.find((v) => ["gewalt", "element", "leben"].includes(this.onto.verbs.get(v)?.spec.family ?? ""));
         const hidden = move.check?.outcome === "versteckt";
-        await this.arena.evade(actor, threat === undefined ? "slash" : this.styleOf(threat), hidden ? "hide" : this.onto.formHas(form, "fliegt") ? "up" : "down");
+        await this.evadeIn(actor, form, this.state.history.at(-2)?.form, hidden);
         this.flashBanner(hidden ? "Versteckt." : "Entkommen.", "good");
       } else if (move.verb !== null) {
         const kind = move.check?.outcome ?? "vernichtet";
@@ -927,6 +930,12 @@ export class App {
   /** The painted attack animation that fits this winner and mechanism best (if the arena has it). */
   private effectOf(form: Form, verb: string): string | undefined {
     return chooseEffect(this.onto, form, verb, (id) => this.arena.hasEffect(id))?.id;
+  }
+
+  /** `form` on `side` slips away from `target`'s blow (up, down, or into hiding). */
+  private evadeIn(side: PlayerId, form: Form, target: Form | undefined, hidden: boolean): Promise<void> {
+    const threat = target === undefined ? undefined : this.onto.compileForm(target).verbs.find((v) => ["gewalt", "element", "leben"].includes(this.onto.verbs.get(v)?.spec.family ?? ""));
+    return this.arena.evade(side, threat === undefined ? "slash" : this.styleOf(threat), hidden ? "hide" : this.onto.formHas(form, "fliegt") ? "up" : "down");
   }
 
   private styleOf(verb: string): AttackStyle {
@@ -1240,7 +1249,7 @@ export class App {
 
   private showCaption(text: string, pending: boolean): void {
     const c = this.els.caption;
-    c.textContent = brief(text, 150);
+    c.textContent = brief(text, NARRATION_MAX);
     // Stays until the next move starts (hideCaption) – reading must never be a race.
     c.className = `caption show${pending ? " pending" : ""}`;
   }
@@ -1425,12 +1434,45 @@ export class App {
     if (state.phase === "finished") void this.showEnd();
   }
 
-  /** Put the arena right for the current state: only the form still standing (`standingForms`). */
+  /**
+   * Put the arena right for the current state: only the form still standing (`standingForms`), at
+   * rest. Runs in turn order, so no animation is cut off by it.
+   */
   private async settleArena(): Promise<void> {
-    if (arenaMatches(this.arena.shownForms(), this.state)) return;
+    if (arenaMatches(this.arena.shownForms(), this.state)) {
+      this.arena.steady();
+      return;
+    }
+    const missed = missedTurn(this.arena.shownForms(), this.state);
+    if (missed !== null) {
+      await this.replayMissed(missed.last, missed.prev);
+      return;
+    }
     this.arena.clear();
     const last = this.state.history.at(-1);
     if (last !== undefined) await this.resummon(last.player, last.form);
+  }
+
+  /** The missed turn in short: `last` comes (with its picture, if one is painted) and beats `prev`. */
+  private async replayMissed(last: Move, prev: Move): Promise<void> {
+    const verb = last.verb;
+    if (verb === null) return;
+    this.els.plates[last.player].textContent = "";
+    this.els.plates[prev.player].textContent = prev.form.name;
+    try {
+      await this.resummon(last.player, last.form);
+      if (verb === ESCAPE) await this.evadeIn(last.player, last.form, prev.form, last.check?.outcome === "versteckt");
+      else await this.arena.attack(last.player, this.styleOf(verb), last.check?.weaknessHit === true, attackOutcome(last.check?.outcome ?? "vernichtet"), this.effectOf(last.form, verb));
+    } finally {
+      // whatever happened meanwhile: the arena ends on the state
+      if (!arenaMatches(this.arena.shownForms(), this.state)) {
+        this.arena.clear();
+        const now = this.state.history.at(-1);
+        if (now !== undefined) await this.arena.summon(now.player, now.form);
+      }
+      this.arena.steady();
+      this.render();
+    }
   }
 
   /** The form still standing after a (re)connect – with its picture if the server has or makes one. */

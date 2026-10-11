@@ -9,7 +9,7 @@
  * came into the arena. Now a (re)connect resolves what still waits, skips what the adopted state
  * already holds and puts the arena right (`settle`) once the last stale animation is over.
  */
-import type { Form, GameState, PlayerId } from "../engine/types.ts";
+import type { Form, GameState, Move, PlayerId } from "../engine/types.ts";
 
 /** What stands in the arena for a state: only the newest form – every earlier one was answered. */
 export function standingForms(state: GameState): readonly [Form | null, Form | null] {
@@ -109,4 +109,16 @@ export class Playback<T> {
 export function arenaMatches(shown: readonly [string | null, string | null], state: GameState): boolean {
   const want = standingForms(state);
   return ([0, 1] as const).every((p: PlayerId) => shown[p] === (want[p]?.id ?? null));
+}
+
+/**
+ * Exactly the state's last turn is missing from the arena: the form it answered still stands alone.
+ * Then that turn is played (in short) instead of the arena being reset – the answered form stays
+ * until the fight is shown, not gone at once while the new one is still being conjured.
+ */
+export function missedTurn(shown: readonly [string | null, string | null], state: GameState): { readonly last: Move; readonly prev: Move } | null {
+  const last = state.history.at(-1);
+  const prev = state.history.at(-2);
+  if (last === undefined || prev === undefined || last.verb === null || last.player === prev.player) return null;
+  return shown[prev.player] === prev.form.id && shown[last.player] === null ? { last, prev } : null;
 }
