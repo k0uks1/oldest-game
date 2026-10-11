@@ -13,7 +13,7 @@ import { Resolver } from "../src/game/resolver.ts";
 import { DEFAULT_SETTINGS } from "../src/llm/client.ts";
 import { emptyLearnedPack } from "../src/llm/learning.ts";
 import { narrateEnd } from "../src/narrate/offline.ts";
-import { arenaMatches, NO_NARRATION, Playback, standingForms } from "../src/online/playback.ts";
+import { arenaMatches, missedTurn, NO_NARRATION, Playback, standingForms } from "../src/online/playback.ts";
 import type { ChronicleEntry, ServerMsg } from "../src/online/protocol.ts";
 import { OnlineHub } from "../server/online.ts";
 
@@ -278,6 +278,31 @@ describe("online playback across a lost connection", () => {
     await p.adopt(1, 1, () => undefined);
     await played;
     assert.equal(words, NO_NARRATION);
+  });
+});
+
+describe("a turn missed while away", () => {
+  it("the answered form still standing alone: that turn is played, not the arena reset", async () => {
+    const { turns } = await playedTurns(2);
+    const [t1, t2] = turns;
+    assert.ok(t1 && t2);
+    // A's knight stands; B's dragon was played while B's phone slept
+    const missed = missedTurn([t1.form.id, null], t2.state);
+    assert.ok(missed !== null);
+    assert.equal(missed.prev.form.id, t1.form.id);
+    assert.equal(missed.last.form.id, t2.form.id);
+    assert.equal(missed.last.player, 1);
+  });
+
+  it("anything else is no single missed turn", async () => {
+    const { turns } = await playedTurns(2);
+    const [t1, t2] = turns;
+    assert.ok(t1 && t2);
+    assert.equal(missedTurn([null, t2.form.id], t2.state), null, "already in sync");
+    assert.equal(missedTurn([null, null], t2.state), null, "nothing stands");
+    assert.equal(missedTurn([t1.form.id, t2.form.id], t2.state), null, "both still stand (cut off mid-fight)");
+    assert.equal(missedTurn([t2.form.id, null], t2.state), null, "a different form on the answered side");
+    assert.equal(missedTurn([null, null], t1.state), null, "the opening has nothing to beat");
   });
 });
 
