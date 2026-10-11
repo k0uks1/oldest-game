@@ -17,7 +17,7 @@ import {
 } from "../llm/client.ts";
 import { browserStore, serverStore, type LearnedStore } from "../llm/learned-store.ts";
 import { emptyLearnedPack, NOTE_MAX_CHARS, reconcileLearned } from "../llm/learning.ts";
-import { brief, narrateEpilogueWithClaude } from "../llm/narrator.ts";
+import { brief, NARRATION_MAX, narrateEpilogueWithClaude } from "../llm/narrator.ts";
 import type { Ontology } from "../engine/ontology/ontology.ts";
 import type { ContentPack, FormSpec } from "../engine/ontology/pack.ts";
 import { narrateEnd } from "../narrate/offline.ts";
@@ -1249,7 +1249,7 @@ export class App {
 
   private showCaption(text: string, pending: boolean): void {
     const c = this.els.caption;
-    c.textContent = brief(text, 150);
+    c.textContent = brief(text, NARRATION_MAX);
     // Stays until the next move starts (hideCaption) – reading must never be a race.
     c.className = `caption show${pending ? " pending" : ""}`;
   }
