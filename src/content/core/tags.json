@@ -161,5 +161,7 @@
   {"id": "kaktusartig", "label": "Kaktus (stachelig, genügsam, aus der Wüste)", "group": "koerper", "parents": ["pflanze"]},
   {"id": "nachaeffend", "label": "äfft nach (plappert alles Gesagte in Kopfstimme nach)", "group": "faehigkeit", "grants": ["aefft_nach", "zieht_ins_laecherliche"]},
   {"id": "betrunken", "label": "betrunken", "group": "merkmal", "parents": ["chaotisch"]},
-  {"id": "laecherlich", "label": "lächerlich (niemand nimmt es ernst)", "group": "merkmal"}
+  {"id": "laecherlich", "label": "lächerlich (niemand nimmt es ernst)", "group": "merkmal"},
+  {"id": "revolutionaer", "label": "revolutionär (Theorie, Klassenkampf – was hortet, gehört allen)", "group": "faehigkeit", "grants": ["enteignet"]},
+  {"id": "geburtstagskind", "label": "Geburtstagskind (hat heute Geburtstag)", "group": "merkmal"}
 ]

@@ -14,6 +14,7 @@ import { displaySize, renderGlow, renderSprite, type PixelImage } from "./sprite
 import { ISO } from "./stage-iso.ts";
 import { acornImage, signatureFor, tattooImage, type Signature } from "./eichel.ts";
 import { JOHNNY_NAME, NOTE_COLORS, noteImage } from "./johnny.ts";
+import { balloonImage, BIRTHDAY_NAME, bookImage, hatImage, isBirthdayBoy, pageImage } from "./birthday.ts";
 import { FLOOR_Y, GROUND_Y, HEIGHT, openBricks, paintStarfield, scatterStars, TORCH_X, WIDTH, type Brick, type StageLayout, type Star } from "./stage.ts";
 
 export { FLOOR_Y, GROUND_Y, HEIGHT, TORCH_X, WIDTH } from "./stage.ts";
@@ -32,9 +33,14 @@ export type Side = 0 | 1;
 export type ArenaCue = "summon" | "reveal" | "strike" | "impact" | "fizzle" | "discovery" | "boom";
 
 /** Special spectacles for a few forms – pure show, no rules involved. */
-export type EasterEgg = "nuke" | "meteor" | "rainbow" | "confetti" | "vortex" | "tattoo" | "eicheln" | "johnny";
+export type EasterEgg = "nuke" | "meteor" | "rainbow" | "confetti" | "vortex" | "tattoo" | "eicheln" | "johnny" | "birthday";
+
+/** The birthday party hall (`rooms.json`). */
+const PARTY_ROOM = "geburtstag";
 
 const EGG_PATTERNS: readonly (readonly [RegExp, EasterEgg])[] = [
+  // the Birthday Boy arrives with balloons and confetti
+  [BIRTHDAY_NAME, "birthday"],
   // the Eichel figures: the gang shows its tattoo, the Eichelober arrives in a shower of acorns
   [/eichel\s*-?\s*(ober\s*-?\s*)?(gang|bande)/i, "tattoo"],
   [/eichel\s*-?\s*ober/i, "eicheln"],
@@ -387,6 +393,10 @@ export abstract class ArenaSim {
   /** Painted attack animations (bundled strips, decoded once) and the ones playing now. */
   private readonly sheets = new Map<string, Sheet>();
   private readonly plays: EffectPlay[] = [];
+  /** His birthday: the party hall all day, a party hat on every figure. */
+  private party = false;
+  private readonly hats: [HTMLCanvasElement | undefined, HTMLCanvasElement | undefined] = [undefined, undefined];
+  private readonly crowns = new WeakMap<HTMLCanvasElement, { u: number; v: number }>();
   /** Painted room states: a still and (optionally) its animation loop, faded in and out. */
   private readonly rooms = new Map<string, { still: HTMLCanvasElement; frames: readonly HTMLCanvasElement[] }>();
   private readonly roomFade = new Map<string, number>();
@@ -574,6 +584,20 @@ export abstract class ArenaSim {
           this.props.push({ image: this.johnnyNote(), x, y: top + 20, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: -r() * 0.3, max: 1.4, gravity: -10, w: 8, h: 11, flip: false, fade: 0.25, glow: 0.7 });
         }
         this.rings.push({ x, y: this.gy(side), r: 4, life: 0, max: 0.9, color: "#8ce85a" });
+        this.onCue?.("discovery");
+        await wait(rm ? 100 : 900);
+        return;
+      }
+      case "birthday": {
+        // the Birthday Boy arrives: balloons float up around him, confetti rains, a ring of light where he lands
+        const colors = ["#ff6a6a", "#ffd86a", "#7dff6a", "#7fc6e8", "#c8a0ff", "#ff9ad0"];
+        for (let i = 0; i < 9; i++) {
+          this.props.push({ image: toCanvas(balloonImage(i)), x: x + (r() - 0.5) * 110, y: this.gy(side) - r() * 20, vx: (r() - 0.5) * 12, vy: -26 - r() * 22, life: -r() * 0.5, max: rm ? 0.8 : 4.5, gravity: -2, w: 7, h: 13, flip: false, fade: 0.3, glow: 0 });
+        }
+        for (let i = 0; i < 140; i++) {
+          this.particles.push({ x: x + (r() - 0.5) * 220, y: -5 - r() * 40, vx: (r() - 0.5) * 30, vy: 20 + r() * 40, life: -r() * 0.8, max: 3 + r() * 2, color: colors[i % colors.length] ?? "#ffffff", size: r() < 0.5 ? 2 : 1, gravity: 10, glow: false });
+        }
+        this.rings.push({ x, y: this.gy(side), r: 4, life: 0, max: 0.9, color: "#ffd86a" });
         this.onCue?.("discovery");
         await wait(rm ? 100 : 900);
         return;
@@ -1069,6 +1093,7 @@ export abstract class ArenaSim {
     if (signature === "eichelkaese") await this.withSignatureMove(side, () => this.eichelkaese(side));
     else if (signature === "eichelhagel") await this.withSignatureMove(side, () => this.eichelhagel(side));
     else if (signature === "klassiker") await this.withSignatureMove(side, () => this.klassiker(side, signatureSeconds));
+    else if (signature === "kapital") await this.withSignatureMove(side, () => this.kapital(side));
     else await this.strike(side, style, false, effect);
     if (target === null) return;
     await this.suspense(other);
@@ -1852,7 +1877,8 @@ export abstract class ArenaSim {
       // a field a big form brought keeps its room while it lasts (the fire burns on after the dragon)
       for (const id of this.latched) if (!fields.includes(id)) this.latched.delete(id);
       for (const id of fields) if (forms.some((f) => f.scale >= ROOM_MIN_SCALE && carriesField(this.onto, f, id))) this.latched.add(id);
-      this.room = chooseRoom(this.onto, fields, forms, (id) => this.rooms.has(id), this.latched)?.id ?? null;
+      // on his birthday the whole arena is the party hall
+      this.room = this.party && this.rooms.has(PARTY_ROOM) ? PARTY_ROOM : (chooseRoom(this.onto, fields, forms, (id) => this.rooms.has(id), this.latched)?.id ?? null);
     }
     // the Eichel-Arena rolls in at once, the other moods take their time
     const speed = this.reducedMotion ? 10 : this.room === "eichel" ? 3 : 0.7;
@@ -1989,6 +2015,61 @@ export abstract class ArenaSim {
       const a = r() * Math.PI * 2;
       this.props.push({ image: this.johnnyNote(), x: tx, y: ty, vx: Math.cos(a) * 90, vy: Math.sin(a) * 90 - 40, life: 0, max: 1, gravity: 120, w: 8, h: 11, flip: false, fade: 0.3, glow: 0.6 });
     }
+  }
+
+  /**
+   * "Das Kapital": the Birthday Boy reads from his red book – loose pages flutter over to the opponent, who reels a
+   * little more with every page – and then he throws the whole book: it spins over and lands with a thud.
+   */
+  private async kapital(side: Side): Promise<void> {
+    const attacker = this.fighters[side];
+    if (attacker === null) return;
+    const other: Side = side === 0 ? 1 : 0;
+    const target = this.fighters[other];
+    const dir = side === 0 ? 1 : -1;
+    const rm = this.reducedMotion;
+    const r = this.rand;
+    const tx = SIDE_X[other];
+    const th = target?.sprite.height ?? 40;
+    const ty = this.gy(other) - th / 2;
+    const page = toCanvas(pageImage());
+    const book = toCanvas(bookImage());
+    const hand = (): [number, number] => [SIDE_X[side] + attacker.offsetX + dir * attacker.sprite.width * 0.3, this.gy(side) + attacker.offsetY - attacker.sprite.height * 0.55];
+    // reading aloud: pages leave the book in arcs
+    const pages = rm ? 4 : 16;
+    for (let i = 0; i < pages; i++) {
+      const [hx, hy] = hand();
+      const flight = rm ? 0.2 : 0.7 + r() * 0.3;
+      const lift = 30 + r() * 30;
+      const ex = tx + (r() - 0.5) * 24;
+      const ey = ty + (r() - 0.5) * th * 0.6;
+      this.props.push({ image: page, x: hx, y: hy, vx: (ex - hx) / flight, vy: (ey - hy) / flight - lift, life: 0, max: flight, gravity: (2 * lift) / flight, w: 7, h: 9, flip: r() < 0.5, fade: 0.1, glow: 0.2 });
+      if (target !== null && i % 3 === 2) {
+        target.flash = 0.35;
+        target.offsetX = dir * (1 + i * 0.25);
+      }
+      if (i % 4 === 0) this.onCue?.("strike");
+      await wait(rm ? 40 : 110);
+    }
+    await wait(rm ? 60 : 500);
+    // the throw: the whole book, spinning in a high arc
+    await this.tween(rm ? 40 : 200, (t) => (attacker.offsetX = -dir * 5 * t));
+    const [hx, hy] = hand();
+    const flight = rm ? 0.2 : 0.6;
+    const lift = 70;
+    this.props.push({ image: book, x: hx, y: hy, vx: (tx - hx) / flight, vy: (ty - hy) / flight - lift, life: 0, max: flight, gravity: (2 * lift) / flight, w: 22, h: 26, flip: false, fade: 0, glow: 0.3, shatter: true });
+    attacker.offsetX = dir * 4;
+    await wait(flight * 1000);
+    this.onCue?.("impact");
+    this.shake = Math.max(this.shake, rm ? 0 : 5);
+    this.burst(tx, ty, "#d82828", 30);
+    for (let i = 0; i < 10; i++) this.props.push({ image: page, x: tx, y: ty, vx: (r() - 0.5) * 120, vy: -40 - r() * 60, life: 0, max: 1.2, gravity: 90, w: 7, h: 9, flip: r() < 0.5, fade: 0.4, glow: 0 });
+    if (target !== null) target.flash = 1;
+    const pushed = target?.offsetX ?? 0;
+    await this.tween(rm ? 40 : 250, (t) => {
+      attacker.offsetX = dir * 4 * (1 - t);
+      if (target !== null) target.offsetX = pushed * (1 - t);
+    });
   }
 
   private eichelProps(): { acorn: HTMLCanvasElement } {
@@ -2203,7 +2284,57 @@ export abstract class ArenaSim {
       const alpha = p.fade <= 0 ? 1 : Math.max(0, Math.min(1, p.life / p.fade, (p.max - p.life) / p.fade));
       out.push({ image: p.image, x: Math.round(p.x - p.w / 2), y: Math.round(p.y - p.h / 2), w: p.w, h: p.h, flip: p.flip, alpha, glow: p.glow, layer: "front" });
     }
+    if (this.party) out.push(...this.partyHats());
     return out;
+  }
+
+  /** On his birthday: a party hat on the highest point of every figure (he brings his own). */
+  private partyHats(): ImageDraw[] {
+    const out: ImageDraw[] = [];
+    for (const side of [0, 1] as const) {
+      const f = this.fighters[side];
+      if (f === null || f.alpha <= 0 || f.appear < 1 || isBirthdayBoy(f.form.name)) continue;
+      const rect = this.fighterRect(side, f);
+      const top = this.crownOf(f.sprite.image);
+      const mirrored = (side === 1) !== (f.facing === -1);
+      const u = mirrored ? 1 - top.u : top.u;
+      const w = Math.max(11, Math.min(22, Math.round(rect.w * 0.26)));
+      const h = Math.round((w * 12) / 9);
+      this.hats[side] ??= toCanvas(hatImage(f.seed));
+      out.push({ image: this.hats[side], x: Math.round(rect.x + u * rect.w - w / 2), y: Math.round(rect.y + top.v * rect.h - h + 2), w, h, flip: false, alpha: f.alpha * (1 - f.stone), glow: 0, layer: "front" });
+    }
+    return out;
+  }
+
+  /** Where a sprite is highest: the middle of its topmost solid row, as fractions of its size (cached per canvas). */
+  private crownOf(img: HTMLCanvasElement): { u: number; v: number } {
+    const known = this.crowns.get(img);
+    if (known !== undefined) return known;
+    let crown = { u: 0.5, v: 0 };
+    const g = img.getContext("2d");
+    if (g !== null && img.width > 0 && img.height > 0) {
+      const { data } = g.getImageData(0, 0, img.width, img.height);
+      search: for (let y = 0; y < img.height; y++) {
+        let first = -1;
+        let last = -1;
+        for (let x = 0; x < img.width; x++) {
+          if ((data[(y * img.width + x) * 4 + 3] ?? 0) < 128) continue;
+          if (first < 0) first = x;
+          last = x;
+        }
+        if (first >= 0) {
+          crown = { u: (first + last + 1) / 2 / img.width, v: y / img.height };
+          break search;
+        }
+      }
+    }
+    this.crowns.set(img, crown);
+    return crown;
+  }
+
+  /** On his birthday: the party hall and a hat for everyone. */
+  setParty(on: boolean): void {
+    this.party = on;
   }
 
   /**
