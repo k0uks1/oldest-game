@@ -10,6 +10,8 @@ One job: show what the engine decided. Presentation only – nothing here feeds 
   `createArena()` picks (hardware WebGL → Pixi; `?pixi` / `?canvas` force)
 - `stage.ts` = scenery types; `stage-iso.ts` (default) / `stage-flat.ts` (`?flat`)
 - `art.ts`, `morph.ts`, `scenery.ts`, `effects.ts`, `rooms.ts`, `look.ts` – below
+- a `Fighter` is updated in place (new picture, animation), never replaced by a copy: running animations hold on to it,
+  and tweens wait for frames (none in a hidden tab). `steady()` puts the standing forms at rest between turns.
 
 ## Generated art ("Kunst auf Abruf", `render/art.ts`, `server/art-service.ts`)
 

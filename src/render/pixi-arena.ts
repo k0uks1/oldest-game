@@ -29,6 +29,8 @@ interface Layer {
 }
 
 interface FighterView {
+  /** The sprite its layers show – a fighter that got a new one gets a new view. */
+  readonly sprite: SpriteEntry;
   readonly base: Container;
   readonly glow: Container;
   readonly silhouette: Layer;
@@ -161,9 +163,11 @@ export class PixiArena extends ArenaScene {
 
   private viewFor(f: Fighter): FighterView {
     const hit = this.views.get(f);
-    if (hit !== undefined) return hit;
+    if (hit?.sprite === f.sprite) return hit;
+    if (hit !== undefined) this.dropView(f, hit);
     const s = f.sprite;
     const v: FighterView = {
+      sprite: s,
       base: new Container(),
       glow: new Container(),
       silhouette: this.layer(s.silhouette),

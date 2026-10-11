@@ -352,6 +352,11 @@ export class App {
       if (!document.hidden) this.sound.wake();
     };
     document.addEventListener("visibilitychange", wake);
+    // back in the tab online (a watcher's socket often survives, so no welcome puts it right): once the
+    // turns that waited for frames have played, the arena shows exactly what the game holds
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && this.online !== null && this.joined) void this.playback.run(() => this.settleArena());
+    });
     window.addEventListener("pageshow", wake);
     window.addEventListener("focus", wake);
     for (const ev of ["pointerdown", "keydown", "touchend"] as const) document.addEventListener(ev, wake, { capture: true, passive: true });
@@ -1425,9 +1430,15 @@ export class App {
     if (state.phase === "finished") void this.showEnd();
   }
 
-  /** Put the arena right for the current state: only the form still standing (`standingForms`). */
+  /**
+   * Put the arena right for the current state: only the form still standing (`standingForms`), at
+   * rest. Runs in turn order, so no animation is cut off by it.
+   */
   private async settleArena(): Promise<void> {
-    if (arenaMatches(this.arena.shownForms(), this.state)) return;
+    if (arenaMatches(this.arena.shownForms(), this.state)) {
+      this.arena.steady();
+      return;
+    }
     this.arena.clear();
     const last = this.state.history.at(-1);
     if (last !== undefined) await this.resummon(last.player, last.form);
