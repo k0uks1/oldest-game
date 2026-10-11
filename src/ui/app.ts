@@ -25,7 +25,7 @@ import { Resolver, type Novelty, type PlayedOutcome, type Turn } from "../game/r
 import { attackOutcome, attackStyle, easterEggFor, type AttackStyle } from "../render/arena.ts";
 import { SIGNATURE_CRY, signatureFor } from "../render/eichel.ts";
 import { isJohnny, parrot, songCry, songFor } from "../render/johnny.ts";
-import { BIRTHDAY_CRY, BIRTHDAY_SONG, isBirthday, isBirthdayBoy } from "../render/birthday.ts";
+import { BIRTHDAY_CRY, BIRTHDAY_SONG, isBirthdayBoy, partyOn } from "../render/birthday.ts";
 import { createArena, type Arena } from "../render/arenas.ts";
 import { clear, h } from "./dom.ts";
 import { OnlineLink, type LinkStart, type LinkStatus } from "../online/link.ts";
@@ -559,12 +559,12 @@ export class App {
     if (side !== undefined) this.bubble(side, `♪ ${BIRTHDAY_SONG.line}`, seconds * 1000);
   }
 
-  /** His birthday – or `?party` to see it any day. */
+  /** The party is on (`partyOn`) – or `?party` to see it anyway. */
   private partyDay(): boolean {
-    return isBirthday(new Date()) || (typeof location !== "undefined" && new URLSearchParams(location.search).has("party"));
+    return partyOn() || (typeof location !== "undefined" && new URLSearchParams(location.search).has("party"));
   }
 
-  /** On his birthday, the first duel of the page opens with a party: confetti, balloons, the song. */
+  /** While the party is on, the first duel of the page opens with confetti, balloons and the song. */
   private partyOnce(): void {
     this.arena.setParty(this.partyDay());
     if (this.partied || !this.partyDay()) return;

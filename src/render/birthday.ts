@@ -12,11 +12,12 @@ export function isBirthdayBoy(name: string): boolean {
   return BIRTHDAY_NAME.test(name);
 }
 
-/** His birthday (month 1–12, day) – the party plays on that day for everyone who enters a duel. */
-export const BIRTHDAY: { readonly month: number; readonly day: number } | null = null;
-
-export function isBirthday(now: Date): boolean {
-  return BIRTHDAY !== null && now.getMonth() + 1 === BIRTHDAY.month && now.getDate() === BIRTHDAY.day;
+/**
+ * The party is on: the party hall, hats for everyone, confetti and the song when a duel opens. No date check – it
+ * runs from the merge until someone makes this return `false` (the celebration was a day late anyway).
+ */
+export function partyOn(): boolean {
+  return true;
 }
 
 /** "Happy Birthday to You" (public domain), in 3/4. */
