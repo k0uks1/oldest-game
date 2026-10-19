@@ -14,10 +14,12 @@ export function isBirthdayBoy(name: string): boolean {
 
 /**
  * The party is on: the party hall, hats for everyone, confetti and the song when a duel opens. No date check – it
- * runs from the merge until someone makes this return `false` (the celebration was a day late anyway).
+ * ran from the merge until this returned `false` (the celebration was a day late anyway). The party is over: the
+ * arena is the plain dungeon again, and the hall only rolls in while the Birthday Boy himself stands in it
+ * (`rooms.json` `geburtstag`). `?party` brings the whole party back for a look.
  */
 export function partyOn(): boolean {
-  return true;
+  return false;
 }
 
 /** "Happy Birthday to You" (public domain), in 3/4. */
